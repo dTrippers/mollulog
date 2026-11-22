@@ -12,7 +12,7 @@ import { getEventContentSchedule, getEventContentsList, getEventShopContent } fr
 import type { RunType } from "~/models/timeline-content";
 import { getAllTimelineContentsMeta } from "~/models/timeline-content.server";
 
-const EVENT_CONTENT_WARM_CONCURRENCY = 2;
+const EVENT_CONTENT_WARM_CONCURRENCY = 6;
 
 type EventContentListSource = Awaited<ReturnType<typeof getEventContentsList>>[number];
 type EventContentListSourceSchedule = EventContentListSource["schedules"][number];

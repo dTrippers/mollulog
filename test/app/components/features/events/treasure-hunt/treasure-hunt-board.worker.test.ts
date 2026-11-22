@@ -1,15 +1,15 @@
 import { describe, expect, it } from "@jest/globals";
-import { TreasureHuntBoardWorkerRuntime } from "~/components/features/events/treasure-hunt/treasure-hunt-board.worker";
-import type {
-  TreasureHuntBoardWorkerRequest,
-  TreasureHuntBoardWorkerResponse,
-} from "~/components/features/events/treasure-hunt/treasure-hunt-board-worker.shared";
 import {
   analyzeTreasureHuntBoard,
   type TreasureHuntBoardAnalysis,
   type TreasureHuntBoardObservation,
   type TreasureHuntComposition,
 } from "~/domain/treasure-hunt";
+import { TreasureHuntBoardWorkerRuntime } from "~/lib/treasure-hunt/treasure-hunt-board.worker";
+import type {
+  TreasureHuntBoardWorkerRequest,
+  TreasureHuntBoardWorkerResponse,
+} from "~/lib/treasure-hunt/treasure-hunt-board-worker.shared";
 
 function composition(
   boardWidth = 3,

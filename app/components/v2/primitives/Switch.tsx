@@ -10,6 +10,7 @@ export type SwitchProps = {
   disabled?: boolean;
   size?: "sm";
   layout?: "inline";
+  hideLabel?: boolean;
 };
 
 // Switch row. The track has a text label next to it, so the state is readable without its color.
@@ -22,6 +23,7 @@ export function Switch({
   disabled = false,
   size,
   layout,
+  hideLabel = false,
 }: SwitchProps) {
   const descriptionId = `${id}-description`;
   if (layout === "inline") {
@@ -36,7 +38,7 @@ export function Switch({
         disabled={disabled}
         onClick={() => onCheckedChange(!checked)}
         className={cn(
-          "group inline-flex min-h-8 min-w-0 cursor-pointer items-center gap-2 rounded-md text-left max-lg:min-h-11",
+          "group inline-flex min-h-8 min-w-0 cursor-pointer items-center gap-2 rounded-md text-left",
           "disabled:cursor-not-allowed disabled:opacity-50",
           v2FocusRing,
         )}
@@ -55,7 +57,7 @@ export function Switch({
             )}
           />
         </span>
-        <span id={`${id}-label`} className="text-[0.8125rem] font-medium text-v2-fg-secondary group-hover:text-v2-fg">
+        <span id={`${id}-label`} className={cn("text-[0.8125rem] font-medium text-v2-fg-secondary group-hover:text-v2-fg v2-interaction-transition", hideLabel && "sr-only")}>
           {label}
         </span>
         {description ? (

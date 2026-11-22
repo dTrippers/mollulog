@@ -1,179 +1,142 @@
+/** @jest-environment jsdom */
+import "../components/v2/layout/layout-test-polyfills";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { defaultStudentDirectoryFilterState, type StudentDirectoryFilterState, type StudentDirectoryPersonalState } from "~/domain/student-directory";
+import { Attack, Defense } from "~/graphql/graphql";
+import type { StudentDirectoryStudent } from "~/models/student-directory";
 
-jest.mock("~/components/features/layout", () => ({ Page: jest.fn(() => null) }));
-jest.mock("~/components/features/students/usePersistentStudentFilterState", () => ({
-  usePersistentStudentFilterState: jest.fn(),
-}));
-jest.mock("~/contexts/SignInProvider", () => ({ useSignIn: jest.fn() }));
+const mockUseLoaderData = jest.fn<() => {
+  students: StudentDirectoryStudent[];
+  listStatus: "loaded" | "failed";
+  filterState: StudentDirectoryFilterState;
+  personalState: StudentDirectoryPersonalState;
+}>();
+const mockUseLocation = jest.fn();
+const mockUseOutletContext = jest.fn();
+const mockShowSignIn = jest.fn();
+const mockSetFilterState = jest.fn();
+jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
+jest.mock("~/models/student-directory", () => ({ getStudentDirectoryStudents: jest.fn() }));
+jest.mock("~/views/student-directory", () => ({ loadStudentDirectoryPersonalState: jest.fn() }));
+jest.mock("~/lib/observability.server", () => ({ getLogger: () => ({ error: jest.fn() }), captureServerError: jest.fn() }));
 jest.mock("react-router", () => {
   const actual = jest.requireActual<typeof import("react-router")>("react-router");
   return {
     ...actual,
-    useLoaderData: jest.fn(),
-    useLocation: jest.fn(),
-    useOutletContext: jest.fn(),
+    Outlet: () => "outlet",
+    useLoaderData: () => mockUseLoaderData(),
+    useLocation: () => mockUseLocation(),
+    useOutletContext: () => mockUseOutletContext(),
+  };
+});
+jest.mock("~/contexts/SignInProvider", () => ({ useSignIn: () => ({ showSignIn: mockShowSignIn }) }));
+jest.mock("~/routes/students._components/use-student-directory-filter-state", () => ({
+  useStudentDirectoryFilterState: () => [mockUseLoaderData().filterState, mockSetFilterState],
+}));
+jest.mock("~/components/v2/features/students/DirectoryFilterPanel", () => ({
+  DirectoryFilterPanel: () => jest.requireActual<typeof import("react")>("react").createElement("div", { "data-filter-panel": true, "data-testid": "filter-panel-body" }),
+}));
+jest.mock("~/components/v2/primitives/Select", () => ({
+  Select: ({ label }: { label: string }) => jest.requireActual<typeof import("react")>("react").createElement("select", { "aria-label": label }),
+}));
+jest.mock("~/components/v2/layout", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  return {
+    V2Page: ({ width, children }: { width: string; children: React.ReactNode }) => React.createElement("div", { "data-v2-width": width }, children),
+    PageHeader: ({ title }: { title: string }) => React.createElement("h1", null, title),
+    PageAside: ({ children }: { children: React.ReactNode }) => React.createElement("aside", null, children),
+    PanelSheet: function PanelSheetMock({ panelId, title, description, sheetDescription, collapsible, disabled, children }: { panelId: string; title: string; description?: string; sheetDescription?: string; collapsible?: boolean; disabled?: boolean; children: React.ReactNode }) {
+      const [expanded, setExpanded] = React.useState(() => !disabled && !collapsible);
+      return React.createElement(
+        "section",
+        { "data-panel": panelId, "data-collapsible": Boolean(collapsible), "data-disabled": Boolean(disabled), "data-description": description ?? "", "data-sheet-description": sheetDescription ?? "" },
+        React.createElement("h2", null, title),
+        description ? React.createElement("span", null, description) : null,
+        sheetDescription ? React.createElement("span", null, sheetDescription) : null,
+        collapsible && !disabled
+          ? React.createElement("button", { type: "button", "aria-expanded": expanded, onClick: () => setExpanded((value) => !value) }, title)
+          : null,
+        !disabled && expanded ? children : null,
+      );
+    },
+    AsideLinks: ({ items }: { items: { title: string; description?: string }[] }) =>
+      React.createElement("ul", { "data-aside-links": true }, items.map((item) => React.createElement("li", { key: item.title }, `${item.title}${item.description ? ` ${item.description}` : ""}`))),
+    MobileActionBar: ({ links, panels }: { links: { title: string }[]; panels: { title: string }[] }) =>
+      React.createElement("nav", { "data-mobile-action-bar": true }, [...links, ...panels].map((item, index) => React.createElement("span", { key: `${item.title}-${index}` }, item.title))),
   };
 });
 
-import { useLoaderData, useLocation, useOutletContext } from "react-router";
-import { Page } from "~/components/features/layout";
-import { createStudentFilterState } from "~/components/features/students/StudentFilter";
-import { usePersistentStudentFilterState } from "~/components/features/students/usePersistentStudentFilterState";
-import { useSignIn } from "~/contexts/SignInProvider";
+import { useLocation, useLoaderData, useOutletContext } from "react-router";
 import StudentsLayout from "~/routes/students";
 
-const mockPage = Page as unknown as jest.Mock;
-const mockUseLoaderData = useLoaderData as unknown as jest.Mock;
-const mockUseLocation = useLocation as unknown as jest.Mock;
-const mockUseOutletContext = useOutletContext as unknown as jest.Mock;
-const mockUsePersistentStudentFilterState = usePersistentStudentFilterState as unknown as jest.Mock;
-const mockUseSignIn = useSignIn as unknown as jest.Mock;
-const mockSetFilterState = jest.fn();
-const mockShowSignIn = jest.fn();
-
-function createStudent() {
-  return {
-    uid: "student-a",
-    name: "학생",
-    familyName: null,
-    altNames: [],
-    school: "millennium",
-    initialTier: 3,
-    order: 1,
-    attackType: "explosive",
-    defenseType: "light",
-    position: "front",
-    tacticRole: "attacker",
-    birthday: null,
-    role: "striker",
-    equipments: ["hat", "bag", "shoes"],
-    released: true,
-    catalog: null,
-  };
-}
+const baseStudent: StudentDirectoryStudent = {
+  uid: "student-a", name: "학생", familyName: null, altNames: [], school: "millennium", initialTier: 3,
+  order: 1, releaseAt: "2025-01-01T00:00:00.000Z", attackType: Attack.Explosive, defenseType: Defense.Light, weaponType: "ar",
+  acquisitionType: "regular", canUseCover: true, skillEffectTags: [], club: null, studentVariant: null, position: "front",
+  tacticRole: "attacker", birthday: "2000-01-01", role: "striker", equipments: ["hat", "bag", "shoes"], released: true, catalog: null,
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
-  const filterState = createStudentFilterState("tier");
-  mockUseLoaderData.mockReturnValue({ students: [createStudent()], filterState });
+  mockUseLoaderData.mockReturnValue({
+    students: [baseStudent],
+    listStatus: "loaded",
+    filterState: defaultStudentDirectoryFilterState,
+    personalState: { status: "signed-out" } satisfies StudentDirectoryPersonalState,
+  });
   mockUseLocation.mockReturnValue({ pathname: "/students" });
   mockUseOutletContext.mockReturnValue({ currentUsername: null });
-  mockUseSignIn.mockReturnValue({ showSignIn: mockShowSignIn });
-  mockUsePersistentStudentFilterState.mockReturnValue([filterState, mockSetFilterState]);
 });
 
-describe("students directory panels", () => {
-  it("splits filters from display settings and keeps the first panel expanded", () => {
-    renderToStaticMarkup(createElement(StudentsLayout));
-
-    const pageProps = mockPage.mock.calls.at(-1)?.[0] as {
-      panels: Array<{
-        title: string;
-        description?: string;
-        collapsible?: boolean;
-        headerAction?: {
-          props: {
-            text?: string;
-            size?: string;
-            variant?: string;
-            onClick?: () => void;
-          };
-        };
-        children: { type: unknown; props: Record<string, unknown> };
-      }>;
-      links?: unknown[];
-    };
-    const { panels, links } = pageProps;
-
-    expect(panels.map((panel) => panel.title)).toEqual(["필터 및 정렬", "표시 설정"]);
-    expect(panels[0].collapsible).toBeUndefined();
-    expect(panels[1].collapsible).toBeUndefined();
-    expect(panels[0].description).toBe("1명 중 1명 표시 중");
-    expect(panels[1].description).toBe("없음 · 그룹 없음");
-
-    expect(panels[0].children.props.sortBy).toEqual(["recent", "old", "name", "tier"]);
-    expect(panels[0].children.props.directory).toBe(true);
-    expect(panels[1].children.props.sortBy).toBeUndefined();
-    expect(links).toBeUndefined();
-    expect(panels[0].headerAction).toBeUndefined();
-    expect(panels[1].headerAction).toBeUndefined();
+describe("students directory v2 layout", () => {
+  it("uses the wide hub layout, title, ordered panels, aside links, and mobile action bar", () => {
+    const markup = renderToStaticMarkup(createElement(StudentsLayout));
+    expect(markup).toContain('data-v2-width="wide"');
+    expect(markup).toContain("<h1>학생부</h1>");
+    expect(markup).toContain('data-description="" data-sheet-description="1명"');
+    expect(markup.indexOf('data-panel="student-directory-filter"')).toBeLessThan(markup.indexOf('data-panel="student-directory-display"'));
+    expect(markup).toContain('data-collapsible="true"');
+    expect(markup).toContain("모집한 학생");
+    expect(markup).toContain("학생 평가 목록");
+    expect(markup).toContain('data-mobile-action-bar="true"');
+    expect(markup).not.toContain("모집한 학생의 성급");
   });
 
-  it("uses a sign-in PageLink for guests and the owner's 모집한 학생 page for signed-in users", () => {
-    renderToStaticMarkup(createElement(StudentsLayout));
-
-    let { belowTitle } = mockPage.mock.calls.at(-1)?.[0] as {
-      belowTitle: { props: { title: string; description: string; to: string; onClick?: () => void } };
-    };
-    expect(belowTitle.props).toMatchObject({
-      title: "모집한 학생",
-      description: "모집한 학생의 성급과 성장 정보를 관리해요",
-      to: "/unauthorized",
+  it("disables filter and display panels after a list failure", () => {
+    mockUseLoaderData.mockReturnValue({
+      students: [], listStatus: "failed", filterState: defaultStudentDirectoryFilterState, personalState: { status: "signed-out" },
     });
-    expect(belowTitle.props.onClick).toBe(mockShowSignIn);
-    belowTitle.props.onClick?.();
-    expect(mockShowSignIn).toHaveBeenCalledTimes(1);
-
-    mockUseOutletContext.mockReturnValue({ currentUsername: "sensei" });
-    renderToStaticMarkup(createElement(StudentsLayout));
-    ({ belowTitle } = mockPage.mock.calls.at(-1)?.[0] as {
-      belowTitle: { props: { title: string; description: string; to: string; onClick?: () => void } };
-    });
-    expect(belowTitle.props).toMatchObject({
-      title: "모집한 학생",
-      to: "/@sensei/students",
-    });
-    expect(belowTitle.props.onClick).toBeUndefined();
+    const markup = renderToStaticMarkup(createElement(StudentsLayout));
+    expect(markup).toContain('data-panel="student-directory-filter" data-collapsible="false" data-disabled="true"');
+    expect(markup).toContain('data-panel="student-directory-display" data-collapsible="true" data-disabled="true"');
   });
 
-  it("places filter and display resets in their panel headers and preserves unrelated state", () => {
-    const filterState = {
-      ...createStudentFilterState("tier"),
-      attackTypes: ["explosive" as const],
-      displayBy: "height" as const,
-      groupBy: "school" as const,
-      search: "아루",
-    };
-    mockUseLoaderData.mockReturnValue({ students: [createStudent()], filterState });
-    mockUsePersistentStudentFilterState.mockReturnValue([filterState, mockSetFilterState]);
-
-    renderToStaticMarkup(createElement(StudentsLayout));
-
-    const { panels } = mockPage.mock.calls.at(-1)?.[0] as {
-      panels: Array<{
-        headerAction?: {
-          props: {
-            text?: string;
-            size?: string;
-            variant?: string;
-            onClick?: () => void;
-          };
-        };
-      }>;
-    };
-    const filterAction = panels[0].headerAction;
-    const displayAction = panels[1].headerAction;
-
-    expect(filterAction?.props).toMatchObject({ text: "필터 해제", size: "xs", variant: "danger-subtle" });
-    expect(displayAction?.props).toMatchObject({ text: "초기화", size: "xs", variant: "danger-subtle" });
-
-    filterAction?.props.onClick?.();
-    const filterUpdater = mockSetFilterState.mock.calls.at(-1)?.[0] as (
-      state: typeof filterState,
-    ) => typeof filterState;
-    expect(filterUpdater(filterState)).toEqual({
-      ...createStudentFilterState("tier"),
-      groupBy: "school",
-      displayBy: "height",
-      search: "",
+  it("shows the filter and enables display settings after a successful retry", () => {
+    mockUseLoaderData.mockReturnValue({
+      students: [], listStatus: "failed", filterState: defaultStudentDirectoryFilterState, personalState: { status: "signed-out" },
     });
+    const rendered = render(createElement(StudentsLayout));
 
-    displayAction?.props.onClick?.();
-    const displayUpdater = mockSetFilterState.mock.calls.at(-1)?.[0] as (
-      state: typeof filterState,
-    ) => typeof filterState;
-    expect(displayUpdater(filterState)).toEqual({ ...filterState, groupBy: "none", displayBy: "none" });
+    expect(screen.queryByTestId("filter-panel-body")).toBeNull();
+    expect(screen.queryByRole("button", { name: "표시 설정" })).toBeNull();
+
+    mockUseLoaderData.mockReturnValue({
+      students: [baseStudent], listStatus: "loaded", filterState: defaultStudentDirectoryFilterState, personalState: { status: "signed-out" },
+    });
+    rendered.rerender(createElement(StudentsLayout));
+
+    expect(screen.getByTestId("filter-panel-body")).toBeTruthy();
+    const displayToggle = screen.getByRole("button", { name: "표시 설정" });
+    expect(displayToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(displayToggle);
+    expect(screen.getByLabelText("학생 카드에 표시할 정보")).toBeTruthy();
+  });
+
+  it("preserves the outlet-only render for student detail routes", () => {
+    mockUseLocation.mockReturnValue({ pathname: "/students/123" });
+    expect(renderToStaticMarkup(createElement(StudentsLayout))).toBe("outlet");
   });
 });

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { mergeEditableRecruitmentResultStudents } from "~/domain/recruitment-result";
 import { Attack, Defense } from "~/graphql/graphql";
@@ -10,13 +10,14 @@ import {
   upsertRecruitmentResult,
 } from "~/models/recruitment-result.server";
 import { getAllStudents } from "~/models/student";
-import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
+import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import {
   action,
   getVisibleTier3StudentUids,
   loader,
+  reconcileOffPickupFlags,
   shouldSkipTier3StudentListInitially,
-} from "../../../app/routes/$username.pickups.edit.$id";
+} from "../../../app/routes/$username_.pickups.edit.$id";
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
@@ -29,6 +30,7 @@ jest.mock("~/models/pickup-history.server", () => ({
 jest.mock("~/models/recruitment-result.server", () => ({
   getRecruitmentResult: jest.fn(),
   getRecruitmentResultComment: jest.fn(),
+  getRecruitmentResults: jest.fn(async () => []),
   upsertRecruitmentResult: jest.fn(),
 }));
 
@@ -45,6 +47,10 @@ jest.mock("~/domain/recruitment-result", () => ({
   getRecruitmentResultTier3CountFromPickupHistory: jest.fn((history: { result: { tier3Count: number }[] }) =>
     history.result.reduce((sum, trial) => sum + trial.tier3Count, 0),
   ),
+  isRecordedRecruitmentResult: jest.fn(() => true),
+  isValidOffPickupSelection:
+    jest.requireActual<typeof import("~/domain/recruitment-result")>("~/domain/recruitment-result")
+      .isValidOffPickupSelection,
   mergeEditableRecruitmentResultStudents: jest.fn(),
   resolveRecruitmentResultStudents: jest.fn(
     (
@@ -83,6 +89,7 @@ jest.mock("~/models/student", () => ({
 
 jest.mock("~/models/timeline-content.server", () => ({
   ...jest.requireActual<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
+  getTimelineContent: jest.fn(),
   getTimelineContentsByRecruitmentGroupUids: jest.fn(),
 }));
 
@@ -104,6 +111,7 @@ const mockedUpsertRecruitmentResult = upsertRecruitmentResult as jest.MockedFunc
 const mockedGetAllStudents = getAllStudents as jest.MockedFunction<typeof getAllStudents>;
 const mockedGetTimelineContentsByRecruitmentGroupUids =
   getTimelineContentsByRecruitmentGroupUids as jest.MockedFunction<typeof getTimelineContentsByRecruitmentGroupUids>;
+const mockedGetTimelineContent = getTimelineContent as jest.MockedFunction<typeof getTimelineContent>;
 const mockedGetAllHistoricalRecruitmentGroups = getAllHistoricalRecruitmentGroups as unknown as jest.MockedFunction<
   (...args: unknown[]) => Promise<unknown[]>
 >;
@@ -147,6 +155,16 @@ function createGroup(uid: string, startAt: string) {
   };
 }
 
+// The call-charge recruitment system starts with this timeline content.
+const CALL_CHARGE_ANCHOR_START_AT = "2026-11-10T02:00:00.000Z";
+
+beforeEach(() => {
+  mockedGetTimelineContent.mockResolvedValue({
+    uid: "pandemonium-cruise",
+    startAt: CALL_CHARGE_ANCHOR_START_AT,
+  } as Awaited<ReturnType<typeof getTimelineContent>>);
+});
+
 afterEach(() => {
   jest.useRealTimers();
   jest.clearAllMocks();
@@ -166,6 +184,54 @@ describe("pickup history editor state helpers", () => {
     expect(shouldSkipTier3StudentListInitially(5, [])).toBe(true);
     expect(shouldSkipTier3StudentListInitially(5, ["hina", "aru", "mika"])).toBe(false);
     expect(shouldSkipTier3StudentListInitially(0, [])).toBe(false);
+  });
+});
+
+describe("pickup history editor 픽업 외 choice", () => {
+  it("keeps each draw's choice when a draw is removed, even between draws of the same student", () => {
+    expect(reconcileOffPickupFlags(["neru", "neru", "hina"], [false, true, false], ["neru", "hina"], 0)).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  it("starts an added draw as 픽업 and keeps the others", () => {
+    expect(reconcileOffPickupFlags(["neru"], [true], ["neru", "neru"])).toEqual([true, false]);
+  });
+
+  it("starts every draw as 픽업 when the list is replaced", () => {
+    expect(reconcileOffPickupFlags(["neru", "hina"], [true, false], ["hina", "neru"])).toEqual([false, false]);
+  });
+
+  it("rejects a 픽업 외 choice on a student that is not a pickup student of the recruitment", async () => {
+    mockedGetRecruitmentGroupByUid.mockResolvedValue(createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z"));
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      { uid: "content-decagrammaton-armed", name: "데카그라마톤 무장", recruitmentGroupUid: "decagrammaton-armed" },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    await expect(
+      action({
+        context: { cloudflare: { env } },
+        request: new Request("https://mollulog.net/@sensei/pickups/edit/new", {
+          method: "POST",
+          body: JSON.stringify({
+            eventUid: "decagrammaton-armed",
+            result: [{ trial: 100, tier3Count: 1, tier3StudentIds: ["10000"], tier3StudentOffPickup: [true] }],
+            exchangedStudentIds: [],
+          }),
+        }),
+        params: { username: "@sensei", id: "new" },
+      } as never),
+    ).rejects.toMatchObject({
+      data: { error: { code: "pickup_history.off_pickup_student_invalid" } },
+      init: { status: 400 },
+    });
+    expect(mockedUpsertRecruitmentResult).not.toHaveBeenCalled();
   });
 });
 
@@ -213,6 +279,53 @@ describe("pickup history editor loader", () => {
       "gojinraigou-rerun",
       "magical-heavy-caliber",
     ]);
+    expect(result.events.every((event: { exchangeable: boolean }) => event.exchangeable)).toBe(true);
+  });
+
+  it("offers no recruitment point exchange for recruitments of the call-charge system", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-11-25T00:00:00.000Z").getTime());
+
+    const legacyGroup = createGroup("before-call-charge", "2026-11-03T02:00:00Z");
+    const callChargeGroup = createGroup("call-charge", CALL_CHARGE_ANCHOR_START_AT);
+    mockedGetAllHistoricalRecruitmentGroups.mockResolvedValue([legacyGroup, callChargeGroup]);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue(null);
+    mockedGetRecruitmentResultComment.mockResolvedValue(null);
+    mockedGetAllStudents.mockResolvedValue([]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-before",
+        name: "이전 모집",
+        startAt: "2026-11-03T02:00:00Z",
+        recruitmentGroupUid: "before-call-charge",
+      },
+      {
+        uid: "content-after",
+        name: "신규 모집",
+        startAt: CALL_CHARGE_ANCHOR_START_AT,
+        recruitmentGroupUid: "call-charge",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const result = await loader({
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.net/@sensei/pickups/edit/new"),
+      params: { username: "@sensei", id: "new" },
+    } as never);
+    if (result instanceof Response) {
+      throw new Error(`Expected pickup history editor data, got redirect to ${result.headers.get("Location")}`);
+    }
+
+    expect(
+      Object.fromEntries(
+        result.events.map((event: { uid: string; exchangeable: boolean }) => [event.uid, event.exchangeable]),
+      ),
+    ).toEqual({ "before-call-charge": true, "call-charge": false });
   });
 
   it("collapses a group shared by two events into one option with joined names", async () => {
@@ -367,6 +480,7 @@ describe("pickup history editor loader", () => {
         trial: 100,
         tier3Count: 0,
         tier3StudentIds: [],
+        tier3StudentOffPickup: [],
       },
     ]);
   });
@@ -425,9 +539,10 @@ describe("pickup history editor loader", () => {
         defenseType: Defense.Light,
         position: "front",
         tacticRole: "attacker",
-        birthday: new Date("2026-01-01T00:00:00.000Z"),
+        birthday: "0000-01-01",
         role: "striker",
         equipments: [],
+        weaponType: null,
         released: true,
       },
     ]);
@@ -453,7 +568,109 @@ describe("pickup history editor loader", () => {
         trial: 100,
         tier3Count: 2,
         tier3StudentIds: ["10129", "10129"],
+        tier3StudentOffPickup: [false, false],
       },
+    ]);
+  });
+
+  it("pairs each stored 픽업 외 flag with its own draw and saves it back unchanged", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-05-27T00:00:00.000Z").getTime());
+
+    const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
+    historicalGroup.recruitments.push({
+      ...historicalGroup.recruitments[0],
+      recruitmentType: "given",
+      studentName: "토키(무장)",
+      student: {
+        ...historicalGroup.recruitments[0].student,
+        uid: "16019",
+        name: "토키(무장)",
+        initialTier: 1,
+      },
+    });
+    mockedGetAllHistoricalRecruitmentGroups.mockResolvedValue([historicalGroup]);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue({
+      uid: "result-with-given",
+      userId: 1,
+      recruitmentGroupUid: "decagrammaton-armed",
+      contentUid: "content-decagrammaton-armed",
+      completedAt: "2026-05-26T02:00:00.000Z",
+      recruitedStudents: [
+        { studentUid: "16019", tier: 3, pickup: true },
+        { studentUid: "10129", tier: 3, pickup: true },
+        { studentUid: "10129", tier: 3, pickup: false, offPickup: true },
+      ],
+      exchangedStudents: [],
+      trial: 100,
+      rawResult: null,
+      commentPostUid: null,
+      createdAt: "2026-05-26T02:00:00.000Z",
+      updatedAt: "2026-05-26T02:00:00.000Z",
+    });
+    mockedGetRecruitmentResultComment.mockResolvedValue(null);
+    mockedGetAllStudents.mockResolvedValue([
+      {
+        uid: "10129",
+        name: "스즈미(매지컬)",
+        familyName: null,
+        altNames: [],
+        school: "trinity",
+        initialTier: 3,
+        order: 1,
+        attackType: Attack.Explosive,
+        defenseType: Defense.Light,
+        position: "front",
+        tacticRole: "attacker",
+        birthday: "0000-01-01",
+        role: "striker",
+        equipments: [],
+        weaponType: null,
+        released: true,
+      },
+    ]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-decagrammaton-armed",
+        name: "데카그라마톤 무장",
+        recruitmentGroupUid: "decagrammaton-armed",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const result = await loader({
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.net/@sensei/pickups/edit/result-with-given"),
+      params: { username: "@sensei", id: "result-with-given" },
+    } as never);
+    if (result instanceof Response) {
+      throw new Error(`Expected pickup history editor data, got redirect to ${result.headers.get("Location")}`);
+    }
+
+    expect(result.currentPickupHistory?.result).toEqual([
+      {
+        trial: 100,
+        tier3Count: 2,
+        tier3StudentIds: ["10129", "10129"],
+        tier3StudentOffPickup: [false, true],
+      },
+    ]);
+    const history = result.currentPickupHistory;
+    if (!history) throw new Error("Expected the stored record");
+    const actualDomain =
+      jest.requireActual<typeof import("~/domain/recruitment-result")>("~/domain/recruitment-result");
+    expect(
+      actualDomain.createRecruitmentResultStudentsFromPickupHistory(
+        { result: history.result.map((trial) => ({ ...trial, trial: trial.trial ?? 0 })) },
+        new Set(["10129"]),
+      ),
+    ).toEqual([
+      { studentUid: "10129", tier: 3, pickup: true },
+      { studentUid: "10129", tier: 3, pickup: false, offPickup: true },
     ]);
   });
 
@@ -513,6 +730,37 @@ describe("pickup history editor loader", () => {
     expect(mockedUpsertRecruitmentResult).not.toHaveBeenCalled();
   });
 
+  it("rejects exchange students for a recruitment of the call-charge system", async () => {
+    mockedGetRecruitmentGroupByUid.mockResolvedValue(createGroup("call-charge", CALL_CHARGE_ANCHOR_START_AT));
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      { uid: "content-after", name: "신규 모집", recruitmentGroupUid: "call-charge" },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    await expect(
+      action({
+        context: { cloudflare: { env } },
+        request: new Request("https://mollulog.net/@sensei/pickups/edit/new", {
+          method: "POST",
+          body: JSON.stringify({
+            eventUid: "call-charge",
+            result: [{ trial: 200, tier3Count: 0, tier3StudentIds: [] }],
+            exchangedStudentIds: ["10129"],
+          }),
+        }),
+        params: { username: "@sensei", id: "new" },
+      } as never),
+    ).rejects.toMatchObject({
+      data: { error: { code: "pickup_history.exchange_unavailable" } },
+      init: { status: 400 },
+    });
+    expect(mockedUpsertRecruitmentResult).not.toHaveBeenCalled();
+  });
+
   it("saves explicit tier3 count even when tier3 student names are omitted", async () => {
     const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
     mockedGetRecruitmentGroupByUid.mockResolvedValue(historicalGroup);
@@ -551,6 +799,44 @@ describe("pickup history editor loader", () => {
         recruitedStudents: [],
       }),
     );
+  });
+
+  it.each([
+    ["/utils/pyroxene", "/utils/pyroxene"],
+    ["https://evil.example/", "/my?path=pickups"],
+    ["//evil.example/", "/my?path=pickups"],
+    [undefined, "/my?path=pickups"],
+  ])("returns to %s after saving only when it is a path on this site", async (returnTo, location) => {
+    mockedGetRecruitmentGroupByUid.mockResolvedValue(createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z"));
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue(null);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-decagrammaton-armed",
+        name: "데카그라마톤 무장",
+        recruitmentGroupUid: "decagrammaton-armed",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const response = (await action({
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.net/@sensei/pickups/edit/new", {
+        method: "POST",
+        body: JSON.stringify({
+          eventUid: "decagrammaton-armed",
+          result: [{ trial: 100, tier3Count: 0, tier3StudentIds: [] }],
+          exchangedStudentIds: [],
+          returnTo,
+        }),
+      }),
+      params: { username: "@sensei", id: "new" },
+    } as never)) as Response;
+
+    expect(response.headers.get("Location")).toBe(location);
   });
 
   it("preserves existing non-tier3 recruited students when editing an existing result", async () => {

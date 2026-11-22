@@ -10,6 +10,7 @@ import {
   createGuestPlannerFromLegacySources,
   createGuestPlannerLegacyMirror,
   guestPlannerHasData,
+  guestPlannerHasImportableData,
   hasUnresolvedGuestPlannerOptions,
   mergeGuestPlannerLegacyChanges,
   normalizeGuestPlanner,
@@ -388,6 +389,26 @@ describe("guest planner envelope", () => {
     envelope.document.pyroxene.eventData = { "event-1": { completed: false, expectedTrials: 200 } };
     envelope.favorites = [{ contentUid: "content-1", studentUid: "student-1" }];
     envelope.document.eventShops = { "shop-1": createDefaultEventShopState([], []) };
+    envelope.document.jankenProgress = {
+      "shop-1": {
+        progress: {
+          currentTier: 1,
+          heldEleph: 0,
+          cumulativeScore: 0,
+          equipmentTier: 1,
+          heldEquipmentCurrency: 0,
+          clearedStageUids: [],
+        },
+        goals: {
+          targetTier: null,
+          shopCurrencyMode: "linked",
+          manualShopCurrency: 0,
+          targetScore: null,
+          averageScore: null,
+          targetEquipmentTier: null,
+        },
+      },
+    };
     envelope.eventShopTimelineUids = { "shop-1": "timeline-1" };
     envelope.document.ap = {
       accountLevel: 85,
@@ -395,6 +416,7 @@ describe("guest planner envelope", () => {
       comfort: 4_500,
       eventPlans: { "event-1": { accessAt: "2026-09-30T03:00:00.000Z" } },
     };
+    expect(guestPlannerHasData(envelope)).toBe(true);
 
     const cleared = clearGuestPlannerItemsIfUnchanged(envelope, envelope, [
       { type: "resources", key: "current" },
@@ -415,9 +437,10 @@ describe("guest planner envelope", () => {
     expect(cleared.document.pyroxene.eventData).toEqual({});
     expect(cleared.favorites).toEqual([]);
     expect(cleared.document.eventShops).toEqual({});
+    expect(cleared.document.jankenProgress).toEqual(envelope.document.jankenProgress);
     expect(cleared.eventShopTimelineUids).toEqual({});
     expect(cleared.document.ap).toBeNull();
-    expect(guestPlannerHasData(cleared)).toBe(false);
+    expect(guestPlannerHasData(cleared)).toBe(true);
   });
 
   it("keeps AP when the guest source changed after the submitted import snapshot", () => {
@@ -630,6 +653,50 @@ describe("guest planner envelope", () => {
     expect(result.conflict).toBeNull();
   });
 
+  it("keeps the recorded instants of purchases and direct gains through a legacy merge", () => {
+    const record = (uid: string, source: "buy" | "other", eventAt: string) => ({
+      uid,
+      eventAt,
+      source,
+      repeatType: "fixed_days" as const,
+      repeatIntervalDays: null,
+      repeatCount: null,
+      autoRepurchase: false,
+      description: source === "buy" ? "청휘석 구매" : "점검 보상",
+      pyroxeneDelta: 600,
+      oneTimeTicketDelta: 0,
+      tenTimeTicketDelta: 0,
+    });
+    const base = createEmptyGuestPlanner();
+    base.document.pyroxene.records = [
+      record("record000001", "buy", "2026-11-17T17:00:00.000Z"), // 02:00 KST on 11/18, for game day 11/17
+      record("record000002", "other", "2026-11-15T19:00:00.000Z"), // 04:00 KST on 11/16
+      record("record000003", "buy", "2026-11-19T19:00:00.000Z"), // 04:00 KST on 11/20
+    ];
+    const firstMirror = createGuestPlannerLegacyMirror(base, null);
+    // The direct gain is then edited onto 11/17, recorded at 15:00 KST.
+    base.document.pyroxene.records = base.document.pyroxene.records.map((item) =>
+      item.uid === "record000002" ? { ...item, eventAt: "2026-11-17T06:00:00.000Z" } : item,
+    );
+    base.legacyMirror = createGuestPlannerLegacyMirror(base, firstMirror);
+    const submittedPyroxene = {
+      ...base.legacyMirror.pyroxene,
+      revision: base.legacyMirror.pyroxene.revision + 1,
+      data: { ...base.legacyMirror.pyroxene.data, collectedSourceKeys: ["event_reward:old-tab"] },
+    };
+
+    const result = mergeGuestPlannerLegacyChanges(base, submittedPyroxene, base.legacyMirror.eventShops);
+
+    expect(result.changed).toBe(true);
+    expect(
+      Object.fromEntries(result.envelope.document.pyroxene.records.map(({ uid, eventAt }) => [uid, eventAt])),
+    ).toEqual({
+      record000001: "2026-11-17T17:00:00.000Z",
+      record000002: "2026-11-17T06:00:00.000Z",
+      record000003: "2026-11-19T19:00:00.000Z",
+    });
+  });
+
   it("merges concurrent edits to different option and event-shop fields", () => {
     const pyroxene = createEmptyGuestPyroxenePlanner();
     pyroxene.data.resources = {
@@ -801,5 +868,30 @@ describe("guest planner envelope", () => {
     expect(result.envelope.document.eventShops["shop-1"].itemQuantities).toEqual({ item: 2 });
     expect(result.conflict?.keys.eventShopUids).toEqual(["shop-1"]);
     expect(result.conflict?.eventShops?.data.plans["shop-1"].state.itemQuantities).toEqual({ item: 3 });
+  });
+});
+
+describe("guestPlannerHasImportableData", () => {
+  it("ignores minigame progress, which the import screen does not offer", () => {
+    const envelope = createEmptyGuestPlanner();
+    envelope.document.jankenProgress = { "shop-1": {} as never };
+
+    expect(guestPlannerHasData(envelope)).toBe(true);
+    expect(guestPlannerHasImportableData(envelope, new Set())).toBe(false);
+  });
+
+  it("ignores received-reward keys the account already has", () => {
+    const envelope = createEmptyGuestPlanner();
+    envelope.document.pyroxene.collectedSourceKeys = ["reward-1", "reward-2"];
+
+    expect(guestPlannerHasImportableData(envelope, new Set(["reward-1", "reward-2"]))).toBe(false);
+    expect(guestPlannerHasImportableData(envelope, new Set(["reward-1"]))).toBe(true);
+  });
+
+  it("reports guest resources as importable", () => {
+    const envelope = createEmptyGuestPlanner();
+    envelope.document.pyroxene.resources = { pyroxene: 100, oneTimeTicket: 0, tenTimeTicket: 0 } as never;
+
+    expect(guestPlannerHasImportableData(envelope, new Set())).toBe(true);
   });
 });

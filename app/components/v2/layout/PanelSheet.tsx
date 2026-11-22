@@ -12,6 +12,8 @@ export type PanelSheetProps = {
   title: string;
   // A node lets a loading value show a skeleton in place of text.
   description?: ReactNode;
+  // Overrides the Aside description in the stacked Sheet header only.
+  sheetDescription?: ReactNode;
   Icon: ElementType;
   headerAction?: ReactNode;
   collapsible?: boolean;
@@ -26,6 +28,7 @@ export function PanelSheet({
   panelId,
   title,
   description,
+  sheetDescription,
   Icon,
   headerAction,
   collapsible = false,
@@ -35,6 +38,15 @@ export function PanelSheet({
 }: PanelSheetProps) {
   const { stacked, sheetPanelId, closeSheet, onSheetExited, revealRequest } = useV2Page();
   const [phase, setPhase] = useState<PanelPhase>(disabled || (collapsible && !defaultExpanded) ? "collapsed" : "open");
+  // A panel without a toggle cannot be opened by hand, so it opens when it stops being disabled, such as after a
+  // failed list loads on retry.
+  const [wasDisabled, setWasDisabled] = useState(disabled);
+  if (wasDisabled !== disabled) {
+    setWasDisabled(disabled);
+    if (!disabled && !collapsible) {
+      setPhase("open");
+    }
+  }
   const [highlightKey, setHighlightKey] = useState(0);
   const [pendingReveal, setPendingReveal] = useState<number | null>(null);
   // The enter and exit animations run only after a user or program change, so the first paint does not animate.
@@ -112,7 +124,10 @@ export function PanelSheet({
         ref={sectionRef}
         aria-labelledby={titleId}
         data-v2-panel={panelId}
-        className="relative rounded-lg bg-v2-surface p-v2-block-p"
+        className={cn(
+          "relative rounded-lg bg-v2-surface",
+          togglesBody && phase === "collapsed" ? "px-v2-block-p py-2" : "p-v2-block-p",
+        )}
       >
         <div className={cn("flex gap-2", togglesBody ? "items-center" : "items-start")}>
           {togglesBody ? (
@@ -122,7 +137,7 @@ export function PanelSheet({
               aria-controls={bodyId}
               onClick={toggle}
               className={cn(
-                "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-v2-row-x text-left hover:bg-v2-hover",
+                "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-v2-row-x text-left hover:bg-v2-hover active:bg-v2-filled-hover v2-interaction-transition",
                 v2FocusRing,
               )}
             >
@@ -147,7 +162,7 @@ export function PanelSheet({
             id={bodyId}
             onAnimationEnd={handleBodyAnimationEnd}
             className={cn(
-              "mt-v2-group-gap text-sm",
+              "mt-v2-block-gap text-sm",
               animated && (phase === "open" ? "v2-panel-enter" : "v2-panel-exit"),
             )}
           >
@@ -168,7 +183,7 @@ export function PanelSheet({
         title={title}
         Icon={Icon}
         panelId={panelId}
-        description={description}
+        description={sheetDescription === undefined ? description : sheetDescription}
         headerAction={headerAction}
         onClose={closeSheet}
         onExited={onSheetExited}

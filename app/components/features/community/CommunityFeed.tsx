@@ -13,7 +13,7 @@ import { bossImageUrl } from "~/models/assets";
 import type { CommunityFeedPost, CommunityPostBlock } from "~/models/community";
 import type { CommunityEngagementActionResult } from "~/models/community-engagement";
 import { STUDENT_GRADING_TAG_DISPLAY, sortStudentGradingTags } from "~/models/student-grading-tag";
-import type { EnrichedCommunityFeedPost } from "~/views/community";
+import type { EnrichedCommunityFeedPost, EnrichedCommunityPostBlock } from "~/views/community";
 import { StudentCards } from "../students";
 import {
   getCommentEditorPanelClassName,
@@ -325,7 +325,11 @@ function PostSubjectMeta({
     return (
       <div className={getSubjectMetaClassName(post.postType)}>
         <Link
-          to={`/events/${post.subjectContentUid}`}
+          to={
+            post.subjectContentType === "live"
+              ? `/lives/${post.subjectContentUid}`
+              : `/events/${post.subjectContentUid}`
+          }
           className="inline-flex max-w-full items-center gap-1.5 text-muted-foreground hover:text-foreground hover:underline"
         >
           <UserGroupIcon className="size-3.5 shrink-0 text-muted-foreground/70" />
@@ -333,7 +337,7 @@ function PostSubjectMeta({
         </Link>
         {pickupStudentSummary && pickupStudentSummary.visibleStudents.length > 0 && (
           <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
-            <span className="mr-0.5 shrink-0 text-muted-foreground/70">픽업</span>
+            <span className="mr-0.5 shrink-0 text-muted-foreground/70">픽업 대상</span>
             {pickupStudentSummary.visibleStudents.map((student) => (
               <StudentSubjectLink
                 key={`${post.uid}-${student.uid}`}
@@ -480,7 +484,7 @@ function BlockView({
   post,
   studentsByUid,
 }: {
-  block: CommunityPostBlock;
+  block: EnrichedCommunityPostBlock;
   post: CommunityFeedPostItem;
   studentsByUid: Record<string, { name: string }>;
 }) {
@@ -503,7 +507,7 @@ function BlockView({
       return null;
     }
 
-    return <MarkdownText text={block.text} />;
+    return <MarkdownText html={block.html} />;
   }
 
   if (block.type === "youtube") {

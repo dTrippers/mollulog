@@ -21,7 +21,7 @@ export function Dialog({ open, onClose, title, children, size }: DialogProps) {
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel
           className={cn(
-            "flex max-h-full w-full flex-col gap-v2-block-gap overflow-hidden rounded-lg bg-v2-elevated p-v2-block-p",
+            "flex max-h-full w-full flex-col gap-v2-block-gap overflow-hidden rounded-lg bg-v2-surface p-v2-block-p ring-1 ring-v2-divider shadow-xl",
             size === "sm" ? "max-w-md" : "max-w-4xl",
           )}
         >

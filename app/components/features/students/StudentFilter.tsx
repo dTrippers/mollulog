@@ -1,4 +1,3 @@
-import { ChevronDownIcon, StarIcon } from "@heroicons/react/16/solid";
 import {
   ArrowsRightLeftIcon,
   ArrowsUpDownIcon,
@@ -8,31 +7,12 @@ import {
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import hangul from "hangul-js";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import {
-  Button,
-  Dropdown,
-  FilterButtons,
-  PanelActionRow,
-  PanelBody,
-  PanelFilterButtonRow,
-  PanelFilterButtonsSection,
-  PanelSearchField,
-} from "~/components/primitives";
+import { useCallback, useEffect, useState } from "react";
+import { Button, PanelBody, PanelFilterButtonRow, PanelSearchField } from "~/components/primitives";
 import { Attack, Defense } from "~/graphql/graphql";
-import { trackGoogleAnalyticsEvent, trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
-import {
-  attackTypeLocale,
-  defenseTypeShortLocale,
-  equipmentTypeLocale,
-  equipmentTypeOrder,
-  positionLocale,
-  roleLocale,
-  schoolShortLocale,
-  tacticRoleLocale,
-} from "~/locales/ko";
+import { trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
+import { defenseTypeShortLocale } from "~/locales/ko";
 import type { Position, Role, TacticRole } from "~/models/content.d";
-import type { StudentDirectoryDisplayField, StudentDirectoryGroupBy } from "~/models/student-directory";
 
 export type StudentFilterState = {
   attackTypes: Attack[];
@@ -40,13 +20,7 @@ export type StudentFilterState = {
   roles: Role[];
   tacticRoles: TacticRole[];
   positions: Position[];
-  schools: string[];
-  equipmentSlots: [string[], string[], string[]];
-  initialTiers: number[];
-
   sort?: SortBy;
-  groupBy?: StudentDirectoryGroupBy;
-  displayBy?: StudentDirectoryDisplayField;
   search?: string;
 };
 
@@ -57,11 +31,9 @@ type StudentFilterProps = {
   onFilterChange?: (uids: string[]) => void;
   state?: StudentFilterState;
   onStateChange?: (state: StudentFilterState) => void;
-
   useFilter?: boolean;
   sortBy?: SortBy[];
   useSearch?: boolean;
-  directory?: boolean;
   searchScope?: "students" | "my_students";
 };
 
@@ -72,7 +44,6 @@ const attackFilterOptions = [
   { text: "진동", color: "purple" as const, value: Attack.Sonic },
   { text: "분해", color: "green" as const, value: Attack.Chemical },
 ];
-
 const defenseFilterOptions = [
   { text: defenseTypeShortLocale.light, color: "red" as const, value: Defense.Light },
   { text: defenseTypeShortLocale.heavy, color: "yellow" as const, value: Defense.Heavy },
@@ -80,18 +51,15 @@ const defenseFilterOptions = [
   { text: defenseTypeShortLocale.elastic, color: "purple" as const, value: Defense.Elastic },
   { text: defenseTypeShortLocale.composite, color: "green" as const, value: Defense.Composite },
 ];
-
 const roleFilterOptions = [
   { text: "스트라이커", color: "red" as const, value: "striker" as const },
   { text: "스페셜", color: "blue" as const, value: "special" as const },
 ];
-
 const positionFilterOptions = [
   { text: "FRONT", value: "front" as const },
   { text: "MIDDLE", value: "middle" as const },
   { text: "BACK", value: "back" as const },
 ];
-
 const tacticRoleFilterOptions = [
   { text: "딜러", value: "attacker" as const },
   { text: "탱커", value: "tank" as const },
@@ -99,76 +67,6 @@ const tacticRoleFilterOptions = [
   { text: "서포터", value: "support" as const },
   { text: "T.S.", value: "tactical_support" as const },
 ];
-
-const equipmentTypesBySlot = [
-  equipmentTypeOrder.slice(0, 3),
-  equipmentTypeOrder.slice(3, 6),
-  equipmentTypeOrder.slice(6, 9),
-] as const;
-
-const equipmentSlotDescriptors = [
-  { key: "equipment1", slotIndex: 0, title: "장비 1" },
-  { key: "equipment2", slotIndex: 1, title: "장비 2" },
-  { key: "equipment3", slotIndex: 2, title: "장비 3" },
-] as const;
-
-const responsiveFilterIconClassName = "lg:[&>svg]:hidden xl:[&>svg]:block";
-
-export const STUDENT_FILTER_OPTION_VALUES = {
-  attackTypes: attackFilterOptions.map(({ value }) => value),
-  defenseTypes: defenseFilterOptions.map(({ value }) => value),
-  roles: roleFilterOptions.map(({ value }) => value),
-  positions: positionFilterOptions.map(({ value }) => value),
-  tacticRoles: tacticRoleFilterOptions.map(({ value }) => value),
-  schools: [
-    "abydos",
-    "gehenna",
-    "millennium",
-    "trinity",
-    "hyakkiyako",
-    "shanhaijing",
-    "redwinter",
-    "valkyrie",
-    "srt",
-    "arius",
-    "highlander",
-    "wildhunt",
-    "odyssey",
-    "others",
-  ] as const,
-  equipmentTypes: [...equipmentTypeOrder],
-  initialTiers: [1, 2, 3],
-} as const;
-
-export const STUDENT_DIRECTORY_GROUP_VALUES = [
-  "none",
-  "school",
-  "attackType",
-  "defenseType",
-  "role",
-  "position",
-] as const satisfies readonly StudentDirectoryGroupBy[];
-
-export const STUDENT_DIRECTORY_DISPLAY_VALUES = [
-  "none",
-  "school",
-  "attackType",
-  "defenseType",
-  "role",
-  "tacticRole",
-  "position",
-  "equipment1",
-  "equipment2",
-  "equipment3",
-  "initialTier",
-  "age",
-  "schoolYear",
-  "height",
-  "street",
-  "outdoor",
-  "indoor",
-] as const satisfies readonly StudentDirectoryDisplayField[];
-
 const sortFilterOptions: Record<SortBy, string> = {
   recent: "최신순",
   old: "과거순",
@@ -176,17 +74,13 @@ const sortFilterOptions: Record<SortBy, string> = {
   tier: "★ 순",
 };
 
-type StudentDirectorySchool = (typeof STUDENT_FILTER_OPTION_VALUES.schools)[number];
-
-export function normalizeStudentDirectorySchool(school: string | null | undefined): StudentDirectorySchool | null {
-  if (!school) {
-    return null;
-  }
-
-  return STUDENT_FILTER_OPTION_VALUES.schools.includes(school as StudentDirectorySchool)
-    ? (school as StudentDirectorySchool)
-    : "others";
-}
+export const STUDENT_FILTER_OPTION_VALUES = {
+  attackTypes: attackFilterOptions.map(({ value }) => value),
+  defenseTypes: defenseFilterOptions.map(({ value }) => value),
+  roles: roleFilterOptions.map(({ value }) => value),
+  tacticRoles: tacticRoleFilterOptions.map(({ value }) => value),
+  positions: positionFilterOptions.map(({ value }) => value),
+} as const;
 
 export function createStudentFilterState(sort: SortBy = "recent"): StudentFilterState {
   return {
@@ -195,52 +89,23 @@ export function createStudentFilterState(sort: SortBy = "recent"): StudentFilter
     roles: [],
     tacticRoles: [],
     positions: [],
-    schools: [],
-    equipmentSlots: [[], [], []],
-    initialTiers: [],
     sort,
-    groupBy: "none",
-    displayBy: "none",
   };
 }
 
 export function hasActiveStudentFilters(state: StudentFilterState): boolean {
   return Boolean(
     state.search ||
-      state.attackTypes?.length ||
-      state.defenseTypes?.length ||
-      state.roles?.length ||
-      state.tacticRoles?.length ||
-      state.positions?.length ||
-      state.schools?.length ||
-      state.equipmentSlots?.some((slot) => slot.length) ||
-      state.initialTiers?.length,
-  );
-}
-
-export function getActiveStudentDirectoryFilterCount(state: StudentFilterState): number {
-  return (
-    (state.schools?.length ?? 0) +
-    (state.equipmentSlots?.reduce((count, slot) => count + (slot?.length ?? 0), 0) ?? 0) +
-    (state.initialTiers?.length ?? 0)
+      state.attackTypes.length ||
+      state.defenseTypes.length ||
+      state.roles.length ||
+      state.tacticRoles.length ||
+      state.positions.length,
   );
 }
 
 export function clearStudentFilters(state: StudentFilterState): StudentFilterState {
-  return {
-    ...createStudentFilterState(state.sort),
-    groupBy: state.groupBy ?? "none",
-    displayBy: state.displayBy ?? "none",
-    search: "",
-  };
-}
-
-export function hasActiveStudentDirectoryDisplaySettings(state: StudentFilterState): boolean {
-  return (state.displayBy ?? "none") !== "none" || (state.groupBy ?? "none") !== "none";
-}
-
-export function clearStudentDirectoryDisplaySettings(state: StudentFilterState): StudentFilterState {
-  return { ...state, displayBy: "none", groupBy: "none" };
+  return { ...createStudentFilterState(state.sort), search: "" };
 }
 
 export function trackStudentFilterChanges(
@@ -248,75 +113,9 @@ export function trackStudentFilterChanges(
   previous: StudentFilterState,
   next: StudentFilterState,
 ) {
-  for (const key of [
-    "attackTypes",
-    "defenseTypes",
-    "roles",
-    "tacticRoles",
-    "positions",
-    "schools",
-    "equipmentSlots",
-    "initialTiers",
-    "sort",
-    "groupBy",
-    "displayBy",
-  ] as const) {
+  for (const key of ["attackTypes", "defenseTypes", "roles", "tacticRoles", "positions", "sort"] as const) {
     if (JSON.stringify(previous[key]) !== JSON.stringify(next[key])) trackFilterApply(scope, key);
   }
-}
-
-type StudentDirectoryDisplaySettingsProps = {
-  state: StudentFilterState;
-  onStateChange: (state: StudentFilterState) => void;
-};
-
-export function StudentDirectoryDisplaySettings({ state, onStateChange }: StudentDirectoryDisplaySettingsProps) {
-  return (
-    <PanelBody className="space-y-0">
-      <PanelActionRow
-        title="표시할 정보"
-        className="py-1"
-        actions={
-          <Dropdown
-            aria-label="학생 카드에 표시할 정보"
-            value={state.displayBy ?? "none"}
-            options={studentDisplayOptions}
-            onChange={(displayBy) => {
-              if (displayBy !== state.displayBy) {
-                trackGoogleAnalyticsEvent("filter_apply", { scope: "students", filter: "displayBy" });
-              }
-              onStateChange({ ...state, displayBy });
-            }}
-            size="xs"
-          />
-        }
-      />
-      <PanelActionRow
-        title="묶어보기"
-        className="py-1"
-        actions={
-          <Dropdown
-            aria-label="학생 묶어보기"
-            value={state.groupBy ?? "none"}
-            options={studentGroupOptions}
-            onChange={(groupBy) => {
-              if (groupBy !== state.groupBy) {
-                trackGoogleAnalyticsEvent("filter_apply", { scope: "students", filter: "groupBy" });
-              }
-              onStateChange({ ...state, groupBy });
-            }}
-            size="xs"
-          />
-        }
-      />
-    </PanelBody>
-  );
-}
-
-export function getStudentDirectoryDisplaySettingsSummary(state: StudentFilterState): string {
-  const displayLabel = studentDisplayOptions.find((option) => option.value === state.displayBy)?.label ?? "없음";
-  const groupLabel = studentGroupOptions.find((option) => option.value === state.groupBy)?.label ?? "그룹 없음";
-  return `${displayLabel} · ${groupLabel}`;
 }
 
 export function getFilteredStudentUids<T extends FilterableStudent & { uid: string }>(
@@ -334,295 +133,91 @@ export default function StudentFilter({
   useFilter,
   sortBy,
   useSearch,
-  directory = false,
   searchScope = "students",
 }: StudentFilterProps) {
-  const [internalState, setInternalState] = useState<StudentFilterState>(() =>
-    createStudentFilterState(sortBy?.[0] || "recent"),
-  );
+  const [internalState, setInternalState] = useState<StudentFilterState>(() => createStudentFilterState(sortBy?.[0] || "recent"));
   const state = controlledState ?? internalState;
   const setFilterState = useCallback(
     (updater: React.SetStateAction<StudentFilterState>) => {
       const nextState = typeof updater === "function" ? updater(state) : updater;
-      if (!controlledState) {
-        setInternalState(nextState);
-      }
+      if (!controlledState) setInternalState(nextState);
       onStateChange?.(nextState);
     },
     [controlledState, onStateChange, state],
   );
-  const advancedFiltersId = useId();
-  const activeAdvancedFilterCount = getActiveStudentDirectoryFilterCount(state);
-  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(() => directory && activeAdvancedFilterCount > 0);
-
-  useEffect(() => {
-    if (directory && activeAdvancedFilterCount > 0) {
-      setAdvancedFiltersOpen(true);
-    }
-  }, [activeAdvancedFilterCount, directory]);
-
   const controlledSearch = controlledState?.search;
   const isControlled = controlledState !== undefined;
   const [localSearch, setLocalSearch] = useState(() => controlledSearch ?? "");
-  useEffect(() => {
-    setLocalSearch(isControlled ? (controlledSearch ?? "") : "");
-  }, [controlledSearch, isControlled]);
 
+  useEffect(() => {
+    setLocalSearch(isControlled ? controlledSearch ?? "" : "");
+  }, [controlledSearch, isControlled]);
   useEffect(() => {
     const timer = setTimeout(() => {
       setFilterState((prev) => (prev.search === localSearch ? prev : { ...prev, search: localSearch }));
     }, 150);
-
     return () => clearTimeout(timer);
   }, [localSearch, setFilterState]);
-
   useEffect(() => {
     onFilterChange?.(getFilteredStudentUids(students, state));
   }, [students, state, onFilterChange]);
 
-  const toggleAttack = (attackType: Attack, activated: boolean) => {
-    if (state.attackTypes.includes(attackType) !== activated) trackFilterApply(searchScope, "attackTypes");
-    updateFilterState("attackTypes", attackType, activated, setFilterState);
+  const toggle = <K extends "attackTypes" | "defenseTypes" | "roles" | "tacticRoles" | "positions">(key: K, value: StudentFilterState[K][number], active: boolean) => {
+    if ((state[key] as StudentFilterState[K][number][]).includes(value) !== active) trackFilterApply(searchScope, key);
+    updateFilterState(key, value, active, setFilterState);
   };
-
-  const toggleDefense = (defenseType: Defense, activated: boolean) => {
-    if (state.defenseTypes.includes(defenseType) !== activated) trackFilterApply(searchScope, "defenseTypes");
-    updateFilterState("defenseTypes", defenseType, activated, setFilterState);
-  };
-
-  const toggleRole = (role: Role, activated: boolean) => {
-    if (state.roles.includes(role) !== activated) trackFilterApply(searchScope, "roles");
-    updateFilterState("roles", role, activated, setFilterState);
-  };
-
-  const toggleSort = (sort: SortBy) => {
-    if (state.sort !== sort) trackFilterApply(searchScope, "sort");
-    setFilterState((prev) => ({ ...prev, sort }));
-  };
-
-  const togglePosition = (position: Position, activated: boolean) => {
-    if (state.positions.includes(position) !== activated) trackFilterApply(searchScope, "positions");
-    updateFilterState("positions", position, activated, setFilterState);
-  };
-
-  const toggleTacticRole = (tacticRole: TacticRole, activated: boolean) => {
-    if (state.tacticRoles.includes(tacticRole) !== activated) trackFilterApply(searchScope, "tacticRoles");
-    updateFilterState("tacticRoles", tacticRole, activated, setFilterState);
-  };
-
-  const toggleSchool = (school: string, activated: boolean) => {
-    if (state.schools.includes(school) !== activated) trackFilterApply(searchScope, "schools");
-    updateFilterState("schools", school, activated, setFilterState);
-  };
-
-  const toggleEquipment = (slotIndex: number, equipment: string, activated: boolean) => {
-    if ((state.equipmentSlots[slotIndex] ?? []).includes(equipment) !== activated) {
-      trackFilterApply(searchScope, "equipmentSlots");
-    }
-    setFilterState((prev) => {
-      const equipmentSlots: [string[], string[], string[]] = [
-        [...(prev.equipmentSlots?.[0] ?? [])],
-        [...(prev.equipmentSlots?.[1] ?? [])],
-        [...(prev.equipmentSlots?.[2] ?? [])],
-      ];
-      const currentSlot = equipmentSlots[slotIndex] ?? [];
-      equipmentSlots[slotIndex] = activated
-        ? currentSlot.includes(equipment)
-          ? currentSlot
-          : [...currentSlot, equipment]
-        : currentSlot.filter((item) => item !== equipment);
-      return { ...prev, equipmentSlots };
-    });
-  };
-
-  const toggleInitialTier = (initialTier: number, activated: boolean) => {
-    if ((state.initialTiers ?? []).includes(initialTier) !== activated) trackFilterApply(searchScope, "initialTiers");
-    setFilterState((prev) => {
-      const initialTiers = prev.initialTiers ?? [];
-      return {
-        ...prev,
-        initialTiers: activated
-          ? initialTiers.includes(initialTier)
-            ? initialTiers
-            : [...initialTiers, initialTier]
-          : initialTiers.filter((tier) => tier !== initialTier),
-      };
-    });
-  };
-
-  const schoolOptions = getSchoolOptions(students);
-  const equipmentOptionsBySlot = equipmentSlotDescriptors.map((descriptor) => ({
-    ...descriptor,
-    options: getEquipmentOptions(descriptor.slotIndex),
-  }));
+  const toggleAttack = (value: Attack, active: boolean) => toggle("attackTypes", value, active);
+  const toggleDefense = (value: Defense, active: boolean) => toggle("defenseTypes", value, active);
+  const toggleRole = (value: Role, active: boolean) => toggle("roles", value, active);
+  const togglePosition = (value: Position, active: boolean) => toggle("positions", value, active);
+  const toggleTacticRole = (value: TacticRole, active: boolean) => toggle("tacticRoles", value, active);
 
   return (
     <PanelBody className="space-y-2">
-      {useSearch && (
-        <PanelSearchField
-          label="이름으로 찾기"
-          value={localSearch}
-          placeholder="학생 이름"
-          className="pt-1"
-          onChange={setLocalSearch}
-        />
-      )}
-      {useFilter && (
+      {useSearch ? (
+        <PanelSearchField label="이름으로 찾기" value={localSearch} placeholder="학생 이름" className="pt-1" onChange={setLocalSearch} />
+      ) : null}
+      {useFilter ? (
         <>
           <PanelFilterButtonRow
             Icon={FireIcon}
-            className={directory ? responsiveFilterIconClassName : undefined}
-            buttonGroupClassName={directory ? "flex-nowrap gap-x-0.5 md:gap-x-0.5" : undefined}
-            buttonProps={attackFilterOptions.map(({ text, color, value }) => ({
-              text,
-              color,
-              active: state.attackTypes.includes(value),
-              onToggle: (activated) => toggleAttack(value, activated),
-            }))}
+            buttonProps={attackFilterOptions.map(({ text, color, value }) => ({ text, color, active: state.attackTypes.includes(value), onToggle: (active) => toggleAttack(value, active) }))}
             size="sm"
           />
           <PanelFilterButtonRow
             Icon={ShieldCheckIcon}
-            className={directory ? responsiveFilterIconClassName : undefined}
-            buttonGroupClassName={directory ? "flex-nowrap gap-x-0.5 md:gap-x-0.5" : undefined}
-            buttonProps={defenseFilterOptions.map(({ text, color, value }) => ({
-              text,
-              color,
-              active: state.defenseTypes.includes(value),
-              onToggle: (activated) => toggleDefense(value, activated),
-            }))}
+            buttonProps={defenseFilterOptions.map(({ text, color, value }) => ({ text, color, active: state.defenseTypes.includes(value), onToggle: (active) => toggleDefense(value, active) }))}
             size="sm"
           />
           <PanelFilterButtonRow
             Icon={ArrowsUpDownIcon}
-            className={directory ? responsiveFilterIconClassName : undefined}
-            buttonGroupClassName={directory ? "gap-x-0.5 md:gap-x-0.5" : undefined}
-            buttonProps={roleFilterOptions.map(({ text, color, value }) => ({
-              text,
-              color,
-              active: state.roles.includes(value),
-              onToggle: (activated) => toggleRole(value, activated),
-            }))}
+            buttonProps={roleFilterOptions.map(({ text, color, value }) => ({ text, color, active: state.roles.includes(value), onToggle: (active) => toggleRole(value, active) }))}
             size="sm"
           />
           <PanelFilterButtonRow
             Icon={ArrowsRightLeftIcon}
-            className={directory ? responsiveFilterIconClassName : undefined}
-            buttonGroupClassName={directory ? "gap-x-0.5 md:gap-x-0.5" : undefined}
-            buttonProps={positionFilterOptions.map(({ text, value }) => ({
-              text,
-              active: state.positions.includes(value),
-              onToggle: (activated) => togglePosition(value, activated),
-            }))}
+            buttonProps={positionFilterOptions.map(({ text, value }) => ({ text, active: state.positions.includes(value), onToggle: (active) => togglePosition(value, active) }))}
             size="sm"
           />
           <PanelFilterButtonRow
             Icon={UserGroupIcon}
-            className={directory ? responsiveFilterIconClassName : undefined}
-            buttonGroupClassName={directory ? "gap-x-0.5 md:gap-x-0.5" : undefined}
-            buttonProps={tacticRoleFilterOptions.map(({ text, value }) => ({
-              text,
-              active: state.tacticRoles.includes(value),
-              onToggle: (activated) => toggleTacticRole(value, activated),
-            }))}
+            buttonProps={tacticRoleFilterOptions.map(({ text, value }) => ({ text, active: state.tacticRoles.includes(value), onToggle: (active) => toggleTacticRole(value, active) }))}
             size="sm"
           />
         </>
-      )}
-      {sortBy && sortBy.length > 0 && (
+      ) : null}
+      {sortBy?.length ? (
         <PanelFilterButtonRow
           Icon={BarsArrowDownIcon}
-          className={directory ? responsiveFilterIconClassName : undefined}
-          buttonGroupClassName={directory ? "gap-x-0.5 md:gap-x-0.5" : undefined}
-          buttonProps={sortBy.map((sort) => ({
-            text: sortFilterOptions[sort],
-            active: state.sort === sort,
-            onToggle: (activated: boolean) => {
-              if (activated) {
-                toggleSort(sort);
-              }
-            },
-          }))}
+          buttonProps={sortBy.map((sort) => ({ text: sortFilterOptions[sort], active: state.sort === sort, onToggle: (active: boolean) => { if (active && state.sort !== sort) trackFilterApply(searchScope, "sort"); if (active) setFilterState((current) => ({ ...current, sort })); } }))}
           exclusive
           atLeastOne
           size="sm"
         />
-      )}
-      {directory && useFilter && (
-        <>
-          <button
-            type="button"
-            className="mt-2 flex w-full cursor-pointer items-center justify-between rounded-md bg-muted px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-            aria-label={advancedFiltersOpen ? "더 보기, 고급 필터 접기" : "더 보기, 고급 필터 펼치기"}
-            aria-expanded={advancedFiltersOpen}
-            aria-controls={advancedFiltersId}
-            onClick={() => setAdvancedFiltersOpen((current) => !current)}
-          >
-            <span className="inline-flex items-center gap-2">
-              <span>더 보기</span>
-              {activeAdvancedFilterCount > 0 && <span>{activeAdvancedFilterCount}개 적용</span>}
-            </span>
-            <ChevronDownIcon
-              aria-hidden="true"
-              className={`size-4 transition-transform ${advancedFiltersOpen ? "rotate-180" : ""}`}
-            />
-          </button>
-          {advancedFiltersOpen && (
-            <div id={advancedFiltersId} className="pt-1">
-              {schoolOptions.length > 0 && (
-                <PanelFilterButtonsSection
-                  title="학교"
-                  buttonGroupClassName="gap-x-0.5 md:gap-x-0.5"
-                  buttonProps={schoolOptions.map(({ text, value }) => ({
-                    text,
-                    active: state.schools?.some((school) => normalizeStudentDirectorySchool(school) === value),
-                    onToggle: (activated: boolean) => toggleSchool(value, activated),
-                  }))}
-                  size="sm"
-                />
-              )}
-              {equipmentOptionsBySlot.map(({ key, options, slotIndex, title }) => (
-                <PanelActionRow
-                  key={key}
-                  title={title}
-                  className="my-1 py-0"
-                  actions={
-                    <FilterButtons
-                      buttonProps={options.map(({ text, value }) => ({
-                        text,
-                        active: state.equipmentSlots?.[slotIndex]?.includes(value),
-                        onToggle: (activated: boolean) => toggleEquipment(slotIndex, value, activated),
-                      }))}
-                      size="sm"
-                      className="my-0 shrink-0"
-                      buttonGroupClassName="flex-nowrap gap-x-0.5 md:gap-x-0.5"
-                    />
-                  }
-                />
-              ))}
-              <PanelActionRow
-                title="초기 성급"
-                className="my-1 py-0"
-                actions={
-                  <InitialTierFilterButtons selectedTiers={state.initialTiers ?? []} onToggle={toggleInitialTier} />
-                }
-              />
-            </div>
-          )}
-        </>
-      )}
-      {!directory && hasActiveStudentFilters(state) ? (
+      ) : null}
+      {hasActiveStudentFilters(state) ? (
         <div className="flex justify-end pt-1">
-          <Button
-            text="필터 해제"
-            size="xs"
-            variant="danger-subtle"
-            onClick={() => {
-              const nextState = clearStudentFilters(state);
-              trackStudentFilterChanges(searchScope, state, nextState);
-              setFilterState(nextState);
-            }}
-          />
+          <Button text="필터 해제" size="xs" variant="danger-subtle" onClick={() => { const nextState = clearStudentFilters(state); trackStudentFilterChanges(searchScope, state, nextState); setFilterState(nextState); }} />
         </div>
       ) : null}
     </PanelBody>
@@ -639,11 +234,8 @@ type FilterableStudent = {
   name: string;
   familyName?: string | null;
   altNames?: string[];
-  school?: string | null;
-  equipments?: string[];
   tier?: number;
   initialTier?: number;
-
   order: number;
 };
 
@@ -651,343 +243,40 @@ function trackFilterApply(_scope: "students" | "my_students", filter: string) {
   trackGoogleAnalyticsEventIfAllowed("filter_apply", { scope: "students", filter });
 }
 
-function updateFilterState<
-  K extends keyof Pick<
-    StudentFilterState,
-    "attackTypes" | "defenseTypes" | "roles" | "tacticRoles" | "positions" | "schools"
-  >,
->(
+function updateFilterState<K extends "attackTypes" | "defenseTypes" | "roles" | "tacticRoles" | "positions">(
   key: K,
   value: StudentFilterState[K][number],
-  activated: boolean,
+  active: boolean,
   setState: (updater: React.SetStateAction<StudentFilterState>) => void,
 ) {
   setState((prev) => ({
     ...prev,
-    [key]: activated ? [...prev[key], value] : prev[key].filter((item) => item !== value),
+    [key]: active ? [...prev[key], value] : prev[key].filter((item) => item !== value),
   }));
 }
 
 export function applyStudentFilter<T extends FilterableStudent>(students: T[], state: StudentFilterState): T[] {
-  const selectedSchools = state.schools?.map(normalizeStudentDirectorySchool) ?? [];
   const filtered = students.filter((student) => {
-    const normalizedSchool = normalizeStudentDirectorySchool(student.school);
-    if (state.attackTypes?.length && !state.attackTypes.includes(student.attackType)) {
-      return false;
-    }
-    if (state.defenseTypes?.length && !state.defenseTypes.includes(student.defenseType)) {
-      return false;
-    }
-    if (state.roles?.length && !state.roles.includes(student.role)) {
-      return false;
-    }
-    if (state.positions?.length && !state.positions.includes(student.position)) {
-      return false;
-    }
-    if (state.tacticRoles?.length && !state.tacticRoles.includes(student.tacticRole)) {
-      return false;
-    }
-    if (state.schools?.length && (!normalizedSchool || !selectedSchools.includes(normalizedSchool))) {
-      return false;
-    }
-    if (
-      state.equipmentSlots?.some(
-        (slot, index) =>
-          Boolean(slot?.length) && (!student.equipments || !slot.includes(student.equipments[index] ?? "")),
-      )
-    ) {
-      return false;
-    }
-    if (state.initialTiers?.length && (!student.initialTier || !state.initialTiers.includes(student.initialTier))) {
-      return false;
-    }
-    if (
-      state.search &&
-      !getSearchableStudentNames(student).some((name) => hangul.search(name, state.search ?? "") >= 0)
-    ) {
-      return false;
-    }
-
+    if (state.attackTypes.length && !state.attackTypes.includes(student.attackType)) return false;
+    if (state.defenseTypes.length && !state.defenseTypes.includes(student.defenseType)) return false;
+    if (state.roles.length && !state.roles.includes(student.role)) return false;
+    if (state.positions.length && !state.positions.includes(student.position)) return false;
+    if (state.tacticRoles.length && !state.tacticRoles.includes(student.tacticRole)) return false;
+    if (state.search && ![student.name, student.familyName ?? "", ...(student.altNames ?? [])].some((name) => hangul.search(name, state.search ?? "") >= 0)) return false;
     return true;
   });
-
   return filtered.sort((a, b) => compareStudents(a, b, state.sort ?? "recent"));
-}
-
-function getSearchableStudentNames(student: FilterableStudent): string[] {
-  return [student.name, student.familyName ?? "", ...(student.altNames ?? [])].filter(Boolean);
 }
 
 function compareStudents(a: FilterableStudent, b: FilterableStudent, sort: SortBy): number {
   if (sort === "name") {
     return a.name.localeCompare(b.name, "ko") || a.order - b.order || (a.uid ?? "").localeCompare(b.uid ?? "");
   }
-
   if (sort === "tier") {
     const tierA = a.tier ?? a.initialTier ?? 0;
     const tierB = b.tier ?? b.initialTier ?? 0;
-    return (
-      tierB - tierA ||
-      a.order - b.order ||
-      a.name.localeCompare(b.name, "ko") ||
-      (a.uid ?? "").localeCompare(b.uid ?? "")
-    );
+    return tierB - tierA || a.order - b.order || a.name.localeCompare(b.name, "ko") || (a.uid ?? "").localeCompare(b.uid ?? "");
   }
-
   const orderDirection = sort === "old" ? 1 : -1;
-  return (
-    orderDirection * (a.order - b.order) ||
-    a.name.localeCompare(b.name, "ko") ||
-    (a.uid ?? "").localeCompare(b.uid ?? "")
-  );
+  return orderDirection * (a.order - b.order) || a.name.localeCompare(b.name, "ko") || (a.uid ?? "").localeCompare(b.uid ?? "");
 }
-
-function getSchoolOptions<T extends FilterableStudent>(students: T[]) {
-  const availableSchools = new Set(
-    students
-      .map((student) => normalizeStudentDirectorySchool(student.school))
-      .filter((school): school is StudentDirectorySchool => school !== null),
-  );
-
-  return STUDENT_FILTER_OPTION_VALUES.schools
-    .filter((value) => availableSchools.has(value))
-    .map((value) => ({ value, text: schoolShortLocale[value] ?? "정보 없음" }));
-}
-
-function getEquipmentOptions(slotIndex: number) {
-  return (equipmentTypesBySlot[slotIndex] ?? []).map((value) => ({
-    value,
-    text: equipmentTypeLocale[value] ?? "정보 없음",
-  }));
-}
-
-type InitialTierFilterButtonsProps = {
-  selectedTiers: number[];
-  onToggle: (initialTier: number, activated: boolean) => void;
-};
-
-function InitialTierFilterButtons({ selectedTiers, onToggle }: InitialTierFilterButtonsProps) {
-  return (
-    <fieldset className="flex flex-nowrap items-center gap-0.5" aria-label="초기 성급">
-      {STUDENT_FILTER_OPTION_VALUES.initialTiers.map((initialTier) => {
-        const active = selectedTiers.includes(initialTier);
-        return (
-          <button
-            key={initialTier}
-            type="button"
-            className={`inline-flex h-8 cursor-pointer items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 lg:h-7 lg:px-1.5 ${
-              active
-                ? "bg-foreground text-background hover:bg-foreground/90"
-                : "bg-muted text-foreground shadow-sm shadow-black/5 hover:bg-muted/80 dark:shadow-none"
-            }`}
-            aria-label={`초기 성급 ${initialTier}성`}
-            aria-pressed={active}
-            onClick={() => onToggle(initialTier, !active)}
-          >
-            <StarIcon aria-hidden="true" className="size-3.5 text-yellow-500" />
-            <span>{initialTier}</span>
-          </button>
-        );
-      })}
-    </fieldset>
-  );
-}
-
-function compareSchoolValues(a: string, b: string): number {
-  const aIndex = STUDENT_FILTER_OPTION_VALUES.schools.indexOf(normalizeStudentDirectorySchool(a) ?? "others");
-  const bIndex = STUDENT_FILTER_OPTION_VALUES.schools.indexOf(normalizeStudentDirectorySchool(b) ?? "others");
-  return aIndex - bIndex || a.localeCompare(b);
-}
-
-export type StudentDirectoryGroup<T extends FilterableStudent = FilterableStudent> = {
-  key: string;
-  label: string | null;
-  students: T[];
-};
-
-export function groupStudentDirectoryStudents<T extends FilterableStudent>(
-  students: T[],
-  groupBy: StudentDirectoryGroupBy = "none",
-): StudentDirectoryGroup<T>[] {
-  if (groupBy === "none") {
-    return students.length > 0 ? [{ key: "all", label: null, students }] : [];
-  }
-
-  const grouped = new Map<string, T[]>();
-  for (const student of students) {
-    const value = getStudentGroupValue(student, groupBy);
-    const key = value ?? "__missing__";
-    const current = grouped.get(key);
-    if (current) {
-      current.push(student);
-    } else {
-      grouped.set(key, [student]);
-    }
-  }
-
-  return [...grouped.entries()]
-    .map(([key, groupedStudents]) => ({
-      key,
-      label: getStudentGroupLabel(key, groupBy),
-      students: groupedStudents,
-    }))
-    .sort((a, b) => compareStudentGroups(a.key, b.key, groupBy));
-}
-
-export function getStudentDirectoryLabel(
-  student: FilterableStudent & {
-    catalog?: {
-      profile: { age: string | null; schoolYear: string | null; height: string | null };
-      terrainAdaptations: { street: string; outdoor: string; indoor: string };
-    } | null;
-  },
-  displayBy: StudentDirectoryDisplayField = "none",
-): { value: string; ariaLabel: string } {
-  const value = getStudentDirectoryDisplayValue(student, displayBy);
-  return { value, ariaLabel: value };
-}
-
-function getStudentGroupValue(
-  student: FilterableStudent,
-  groupBy: Exclude<StudentDirectoryGroupBy, "none">,
-): string | null {
-  if (groupBy === "school") {
-    return normalizeStudentDirectorySchool(student.school);
-  }
-  if (groupBy === "attackType") {
-    return student.attackType;
-  }
-  if (groupBy === "defenseType") {
-    return student.defenseType;
-  }
-  if (groupBy === "role") {
-    return student.role;
-  }
-  return student.position;
-}
-
-function getStudentGroupLabel(key: string, groupBy: Exclude<StudentDirectoryGroupBy, "none">): string {
-  if (key === "__missing__") {
-    return "정보 없음";
-  }
-  if (groupBy === "school") {
-    return schoolShortLocale[key] ?? "정보 없음";
-  }
-  if (groupBy === "attackType") {
-    return attackTypeLocale[key as Attack] ?? "정보 없음";
-  }
-  if (groupBy === "defenseType") {
-    return defenseTypeShortLocale[key as Defense] ?? "정보 없음";
-  }
-  if (groupBy === "role") {
-    return roleLocale[key as Role] ?? "정보 없음";
-  }
-  return positionLocale[key as Position] ?? "정보 없음";
-}
-
-function compareStudentGroups(a: string, b: string, groupBy: Exclude<StudentDirectoryGroupBy, "none">): number {
-  if (a === "__missing__") return b === "__missing__" ? 0 : 1;
-  if (b === "__missing__") return -1;
-  if (groupBy === "school") {
-    return compareSchoolValues(a, b);
-  }
-
-  const order = getGroupOrder(groupBy);
-  const aIndex = order.indexOf(a);
-  const bIndex = order.indexOf(b);
-  return (
-    (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) - (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex) ||
-    a.localeCompare(b)
-  );
-}
-
-function getGroupOrder(groupBy: Exclude<StudentDirectoryGroupBy, "none">): readonly string[] {
-  if (groupBy === "attackType") {
-    return STUDENT_FILTER_OPTION_VALUES.attackTypes;
-  }
-  if (groupBy === "defenseType") {
-    return STUDENT_FILTER_OPTION_VALUES.defenseTypes;
-  }
-  if (groupBy === "role") {
-    return STUDENT_FILTER_OPTION_VALUES.roles;
-  }
-  return STUDENT_FILTER_OPTION_VALUES.positions;
-}
-
-function getStudentDirectoryDisplayValue(
-  student: FilterableStudent & {
-    catalog?: {
-      profile: { age: string | null; schoolYear: string | null; height: string | null };
-      terrainAdaptations: { street: string; outdoor: string; indoor: string };
-    } | null;
-  },
-  displayBy: StudentDirectoryDisplayField,
-): string {
-  if (displayBy === "none") {
-    return "";
-  }
-  if (displayBy === "school") {
-    return schoolShortLocale[student.school ?? ""] ?? "정보 없음";
-  }
-  if (displayBy === "attackType") {
-    return attackTypeLocale[student.attackType] ?? "정보 없음";
-  }
-  if (displayBy === "defenseType") {
-    return defenseTypeShortLocale[student.defenseType] ?? "정보 없음";
-  }
-  if (displayBy === "role") {
-    return roleLocale[student.role] ?? "정보 없음";
-  }
-  if (displayBy === "tacticRole") {
-    return tacticRoleLocale[student.tacticRole] ?? "정보 없음";
-  }
-  if (displayBy === "position") {
-    return positionLocale[student.position] ?? "정보 없음";
-  }
-  if (displayBy === "equipment1" || displayBy === "equipment2" || displayBy === "equipment3") {
-    const index = Number(displayBy.slice(-1)) - 1;
-    return equipmentTypeLocale[student.equipments?.[index] ?? ""] ?? "정보 없음";
-  }
-  if (displayBy === "initialTier") {
-    return typeof student.initialTier === "number" && student.initialTier > 0
-      ? `${student.initialTier}성`
-      : "정보 없음";
-  }
-  if (displayBy === "age" || displayBy === "schoolYear" || displayBy === "height") {
-    return getAvailablePublicString(student.catalog?.profile?.[displayBy]);
-  }
-  return getAvailablePublicString(student.catalog?.terrainAdaptations?.[displayBy]);
-}
-
-function getAvailablePublicString(value: string | null | undefined): string {
-  return value === null || value === undefined || value === "" ? "정보 없음" : value;
-}
-
-const studentGroupOptions = [
-  { value: "none" as const, label: "그룹 없음" },
-  { value: "school" as const, label: "학교" },
-  { value: "attackType" as const, label: "공격 타입" },
-  { value: "defenseType" as const, label: "방어 타입" },
-  { value: "role" as const, label: "클래스" },
-  { value: "position" as const, label: "포지션" },
-];
-
-const studentDisplayOptions = [
-  { value: "none" as const, label: "없음" },
-  { value: "school" as const, label: "학교" },
-  { value: "attackType" as const, label: "공격 타입" },
-  { value: "defenseType" as const, label: "방어 타입" },
-  { value: "role" as const, label: "클래스" },
-  { value: "tacticRole" as const, label: "전술 역할" },
-  { value: "position" as const, label: "포지션" },
-  { value: "equipment1" as const, label: "장비 1" },
-  { value: "equipment2" as const, label: "장비 2" },
-  { value: "equipment3" as const, label: "장비 3" },
-  { value: "initialTier" as const, label: "초기 성급" },
-  { value: "age" as const, label: "나이" },
-  { value: "schoolYear" as const, label: "학년" },
-  { value: "height" as const, label: "키" },
-  { value: "street" as const, label: "시가지 적성" },
-  { value: "outdoor" as const, label: "야외 적성" },
-  { value: "indoor" as const, label: "실내 적성" },
-];

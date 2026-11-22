@@ -12,7 +12,13 @@ import {
   getTimelineContentsByContentTypes,
   groupTimelineContentsByRecruitmentGroupUid,
 } from "~/models/timeline-content.server";
-import { getHomeBirthdaySource, getHomeFavoritedCounts, getIndexContents } from "~/views/home";
+import {
+  getHomeBirthdaySource,
+  getHomeFavoritedCounts,
+  getIndexContents,
+  HomeIndexIncompleteError,
+  refreshIndexContents,
+} from "~/views/home";
 import { getUpcomingRaidContents } from "~/views/raid-content";
 
 const mockLogger = { error: jest.fn() };
@@ -57,13 +63,13 @@ afterEach(() => {
 });
 
 describe("getIndexContents", () => {
-  it("caches a complete snapshot under the route index version 7 key, without the favorited counts", async () => {
+  it("caches a complete snapshot under the route index version 8 key, without the favorited counts", async () => {
     healthySources();
     mockedFetchRouteCached.mockImplementation((_env, _ctx, _key, fn) => fn());
 
     const result = await getIndexContents(env, false, ctx);
 
-    expect(mockedFetchRouteCached).toHaveBeenCalledWith(env, ctx, "route::index::v7::all", expect.any(Function), false);
+    expect(mockedFetchRouteCached).toHaveBeenCalledWith(env, ctx, "route::index::v8::all", expect.any(Function), false);
     expect(result).not.toHaveProperty("favoritedCounts");
     expect(getFavoritedCounts).not.toHaveBeenCalled();
     expect(result.events).toEqual({
@@ -125,6 +131,26 @@ describe("getIndexContents", () => {
     expect(second.events).toEqual({ status: "error" });
     expect(second.news).toEqual({ status: "success", data: [] });
     expect(second.raids.status).toBe("success");
+  });
+});
+
+describe("refreshIndexContents", () => {
+  it("force-refreshes the same route key and resolves a complete snapshot", async () => {
+    healthySources();
+    mockedFetchRouteCached.mockImplementation((_env, _ctx, _key, fn) => fn());
+
+    const result = await refreshIndexContents(env, ctx);
+
+    expect(mockedFetchRouteCached).toHaveBeenCalledWith(env, ctx, "route::index::v8::all", expect.any(Function), true);
+    expect(result.news).toEqual({ status: "success", data: [] });
+  });
+
+  it("rejects when a source failed instead of returning the uncached partial contents", async () => {
+    healthySources();
+    jest.mocked(getHomeCampaigns).mockRejectedValue(new Error("BAQL unavailable"));
+    mockedFetchRouteCached.mockImplementation((_env, _ctx, _key, fn) => fn());
+
+    await expect(refreshIndexContents(env, ctx)).rejects.toBeInstanceOf(HomeIndexIncompleteError);
   });
 });
 

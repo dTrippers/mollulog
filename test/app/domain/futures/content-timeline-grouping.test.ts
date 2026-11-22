@@ -57,4 +57,19 @@ describe("groupFutureContents", () => {
     );
     expect(groups[0].contents.map((item) => item.uid)).toEqual(["new", "rerun", "live"]);
   });
+
+  it("places Korean dubbing after the stories released on the same date", () => {
+    const since = "2026-10-20T00:00:00.000Z";
+    const groups = groupFutureContents(
+      [
+        content("voice", since, null, "ko_voice"),
+        content("mini", since, null, "mini_story"),
+        content("main", since, null, "main_story"),
+        content("drill", since, null, "joint_firing_drill"),
+      ],
+      timeZone,
+      "2026-10-15T03:00:00.000Z",
+    );
+    expect(groups[0].contents.map((item) => item.uid)).toEqual(["main", "mini", "voice", "drill"]);
+  });
 });

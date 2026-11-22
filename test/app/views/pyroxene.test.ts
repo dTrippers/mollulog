@@ -10,6 +10,9 @@ jest.mock("~/models/recruitment", () => ({
 }));
 jest.mock("~/models/raid", () => ({ getRaidSchedule: jest.fn() }));
 jest.mock("~/models/student", () => ({ getAllStudentsMap: jest.fn() }));
+jest.mock("~/models/student-directory", () => ({
+  getStudentDirectoryStudents: jest.fn(() => Promise.resolve([])),
+}));
 jest.mock("~/models/main-story", () => ({
   ...jest.requireActual<typeof import("~/models/main-story")>("~/models/main-story"),
   getMainStories: jest.fn(),
@@ -199,6 +202,7 @@ function timelineContent(overrides: Partial<TimelineContent> & { uid: string }):
     isSpoiler: false,
     tags: [],
     earnablePyroxene: null,
+    featuredUntil: null,
     syncedAt: null,
     ...overrides,
   };
@@ -275,6 +279,12 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
       },
     ] as unknown as Awaited<ReturnType<typeof getRecruitmentGroupsByUids>>);
 
+    const { getStudentDirectoryStudents } =
+      jest.requireMock<typeof import("~/models/student-directory")>("~/models/student-directory");
+    (getStudentDirectoryStudents as jest.MockedFunction<typeof getStudentDirectoryStudents>).mockResolvedValueOnce([
+      { uid: "a", acquisitionType: "limited" },
+    ] as unknown as Awaited<ReturnType<typeof getStudentDirectoryStudents>>);
+
     const contents = await getPyroxenePlannerContents({} as Env);
 
     expect(new Set(contents.map((c) => c.uid))).toEqual(new Set(["event-a", "event-b", "group:shared-group"]));
@@ -310,6 +320,10 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
       ["c", "event-b"],
       ["d", "event-b"],
     ]);
+    // The acquisition type comes from the student directory; a student it does not list has none.
+    expect(
+      merged && "recruitments" in merged ? merged.recruitments.map((r) => r.student?.acquisitionType) : null,
+    ).toEqual(["limited", null, null, null]);
   });
 });
 
@@ -400,7 +414,7 @@ describe("getPyroxenePlannerContents raid season identity", () => {
 });
 
 describe("getPyroxenePlannerContents with an unregistered pickup student", () => {
-  it("keeps the target as a provisional three-star and switches rules at the anchor event", async () => {
+  it("leaves the tier unconfirmed, keeps the provisional three-star pool, and switches rules at the anchor event", async () => {
     const { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } =
       jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
     const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
@@ -461,7 +475,7 @@ describe("getPyroxenePlannerContents with an unregistered pickup student", () =>
             uid: expect.stringMatching(/^provisional:/),
             imageUid: null,
             name: "미등록 학생",
-            initialTier: 3,
+            initialTier: null,
           },
         },
       ],

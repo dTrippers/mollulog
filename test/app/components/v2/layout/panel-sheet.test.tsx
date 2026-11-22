@@ -3,7 +3,7 @@
  */
 import "./layout-test-polyfills";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useNavigate } from "react-router";
 import {
   MobileActionBar,
@@ -51,7 +51,12 @@ function Harness({ request = null, closeRequest = null, onCloseHandled, withActi
         <NavigateButton />
       </PageMain>
       <PageAside>
-        <PanelSheet panelId="filter" title="컨텐츠 필터" Icon={Icon} headerAction={<button type="button">초기화</button>}>
+        <PanelSheet
+          panelId="filter"
+          title="컨텐츠 필터"
+          Icon={Icon}
+          headerAction={<button type="button">초기화</button>}
+        >
           <label>
             <input type="checkbox" /> 이벤트
           </label>
@@ -95,6 +100,26 @@ function HeaderActionHarness({ withAction }: { withAction: boolean }) {
   );
 }
 
+function SheetDescriptionHarness({ request }: { request: V2PanelRequest }) {
+  return (
+    <V2Page width="wide" panelRequest={request}>
+      <PageHeader title="학생부" />
+      <PageMain>본문</PageMain>
+      <PageAside>
+        <PanelSheet
+          panelId="filter"
+          title="필터"
+          Icon={Icon}
+          description="Aside 설명"
+          sheetDescription="Sheet 설명"
+        >
+          <span>필터 본문</span>
+        </PanelSheet>
+      </PageAside>
+    </V2Page>
+  );
+}
+
 describe("PanelSheet", () => {
   beforeEach(() => {
     installLayoutTestEnv();
@@ -102,15 +127,24 @@ describe("PanelSheet", () => {
   });
 
   it("starts a collapsible panel collapsed and toggles its body with aria-expanded", () => {
-    renderHarness(<Harness />);
+    const { container } = renderHarness(<Harness />);
     const toggle = screen.getByRole("button", { name: "표시 설정" });
+    const collapsiblePanel = container.querySelector<HTMLElement>('[data-v2-panel="display"]') as HTMLElement;
+    const regularPanel = container.querySelector<HTMLElement>('[data-v2-panel="filter"]') as HTMLElement;
 
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.className).toContain("active:bg-v2-filled-hover");
+    expect(collapsiblePanel.className).toContain("px-v2-block-p py-2");
+    expect(collapsiblePanel.className).not.toContain("p-v2-block-p");
+    expect(regularPanel.className).toContain("p-v2-block-p");
+    expect(regularPanel.className).not.toContain("py-2");
     expect(screen.queryByText("표시 설정 본문")).toBeNull();
 
     fireEvent.click(toggle);
 
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(collapsiblePanel.className).toContain("p-v2-block-p");
+    expect(collapsiblePanel.className).not.toContain("py-2");
     expect(screen.getByText("표시 설정 본문")).toBeTruthy();
   });
 
@@ -119,13 +153,16 @@ describe("PanelSheet", () => {
     const toggle = screen.getByRole("button", { name: "표시 설정" });
     fireEvent.click(toggle);
     const body = screen.getByText("표시 설정 본문").parentElement as HTMLElement;
+    const panel = body.closest("section") as HTMLElement;
 
     fireEvent.click(toggle);
     expect(body.isConnected).toBe(true);
     expect(body.className).toContain("v2-panel-exit");
+    expect(panel.className).not.toContain("py-2");
 
     fireEvent.animationEnd(body);
     expect(screen.queryByText("표시 설정 본문")).toBeNull();
+    expect(panel.className).toContain("px-v2-block-p py-2");
   });
 
   it("renders the body in the Aside on side-by-side and opens no sheet for a request", () => {
@@ -141,6 +178,15 @@ describe("PanelSheet", () => {
 
     expect(await screen.findByRole("dialog", { name: "컨텐츠 필터" })).toBeTruthy();
     await waitFor(() => expect(document.activeElement?.textContent).toBe("컨텐츠 필터"));
+  });
+
+  it("uses the sheet-specific description in the mobile sheet", async () => {
+    setLayoutWidth(390);
+    renderHarness(<SheetDescriptionHarness request={{ panelId: "filter", requestId: 1 }} />);
+
+    const dialog = await screen.findByRole("dialog", { name: "필터" });
+    expect(within(dialog).getByText("Sheet 설명")).toBeTruthy();
+    expect(within(dialog).queryByText("Aside 설명")).toBeNull();
   });
 
   it("keeps one body instance while the stacked sheet is open", async () => {
@@ -277,6 +323,31 @@ describe("PanelSheet", () => {
 
     expect(headerRow().className).toBe(withoutAction);
     expect(headerRow().children).toHaveLength(1);
+  });
+
+  it("shows the body of a panel without a toggle once it stops being disabled", () => {
+    function RetryHarness({ disabled }: { disabled: boolean }) {
+      return (
+        <V2Page width="wide">
+          <PageHeader title="가구 도감" />
+          <PageMain>본문</PageMain>
+          <PageAside>
+            <PanelSheet panelId="search" title="검색" Icon={Icon} disabled={disabled}>
+              <span>검색 본문</span>
+            </PanelSheet>
+          </PageAside>
+        </V2Page>
+      );
+    }
+    const { rerender } = renderHarness(<RetryHarness disabled />);
+    expect(screen.queryByText("검색 본문")).toBeNull();
+
+    rerender(
+      <MemoryRouter>
+        <RetryHarness disabled={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("검색 본문")).toBeTruthy();
   });
 
   it("ignores a program request for a disabled panel", () => {

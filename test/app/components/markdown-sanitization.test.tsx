@@ -2,10 +2,11 @@ import { describe, expect, it } from "@jest/globals";
 import { renderToStaticMarkup } from "react-dom/server";
 import MarkdownText from "~/components/primitives/MarkdownText";
 import { MarkdownContent } from "~/components/v2/primitives/MarkdownContent";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 
 describe.each([
-  ["MarkdownText", (text: string) => renderToStaticMarkup(<MarkdownText text={text} />)],
-  ["MarkdownContent", (text: string) => renderToStaticMarkup(<MarkdownContent text={text} headingLevel={2} />)],
+  ["MarkdownText", (text: string) => renderToStaticMarkup(<MarkdownText html={renderMarkdownToSafeHtml(text)} />)],
+  ["MarkdownContent", (text: string) => renderToStaticMarkup(<MarkdownContent html={renderMarkdownToSafeHtml(text)} headingLevel={2} />)],
 ] as const)("%s sanitization", (_name, render) => {
   it("rejects encoded executable URLs and event handlers while preserving safe content", () => {
     const markup = render(

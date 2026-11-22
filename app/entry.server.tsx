@@ -83,12 +83,16 @@ export default async function handleRequest(
       { method: request.method, routePattern: routePage.routePattern },
     );
     if (botRequest) {
-      await watchIo("ssr.allReady", streamingBody.allReady, { method: request.method, routePattern: routePage.routePattern });
+      await watchIo("ssr.allReady", streamingBody.allReady, {
+        method: request.method,
+        routePattern: routePage.routePattern,
+      });
     }
     body = streamingBody;
   }
 
-  responseHeaders.set("Content-Type", "text/html");
+  // Name the charset so tools that ignore `<meta charset>` (some link-preview validators) still read UTF-8.
+  responseHeaders.set("Content-Type", "text/html; charset=utf-8");
   const isPrivateResponse = responseHeaders
     .get("Cache-Control")
     ?.split(",")
@@ -101,6 +105,13 @@ export default async function handleRequest(
     responseHeaders.set("X-Robots-Tag", "noindex");
   }
   appendVary(responseHeaders, "User-Agent");
+  // `no-transform` also stops Cloudflare from compressing the document, which made pages several times larger on the
+  // wire. The Workers runtime compresses the stream itself when the response names an encoding, so visitors get gzip
+  // without Cloudflare touching the response. Bot responses are left exactly as before for the SEO checks.
+  if (!botRequest && acceptsGzip(request)) {
+    responseHeaders.set("Content-Encoding", "gzip");
+    appendVary(responseHeaders, "Accept-Encoding");
+  }
   responseHeaders.set(SEO_DEBUG_HEADERS.renderId, requestDiagnostics.renderId);
   responseHeaders.set(SEO_DEBUG_HEADERS.requestPath, requestDiagnostics.requestPath);
   responseHeaders.set(SEO_DEBUG_HEADERS.routerPath, routerPath);
@@ -183,6 +194,17 @@ function appendVary(headers: Headers, value: string) {
   );
   values.add(value);
   headers.set("Vary", [...values].join(", "));
+}
+
+function acceptsGzip(request: Request): boolean {
+  // Cloudflare may rewrite Accept-Encoding before the Worker sees it; the visitor's own value is kept in the cf object.
+  const clientAcceptEncoding = request.cf?.clientAcceptEncoding;
+  const acceptEncoding =
+    typeof clientAcceptEncoding === "string" ? clientAcceptEncoding : (request.headers.get("Accept-Encoding") ?? "");
+  return acceptEncoding.split(",").some((entry) => {
+    const [coding, ...params] = entry.split(";").map((part) => part.trim().toLowerCase());
+    return coding === "gzip" && !params.some((param) => /^q=0(\.0*)?$/.test(param));
+  });
 }
 
 async function sha256Hex(body: string): Promise<string> {

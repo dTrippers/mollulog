@@ -12,6 +12,16 @@ const items: ActionMenuItem[] = [
 ];
 
 describe("ActionMenu while disabled", () => {
+  it("keeps the icon trigger and menu rows compact", () => {
+    render(<ActionMenu label="의견 메뉴" icon={EllipsisHorizontalIcon} items={items} />);
+
+    const trigger = screen.getByRole("button", { name: "의견 메뉴" });
+    expect(trigger.className).toContain("size-8");
+    expect(trigger.className).not.toContain("max-lg:size-11");
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menuitem", { name: "수정" }).className).toContain("min-h-v2-row-min");
+  });
+
   it("disables the trigger and closes an open menu, so a save in flight cannot start another action", () => {
     const { rerender } = render(<ActionMenu label="의견 메뉴" icon={EllipsisHorizontalIcon} items={items} />);
     fireEvent.click(screen.getByRole("button", { name: "의견 메뉴" }));

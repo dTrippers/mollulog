@@ -13,6 +13,7 @@ import {
   updateComment,
 } from "~/models/content.server";
 import { classifyAndPersistRecruitmentOpinion } from "~/models/recruitment-opinion-classifier.server";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 
 export type CommentResponse = {
   comments: NestedComment[];
@@ -26,14 +27,11 @@ async function getCommentsResponse(
   ctx: ExecutionContext,
 ): Promise<CommentResponse> {
   const logger = getLogger(env, ctx, { route: "api.contents.comments", contentUid });
-  const hideRecruitmentOpinions = currentUser?.hideRecruitmentOpinions === true;
-  const recruitmentPeriod = await getContentRecruitmentPeriod(env, contentUid, { ctx });
-  const options = {
-    hideRecruitmentOpinions,
-    recruitmentPeriodStartAtByContentId: { [contentUid]: recruitmentPeriod?.startAt ?? null },
-    ctx,
-  };
   try {
+    const options = {
+      hideRecruitmentOpinions: await getHideRecruitmentOpinions(env, currentUser, { ctx }),
+      ctx,
+    };
     return { comments: await getNestedContentComments(env, contentUid, currentUser, options), unavailable: false };
   } catch (error) {
     const errorContext = {
@@ -80,7 +78,8 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
   }
 
   const actionData = await request.json<ActionData>();
-  const recruitmentPeriod = await getContentRecruitmentPeriod(env, contentUid, { ctx });
+  const recruitmentPeriod =
+    actionData.action === "create" ? await getContentRecruitmentPeriod(env, contentUid, { ctx }) : null;
   const commentOptions = { recruitmentPeriodStartAt: recruitmentPeriod?.startAt ?? null, ctx };
   if (actionData.action === "create") {
     if (!actionData.body) {
@@ -95,9 +94,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
       commentOptions,
     );
     if (recruitmentPeriod && Date.now() >= new Date(recruitmentPeriod.startAt).getTime()) {
-      ctx.waitUntil(
-        classifyAndPersistRecruitmentOpinion(env, { postUid: commentUid, body: actionData.body, revision: 0 }, ctx),
-      );
+      ctx.waitUntil(classifyAndPersistRecruitmentOpinion(env, { postUid: commentUid, body: actionData.body }, ctx));
     }
   } else if (actionData.action === "createSubcomment") {
     if (!actionData.body || !actionData.parentCommentUid) {
@@ -119,10 +116,11 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     const classificationJob = await updateComment(
       env,
       currentUser.id,
+      contentUid,
       actionData.commentUid,
       actionData.body,
       actionData.visibility ?? "private",
-      commentOptions,
+      { ctx },
     );
     if (classificationJob) {
       ctx.waitUntil(classifyAndPersistRecruitmentOpinion(env, classificationJob, ctx));

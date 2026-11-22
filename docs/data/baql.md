@@ -32,7 +32,13 @@ Prefer the type inference codegen produces; do not hand-declare the same result
 shape in a route or component. `codegen.ts` maps `ISO8601DateTime` to TypeScript
 `Date`, but this is only a static mapping. GraphQL JSON does not parse a wire
 timestamp into a `Date` object at runtime, so a response can still contain a
-string. Do not silently change that mapping.
+string. Do not silently change that mapping. `ISO8601Date` maps to `string`,
+because BAQL sends calendar dates such as `0000-02-05` that are not instants.
+
+Codegen keeps schema enums as native TypeScript enums (`enumType: "native"`),
+because app code and tests use them as runtime values such as `Attack.Sonic`.
+Codegen only rewrites output whose documents changed, so a codegen upgrade must
+be checked by deleting `app/graphql/graphql.ts` and regenerating it.
 
 Normalize source timestamps at the model boundary with `toUtcIso` or
 `normalizeInstant`, and expose the UTC ISO string contract described in

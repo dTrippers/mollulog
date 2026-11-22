@@ -1,4 +1,6 @@
 import type { CacheRefreshTaskName, CacheRefreshTaskResult } from "~/domain/cache-refresh";
+import type { CacheRefreshScope } from "~/lib/cache/refresh-scope";
+import { runInCacheRefreshScope } from "~/lib/cache/refresh-scope.server";
 import { getLogger } from "~/lib/observability.server";
 import { syncEventContentsList } from "~/models/event-content";
 import { getFurnitureCatalogSource } from "~/models/furniture-catalog";
@@ -6,6 +8,7 @@ import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
 import { warmRaidCache } from "~/models/raid";
+import { getRecruitTicketSource } from "~/models/recruit-ticket";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getCampaignFarmingStages } from "~/models/stage";
@@ -14,7 +17,7 @@ import { syncAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { getEventList, warmActiveUpcomingEventContent } from "~/views/events";
 import { getFutureContents } from "~/views/futures";
-import { getIndexContents } from "~/views/home";
+import { refreshIndexContents } from "~/views/home";
 import { getNavigationBarContentsRaw } from "~/views/navigation";
 
 const SAFE_TASK_ERROR = "작업을 완료하지 못했어요. 로그에서 job ID를 확인해주세요.";
@@ -67,11 +70,14 @@ async function executeCacheRefreshTask(env: Env, ctx: ExecutionContext, name: Ca
     case "getCampaignFarmingStages":
       await getCampaignFarmingStages(env, true);
       return;
+    case "getRecruitTicketSource":
+      await getRecruitTicketSource(env, true);
+      return;
     case "getEventList":
       await getEventList(env, undefined, true, ctx);
       return;
     case "getIndexContents":
-      await getIndexContents(env, true, ctx);
+      await refreshIndexContents(env, ctx);
       return;
     case "getFutureContents":
       await getFutureContents(env, true, ctx);
@@ -89,12 +95,13 @@ export async function runCacheRefreshTask(
   ctx: ExecutionContext,
   jobUid: string,
   name: CacheRefreshTaskName,
+  scope: CacheRefreshScope,
 ): Promise<CacheRefreshTaskResult> {
   const startedAt = Date.now();
   const logger = getLogger(env, ctx, { job: "cache-refresh", jobUid, taskName: name });
 
   try {
-    await executeCacheRefreshTask(env, ctx, name);
+    await runInCacheRefreshScope(scope, () => executeCacheRefreshTask(env, ctx, name));
     const durationMs = Date.now() - startedAt;
     logger.info("Cache refresh task completed", { durationMs });
     return { status: "succeeded", durationMs, error: null };

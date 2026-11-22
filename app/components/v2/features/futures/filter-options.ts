@@ -9,7 +9,7 @@ export type FilterChipOption = {
 export const eventFilterOptions: FilterChipOption[] = [
   { label: "메인 이벤트", types: ["event", "immortal_event", "fes", "collab"] },
   { label: "미니 이벤트", types: ["mini_event"] },
-  { label: "스토리", types: ["main_story", "mini_story"] },
+  { label: "스토리", types: ["main_story", "mini_story", "ko_voice"] },
   { label: "캠페인", types: ["campaign"] },
   { label: "종합전술시험", types: ["joint_firing_drill"] },
   { label: "픽업 모집", types: ["pickup"] },

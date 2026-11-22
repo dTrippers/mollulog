@@ -16,13 +16,18 @@ import {
   buildResourceGroups,
   CHARACTER_EXP_PER_STUDENT,
   CharacterExpSummary,
+  calculateMaterialExpBalance,
   calculateOwnedCharacterExp,
   EquipmentSubGroups,
   formatCharacterExpEquivalent,
   getResourceInventoryEmptyText,
+  MaterialExpSummary,
+  normalizeCategoryModes,
+  SkillMaterialSubGroups,
 } from "~/routes/utils.resources._components/ResourceInventoryEditor";
 import {
   filterResourceInventoryResources,
+  normalizeStoredResourceInventoryFilter,
   RESOURCE_INVENTORY_RARITY_OPTIONS,
   type ResourceInventoryFilterState,
 } from "~/routes/utils.resources._components/ResourceInventoryFilterPanel";
@@ -640,6 +645,155 @@ describe("resource inventory filter", () => {
     expect(filteredGroups).toEqual([]);
   });
 
+  it("shows only short resources in a category set to the shortage mode", () => {
+    const inventoryResources = resources.map((resource) => ({
+      ...resource,
+      type: ResourceTypeEnum.Item,
+      category: "favor",
+      subCategory: null,
+      requiredAmount: resource.uid === "3" ? 0 : 3,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.favor,
+    }));
+
+    const groups = buildResourceGroups(
+      inventoryResources,
+      { [GROWTH_RESOURCE_KIND_ORDER.favor]: "shortage" },
+      { search: "", rarities: [] },
+      0,
+      { "1": 3, "2": 1 },
+    );
+
+    expect(groups.map((group) => [group.mode, group.shortageOverride])).toEqual([["shortage", false]]);
+    expect(groups[0]?.resources.map((resource) => resource.uid)).toEqual(["2"]);
+  });
+
+  it("overrides every category mode with the shortage filter and restores them when it is cleared", () => {
+    const favorResources = resources.map((resource) => ({
+      ...resource,
+      type: ResourceTypeEnum.Item,
+      category: "favor",
+      subCategory: null,
+      requiredAmount: resource.uid === "1" ? 3 : 0,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.favor,
+    }));
+    const elephResource = {
+      uid: "9001",
+      name: "학생 엘레프",
+      rarity: 1,
+      type: ResourceTypeEnum.Item,
+      category: "secretstone",
+      subCategory: null,
+      requiredAmount: 5,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.eleph,
+    };
+    const categoryModes = {
+      [GROWTH_RESOURCE_KIND_ORDER.favor]: "all",
+      [GROWTH_RESOURCE_KIND_ORDER.eleph]: "needed",
+    } as const;
+    const quantities = { "1": 0, "9001": 5 };
+
+    const overridden = buildResourceGroups(
+      [...favorResources, elephResource],
+      categoryModes,
+      { search: "", rarities: [], shortageOnly: true },
+      0,
+      quantities,
+    );
+    expect(
+      overridden.map((group) => [group.kindOrder, group.mode, group.shortageOverride, group.resources.length]),
+    ).toEqual(
+      expect.arrayContaining([
+        [GROWTH_RESOURCE_KIND_ORDER.favor, "shortage", true, 1],
+        [GROWTH_RESOURCE_KIND_ORDER.eleph, "shortage", true, 0],
+      ]),
+    );
+    expect(overridden).toHaveLength(2);
+
+    const restored = buildResourceGroups(
+      [...favorResources, elephResource],
+      categoryModes,
+      { search: "", rarities: [], shortageOnly: false },
+      0,
+      quantities,
+    );
+    expect(restored.map((group) => [group.kindOrder, group.mode, group.shortageOverride])).toEqual(
+      expect.arrayContaining([
+        [GROWTH_RESOURCE_KIND_ORDER.favor, "all", false],
+        [GROWTH_RESOURCE_KIND_ORDER.eleph, "needed", false],
+      ]),
+    );
+  });
+
+  it("still hides categories without a match when a name filter is combined with the shortage filter", () => {
+    const inventoryResources = resources.map((resource) => ({
+      ...resource,
+      type: ResourceTypeEnum.Item,
+      category: "favor",
+      subCategory: null,
+      requiredAmount: 3,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.favor,
+    }));
+
+    const groups = buildResourceGroups(
+      inventoryResources,
+      {},
+      { search: "zzz", rarities: [], shortageOnly: true },
+      0,
+      {},
+    );
+
+    expect(groups).toEqual([]);
+  });
+
+  it("keeps shortage-mode categories whose resources match the name or rarity filter even with no shortage", () => {
+    const inventoryResources = resources.map((resource) => ({
+      ...resource,
+      type: ResourceTypeEnum.Item,
+      category: "favor",
+      subCategory: null,
+      requiredAmount: 3,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.favor,
+    }));
+    const stocked = { "1": 3, "2": 3, "3": 3 };
+    const allRarities = RESOURCE_INVENTORY_RARITY_OPTIONS.map(({ value }) => value);
+
+    const overridden = buildResourceGroups(
+      inventoryResources,
+      {},
+      { search: "", rarities: allRarities, shortageOnly: true },
+      0,
+      stocked,
+    );
+    expect(overridden.map((group) => [group.mode, group.resources.length])).toEqual([["shortage", 0]]);
+
+    const shortageTab = buildResourceGroups(
+      inventoryResources,
+      { [GROWTH_RESOURCE_KIND_ORDER.favor]: "shortage" },
+      { search: "hammer", rarities: [] },
+      0,
+      stocked,
+    );
+    expect(shortageTab.map((group) => [group.mode, group.resources.length])).toEqual([["shortage", 0]]);
+  });
+
+  it("keeps only known category modes when restoring them from storage", () => {
+    expect(normalizeCategoryModes({ "3": "shortage", "4": "needed", "5": "unknown", abc: "all", "6": 1 })).toEqual({
+      3: "shortage",
+      4: "needed",
+    });
+    expect(normalizeCategoryModes(null)).toEqual({});
+    expect(normalizeCategoryModes(["all"])).toEqual({});
+  });
+
+  it("restores only valid rarity and shortage filter values from storage", () => {
+    expect(normalizeStoredResourceInventoryFilter({ rarities: [4, 4, 9, "2", 1], shortageOnly: true })).toEqual({
+      rarities: [4, 1],
+      shortageOnly: true,
+    });
+    expect(normalizeStoredResourceInventoryFilter({ search: "망치", shortageOnly: "yes" })).toEqual({});
+    expect(normalizeStoredResourceInventoryFilter("broken")).toEqual({});
+  });
+
   it("does not classify a resource as short when its choice boxes cover the final deficit", () => {
     const inventoryResources = [
       {
@@ -672,7 +826,7 @@ describe("resource inventory filter", () => {
       { "101001": 0, "150028": 5 },
     );
 
-    expect(groups).toEqual([]);
+    expect(groups.map((group) => [group.mode, group.resources.length])).toEqual([["shortage", 0]]);
   });
 
   it("keeps shared equipment choice-box allocation stable when shortage filtering narrows tiles", () => {
@@ -835,7 +989,7 @@ describe("resource inventory filter", () => {
       { "101004": 0, "150031": 0, "501000": 7 },
     );
 
-    expect(groups).toEqual([]);
+    expect(groups.map((group) => [group.mode, group.resources.length])).toEqual([["shortage", 0]]);
   });
 
   it("keeps shared skill-material choice-box allocation stable when shortage filtering narrows tiles", () => {
@@ -912,7 +1066,7 @@ describe("resource inventory filter", () => {
       10_000,
       { "13": 1 },
     );
-    expect(coveredGroups).toEqual([]);
+    expect(coveredGroups.map((group) => [group.mode, group.resources.length])).toEqual([["shortage", 0]]);
   });
 
   it("formats activity-report equivalents as floored natural-number counts", () => {
@@ -1075,5 +1229,232 @@ describe("resource inventory editor universal blueprint tile", () => {
     expect(universalTileMarkup).not.toContain("여유");
     expect(universalTileMarkup).not.toContain("부족");
     expect(directTileMarkup).toContain("부족");
+  });
+});
+
+type SkillMaterialSubGroupsProps = ComponentProps<typeof SkillMaterialSubGroups>;
+
+function SkillMaterialSubGroupsWithInputNavigation(
+  props: Omit<SkillMaterialSubGroupsProps, "numberInputFlowNavigation">,
+) {
+  const numberInputFlowNavigation = useNumberInputFlowNavigation();
+  return createElement(SkillMaterialSubGroups, { ...props, numberInputFlowNavigation });
+}
+
+function renderSkillMaterialSubGroups(props: Omit<SkillMaterialSubGroupsProps, "numberInputFlowNavigation">) {
+  return renderToStaticMarkup(createElement(SkillMaterialSubGroupsWithInputNavigation, props));
+}
+
+function extractMetricValue(tileMarkup: string, label: string): string | null {
+  const match = tileMarkup.match(new RegExp(`>${label}</span><span[^>]*>([^<]+)</span>`));
+  return match?.[1] ?? null;
+}
+
+describe("resource inventory editor per-item surplus", () => {
+  const bdResources = [
+    {
+      uid: "3001",
+      name: "A BD",
+      rarity: 1,
+      type: ResourceTypeEnum.Item,
+      category: null,
+      subCategory: "cd_item",
+      requiredAmount: 4,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.bd,
+    },
+    {
+      uid: "3002",
+      name: "B BD",
+      rarity: 1,
+      type: ResourceTypeEnum.Item,
+      category: null,
+      subCategory: "cd_item",
+      requiredAmount: 4,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.bd,
+    },
+    {
+      uid: "150004",
+      name: "1등급 BD 선택 상자",
+      rarity: 1,
+      type: ResourceTypeEnum.Item,
+      category: null,
+      subCategory: null,
+      requiredAmount: 0,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.bd,
+    },
+  ];
+
+  function renderBdGroup(draftQuantities: Record<string, number>) {
+    return renderSkillMaterialSubGroups({
+      resources: bdResources,
+      allocationResources: bdResources,
+      ownedQuantities: draftQuantities,
+      draftQuantities,
+      onQuantityChange: jest.fn(),
+    });
+  }
+
+  it("shows the surplus of a skill material that has a choice box when its own stock covers the requirement", () => {
+    const markup = renderBdGroup({ "3001": 10, "3002": 4, "150004": 0 });
+
+    expect(extractMetricValue(extractTileMarkup(markup, "A BD"), "여유")).toBe("6");
+    expect(extractMetricValue(extractTileMarkup(markup, "B BD"), "여유")).toBe("0");
+  });
+
+  it("keeps the choice-box and remaining-shortage split for a short skill material", () => {
+    const markup = renderBdGroup({ "3001": 10, "3002": 1, "150004": 2 });
+    const shortTileMarkup = extractTileMarkup(markup, "B BD");
+
+    expect(shortTileMarkup).not.toContain(">여유</span>");
+    expect(extractMetricValue(shortTileMarkup, "선택상자")).toBe("2");
+    expect(extractMetricValue(shortTileMarkup, "부족")).toBe("1");
+    expect(extractMetricValue(extractTileMarkup(markup, "1등급 BD 선택 상자"), "부족")).toBe("1");
+  });
+
+  const blueprintResources = [
+    {
+      uid: "101004",
+      name: "T5 모자 설계도",
+      rarity: 1,
+      type: ResourceTypeEnum.Equipment,
+      category: "hat",
+      subCategory: null,
+      requiredAmount: 20,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+    },
+  ];
+
+  function renderBlueprintGroup(ownedAmount: number) {
+    const draftQuantities = { "101004": ownedAmount };
+    return renderEquipmentSubGroups({
+      resources: blueprintResources,
+      allocationResources: blueprintResources,
+      ownedQuantities: draftQuantities,
+      draftQuantities,
+      onQuantityChange: jest.fn(),
+    });
+  }
+
+  it("shows the surplus of a direct blueprint when its own stock covers the requirement", () => {
+    const tileMarkup = extractTileMarkup(renderBlueprintGroup(35), "T5 모자 설계도");
+
+    expect(extractMetricValue(tileMarkup, "필요")).toBe("20");
+    expect(extractMetricValue(tileMarkup, "여유")).toBe("15");
+    expect(tileMarkup).not.toContain(">부족</span>");
+  });
+
+  it("keeps the allocation split without its own balance for a short direct blueprint", () => {
+    const tileMarkup = extractTileMarkup(renderBlueprintGroup(5), "T5 모자 설계도");
+
+    expect(tileMarkup).not.toContain(">여유</span>");
+    expect(extractMetricValue(tileMarkup, "부족")).toBe("15");
+  });
+});
+
+describe("resource inventory editor material EXP", () => {
+  const noWeaponExp = { a: 0, b: 0, c: 0, none: 0 };
+  const stones = ["1", "2", "3", "4"].map((uid) => ({
+    uid,
+    inventoryUid: `equipment:${uid}`,
+    name: `강화석 ${uid}`,
+    rarity: Number(uid),
+    type: ResourceTypeEnum.Equipment,
+    category: "exp",
+    subCategory: null,
+    requiredAmount: 0,
+    kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipmentExp,
+  }));
+  const weaponMaterials = ["10", "20", "43"].map((uid) => ({
+    uid,
+    inventoryUid: `equipment:${uid}`,
+    name: `재료 ${uid}`,
+    rarity: (Number(uid) % 10) + 1,
+    type: ResourceTypeEnum.Equipment,
+    category: `weapon_exp_growth_${uid[0] === "1" ? "a" : uid[0] === "2" ? "b" : "z"}`,
+    subCategory: null,
+    requiredAmount: 0,
+    kindOrder: GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth,
+  }));
+
+  it("totals enhancement-stone EXP by inventory UID against the required EXP", () => {
+    const balance = calculateMaterialExpBalance(
+      GROWTH_RESOURCE_KIND_ORDER.equipmentExp,
+      stones,
+      // Item UIDs 1-4 are other resources and must not count as stones.
+      { "1": 99, "equipment:1": 2, "equipment:4": 1 },
+      { equipmentExp: 6000, weaponExp: noWeaponExp },
+    );
+    expect(balance).toEqual({ requiredExp: 6000, ownedExp: 5940, balance: -60 });
+  });
+
+  it("applies the weapon bonus to the matching family and the universal family", () => {
+    const balance = calculateMaterialExpBalance(
+      GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth,
+      weaponMaterials,
+      { "equipment:10": 10, "equipment:20": 10, "equipment:43": 1 },
+      { equipmentExp: 0, weaponExp: { a: 1650, b: 0, c: 0, none: 0 } },
+    );
+    // a: 100 x 1.5 = 150, z: 1000 x 1.5 = 1500, and b stays as 100 base EXP.
+    expect(balance).toEqual({ requiredExp: 1650, ownedExp: 1750, balance: 100 });
+  });
+
+  it("returns no balance for other categories", () => {
+    expect(
+      calculateMaterialExpBalance(GROWTH_RESOURCE_KIND_ORDER.bd, [], {}, { equipmentExp: 1, weaponExp: noWeaponExp }),
+    ).toBeNull();
+  });
+
+  it("marks every stone short in the shortage tab when the total EXP is short", () => {
+    const required = { equipmentExp: 6000, weaponExp: noWeaponExp };
+    const shortageGroups = buildResourceGroups(
+      stones,
+      {},
+      { search: "", rarities: [], shortageOnly: true },
+      0,
+      { "equipment:4": 1 },
+      required,
+    );
+    expect(shortageGroups[0]?.resources.map((resource) => resource.uid)).toEqual(["1", "2", "3", "4"]);
+
+    const coveredGroups = buildResourceGroups(
+      stones,
+      {},
+      { search: "", rarities: [], shortageOnly: true },
+      0,
+      { "equipment:4": 2 },
+      required,
+    );
+    expect(coveredGroups.map((group) => [group.mode, group.resources.length])).toEqual([["shortage", 0]]);
+  });
+
+  it("shows every stone in the all mode even without per-item requirements", () => {
+    const groups = buildResourceGroups(stones, {}, { search: "", rarities: [], shortageOnly: false }, 0, {});
+    expect(groups.map((group) => [group.mode, group.resources.length])).toEqual([["all", 4]]);
+  });
+
+  it("renders required, owned, and shortage EXP with the calculation note", () => {
+    const markup = renderToStaticMarkup(
+      createElement(MaterialExpSummary, {
+        balance: { requiredExp: 6000, ownedExp: 5940, balance: -60 },
+        note: "참고 문구",
+      }),
+    );
+    expect(markup).toContain("필요 경험치");
+    expect(markup).toContain("6,000");
+    expect(markup).toContain("부족 경험치");
+    expect(markup).toContain(">60<");
+    expect(markup).toContain("참고 문구");
+  });
+
+  it("renders only owned EXP without a growth target", () => {
+    const markup = renderToStaticMarkup(
+      createElement(MaterialExpSummary, {
+        balance: { requiredExp: 0, ownedExp: 900, balance: 900 },
+        note: "참고 문구",
+      }),
+    );
+    expect(markup).toContain("보유 경험치");
+    expect(markup).not.toContain("필요 경험치");
+    expect(markup).not.toContain("참고 문구");
   });
 });

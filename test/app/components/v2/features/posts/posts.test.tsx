@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { PostLatest } from "~/components/v2/features/posts/PostLatest";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import { newsListOriginState, PostRowList } from "~/components/v2/features/posts/PostRowList";
 import { RecentPosts } from "~/components/v2/features/posts/RecentPosts";
 import {
@@ -18,8 +19,8 @@ import {
 import { installLayoutTestEnv } from "../../layout/layout-test-env";
 
 const rows = [
-  { uid: "post-b", title: "8/30 업데이트 안내", createdAt: "2026-08-30T20:00:00.000Z" as const },
-  { uid: "post-a", title: "6/24 업데이트 및 서버 혼잡 개선 안내 — 긴 제목도 줄바꿈합니다", createdAt: "2026-06-24T00:00:00.000Z" as const },
+  { uid: "post-b", title: "8/30 업데이트 안내", publishedAt: "2026-08-30T20:00:00.000Z" as const },
+  { uid: "post-a", title: "6/24 업데이트 및 서버 혼잡 개선 안내 — 긴 제목도 줄바꿈합니다", publishedAt: "2026-06-24T00:00:00.000Z" as const },
 ];
 
 function renderInRouter(node: React.ReactNode) {
@@ -66,9 +67,9 @@ describe("PostLatest", () => {
         post={{
           uid: "post-1",
           title: "9/8 업데이트 안내",
-          content: "## 새로운 기능\n\n- 항목",
-          createdAt: "2026-09-08T00:00:00.000Z",
+          publishedAt: "2026-09-08T00:00:00.000Z",
         }}
+        contentHtml={renderMarkdownToSafeHtml("## 새로운 기능\n\n- 항목")}
         timeZone="UTC"
       />,
     );
@@ -124,7 +125,6 @@ describe("PostStates", () => {
     renderInRouter(<PostListFailure onRetry={onRetry} />);
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain("업데이트 소식을 불러오지 못했어요");
-    expect(alert.textContent).toContain("일시적인 문제일 수 있어요. 잠시 후 다시 시도해 주세요.");
     fireEvent.click(within(alert).getByRole("button", { name: "다시 시도" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });

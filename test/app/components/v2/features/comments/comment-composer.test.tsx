@@ -34,6 +34,18 @@ describe("CommentComposer", () => {
     expect(screen.getByRole("button", { name: "공개 범위: 전체 공개" })).toBeTruthy();
   });
 
+  it("keeps the editor and visibility control compact on stacked layouts", () => {
+    renderComposer();
+
+    const editor = screen.getByRole("textbox");
+    const visibility = screen.getByRole("button", { name: "공개 범위: 전체 공개" });
+    expect(editor.className).toContain("min-h-8");
+    expect(editor.className).not.toContain("max-lg:min-h-11");
+    expect(editor.className).not.toContain("max-lg:py-3");
+    expect(visibility.className).toContain("h-8");
+    expect(visibility.className).not.toContain("max-lg:h-11");
+  });
+
   it("labels the editor from its own label, with an id that is unique per instance", () => {
     render(
       <>

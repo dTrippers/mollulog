@@ -1,8 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
-import { calculateMinigamePaymentCosts } from "~/components/features/events/shop/utils";
-import { calculateResourceLedger } from "../../../../../../../app/components/features/events/shop/calculations/ledger";
+import { calculateResourceLedger } from "~/domain/event-shop/calculations/ledger";
+import { evaluateJankenPlan, planJanken } from "~/domain/event-shop/janken";
+import { calculateMinigamePaymentCosts } from "~/domain/event-shop/utils";
 import type { MinigameConfig, ShopResource, Stage } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
+import { janken860Fixture } from "../../../../../../app/domain/fixtures/janken-860";
 
 const gamepad = {
   type: ResourceTypeEnum.Item,
@@ -69,6 +71,90 @@ function createClueExchangeResources(): ShopResource[] {
 }
 
 describe("calculateResourceLedger", () => {
+  it("matches planner reward totals when applied stage plays include score rewards", () => {
+    const progress = {
+      currentTier: 1,
+      heldEleph: 0,
+      cumulativeScore: 0,
+      equipmentTier: 1,
+      heldEquipmentCurrency: 0,
+      clearedStageUids: [] as string[],
+    };
+    const plannerGoals = {
+      targetTier: null,
+      shopCurrencyMode: "manual" as const,
+      manualShopCurrency: 0,
+      targetScore: 1_000_000,
+      averageScore: 500_000,
+      targetEquipmentTier: null,
+    };
+    const planned = planJanken(janken860Fixture, {
+      progress,
+      goals: plannerGoals,
+      shopCurrencyRequired: 0,
+      studentGrowthTotalRequired: 0,
+    });
+    const config: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken: janken860Fixture,
+    };
+    const ledger = calculateResourceLedger({
+      shopResources: [],
+      itemQuantities: {},
+      itemPurchaseDays: {},
+      existingPaymentItemQuantities: {},
+      stages: [],
+      includeFirstClear: false,
+      minigamePlayCount: 0,
+      jankenStagePlays: planned.stagePlays,
+      jankenClearedStageUids: progress.clearedStageUids,
+      jankenScore: { currentScore: progress.cumulativeScore, averageScore: plannerGoals.averageScore },
+      minigameConfig: config,
+    });
+
+    expect(planned.status).toBe("available");
+    expect(planned.rewards["26016"]).toBeGreaterThan(23);
+    expect(ledger.fromMinigame).toEqual(planned.rewards);
+    expect(
+      evaluateJankenPlan(janken860Fixture, {
+        stagePlays: planned.stagePlays,
+        clearedStageUids: progress.clearedStageUids,
+        currentScore: progress.cumulativeScore,
+        averageScore: plannerGoals.averageScore,
+      }).rewards,
+    ).toEqual(ledger.fromMinigame);
+  });
+
+  it("includes cumulative score rewards only when an average score is available", () => {
+    const config: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken: janken860Fixture,
+    };
+    const clearedPrerequisites = janken860Fixture.stages.filter(({ uid }) => uid !== "100860301").map(({ uid }) => uid);
+    const getRewards = (averageScore: number | null) =>
+      calculateResourceLedger({
+        shopResources: [],
+        itemQuantities: {},
+        itemPurchaseDays: {},
+        existingPaymentItemQuantities: {},
+        stages: [],
+        includeFirstClear: false,
+        minigamePlayCount: 0,
+        jankenStagePlays: { "100860301": 1 },
+        jankenClearedStageUids: clearedPrerequisites,
+        jankenScore: { currentScore: 0, averageScore },
+        minigameConfig: config,
+      }).fromMinigame["26016"];
+
+    expect(getRewards(500_000) - getRewards(null)).toBe(10);
+  });
+
   it("uses selected shop purchases as both resource costs and acquisitions", () => {
     const ledger = calculateResourceLedger({
       shopResources: createShopResources(),
@@ -78,6 +164,7 @@ describe("calculateResourceLedger", () => {
       stages: [],
       includeFirstClear: false,
       minigamePlayCount: 0,
+      jankenStagePlays: {},
     });
 
     expect(ledger.requiredForShopItems).toEqual({ gamepad: 6700, cable: 70 });
@@ -118,6 +205,7 @@ describe("calculateResourceLedger", () => {
       stages,
       includeFirstClear: true,
       minigamePlayCount: 0,
+      jankenStagePlays: {},
       overriddenRequiredQuantities: { gamepad: 120 },
     });
 
@@ -151,6 +239,7 @@ describe("calculateResourceLedger", () => {
       existingPaymentItemQuantities: {},
       stages,
       minigamePlayCount: 0,
+      jankenStagePlays: {},
       overriddenRequiredQuantities: { gamepad: 100 },
     };
 
@@ -176,6 +265,7 @@ describe("calculateResourceLedger", () => {
       stages: [],
       includeFirstClear: false,
       minigamePlayCount: 1,
+      jankenStagePlays: {},
       minigamePaymentCosts: [{ resourceType: ResourceTypeEnum.Item, resourceUid: "event-points", quantity: 400 }],
       excludedShopResourceUids: ["legacy-clue-for-points", "legacy-points-for-clue"],
     });
@@ -215,6 +305,7 @@ describe("calculateResourceLedger", () => {
       stages: [],
       includeFirstClear: false,
       minigamePlayCount: playCount,
+      jankenStagePlays: {},
       minigameConfig,
       minigamePaymentCosts,
     });
@@ -246,6 +337,7 @@ describe("calculateResourceLedger", () => {
       stages: [],
       includeFirstClear: false,
       minigamePlayCount: 6,
+      jankenStagePlays: {},
       minigameConfig,
       minigamePaymentCosts: [{ resourceType: ResourceTypeEnum.Item, resourceUid: "yukari", quantity: 7000 }],
       minigameRewards: [
@@ -258,5 +350,48 @@ describe("calculateResourceLedger", () => {
     expect(ledger.fromMinigame).toEqual({ renge: 200, credit: 8320000 });
     expect(ledger.fromMinigame).not.toHaveProperty("legacy-reward");
     expect(ledger.requiredForMinigame).not.toHaveProperty("legacy-cost");
+  });
+
+  it("applies road-puzzle sticker costs and pipe-wrench rewards to shop planning", () => {
+    const wrenchResource = { type: ResourceTypeEnum.Item, uid: "pipe-wrench", name: "파이프 렌치" };
+    const stickerPayment = {
+      resourceType: ResourceTypeEnum.Item,
+      resourceUid: "highlander-sticker",
+      resourceName: "하이랜더 기념 스티커",
+      quantity: 150,
+    };
+    const minigameConfig: MinigameConfig = {
+      minigameType: "road_puzzle",
+      payment: stickerPayment,
+      payments: [stickerPayment],
+      rewardGroups: [],
+      roadPuzzle: null,
+    };
+    const shopResource: ShopResource = {
+      uid: "shop-item",
+      resource: { type: ResourceTypeEnum.Item, uid: "shop-item-resource", name: "상점 상품", rarity: 1 },
+      resourceAmount: 1,
+      paymentResource: wrenchResource,
+      purchaseTiers: [{ tierIndex: 0, startQuantity: 1, quantity: 1, unitPrice: 100, paymentResource: wrenchResource }],
+      shopAmount: 1,
+    };
+    const ledger = calculateResourceLedger({
+      shopResources: [shopResource],
+      itemQuantities: { "shop-item": 1 },
+      itemPurchaseDays: {},
+      existingPaymentItemQuantities: {},
+      stages: [],
+      includeFirstClear: false,
+      minigamePlayCount: 9,
+      jankenStagePlays: {},
+      minigameConfig,
+      minigamePaymentCosts: [{ ...stickerPayment, quantity: 25_359 }],
+      minigameRewards: [{ resourceType: ResourceTypeEnum.Item, resourceUid: "pipe-wrench", quantity: 40 }],
+    });
+
+    expect(ledger.requiredForMinigame).toEqual({ "highlander-sticker": 25_359 });
+    expect(ledger.requiredForShopItems).toEqual({ "pipe-wrench": 100 });
+    expect(ledger.fromMinigame).toEqual({ "pipe-wrench": 40 });
+    expect(ledger.remainingToFarm).toEqual({ "highlander-sticker": 25_359, "pipe-wrench": 60 });
   });
 });

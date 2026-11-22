@@ -18,9 +18,10 @@ import { MarkdownContent } from "~/components/v2/primitives/MarkdownContent";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import { captureClientError } from "~/lib/observability.client";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
-import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL } from "~/lib/seo";
+import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL, socialMeta } from "~/lib/seo";
 import { getPostDetailView } from "~/views/post-detail";
 
 function notFoundResponse() {
@@ -75,7 +76,8 @@ export const loader = async ({ context, params }: LoaderFunctionArgs) => {
   if (!view) {
     throw notFoundResponse();
   }
-  return view;
+  const { content, ...post } = view.post;
+  return { ...view, post, contentHtml: renderMarkdownToSafeHtml(content) };
 };
 
 export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
@@ -87,12 +89,12 @@ export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
     ];
   }
 
-  const title = `${data.post.title} | 몰루로그`;
   const description = `${data.post.title} 게시물 내용을 확인해보세요.`;
   const imageUrl = data.post.thumbnailImageUrl ?? DEFAULT_OPEN_GRAPH_IMAGE_URL;
   return [
-    { title },
+    { title: `${data.post.title} | 몰루로그` },
     { name: "description", content: description },
+    ...socialMeta({ title: data.post.title, description, pathname: location.pathname, type: "article" }),
     { property: "og:image", content: imageUrl },
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:image", content: imageUrl },
@@ -134,7 +136,7 @@ export function ErrorBoundary() {
 }
 
 export default function PostDetailPage() {
-  const { post, back, recent } = useLoaderData<typeof loader>();
+  const { post, contentHtml, back, recent } = useLoaderData<typeof loader>();
   const timeZone = useDisplayTimeZone();
   const location = useLocation();
   const navigate = useNavigate();
@@ -180,8 +182,8 @@ export default function PostDetailPage() {
         back={backLink}
         title={post.title}
         meta={
-          <time dateTime={post.createdAt} className="tabular-nums">
-            {formatInstant(post.createdAt, { timeZone, format: "YYYY/MM/DD" })}
+          <time dateTime={post.publishedAt} className="tabular-nums">
+            {formatInstant(post.publishedAt, { timeZone, format: "YYYY/MM/DD" })}
           </time>
         }
       />
@@ -198,7 +200,7 @@ export default function PostDetailPage() {
       />
       <PageMain>
         <article className="rounded-lg bg-v2-surface p-v2-block-p">
-          <MarkdownContent text={post.content} headingLevel={2} />
+          <MarkdownContent html={contentHtml} headingLevel={2} />
           <span className="sr-only" role="status">
             {shareStatus === "error"
               ? "게시글 주소를 공유하지 못했어요."

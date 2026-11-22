@@ -23,6 +23,7 @@ export type RaidPartySlot = {
   level?: number | null;
   startingSkillOrder?: number | null;
   isAssist?: boolean | null;
+  formIndex?: number;
   grayscale?: boolean;
   unrecruited?: boolean;
   badge?: ReactNode;
@@ -259,6 +260,7 @@ function PartyStudentCard({
         tier={tierBelowImage ? undefined : slot.tier}
         level={compactLevel ? undefined : slot.level}
         isAssist={slot.isAssist ?? undefined}
+        formIndex={slot.formIndex}
         grayscale={slot.grayscale}
         popups={slot.name && actions.length > 0 ? actions : undefined}
         popupId={slot.name && actions.length > 0 ? popupId : undefined}

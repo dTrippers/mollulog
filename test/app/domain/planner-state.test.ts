@@ -1,9 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  normalizeJankenPlannerProgress,
   PlannerStateProjectionError,
   type PlannerStateProjectionRows,
   projectPlannerStateDocument,
   sortPlannerStateTimelineRecords,
+  withPyroxeneEventDataPatch,
 } from "~/domain/planner-state";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 
@@ -21,6 +23,7 @@ const shopRow = {
   extraStageRuns: { "stage-1": 2 },
   minigameStartRound: 4,
   minigamePlayCount: 5,
+  jankenStagePlays: {},
   minigamePaymentQuantityMode: "max",
   cardFlipStrategy: "sr-reset",
   overriddenRequiredQuantities: { "item-1": 11 },
@@ -76,6 +79,33 @@ function projectionRows(overrides: Partial<PlannerStateProjectionRows> = {}): Pl
 }
 
 describe("planner state projection", () => {
+  it("defaults missing janken progress and rejects malformed entries", () => {
+    expect(projectPlannerStateDocument(projectionRows()).jankenProgress).toEqual({});
+    expect(normalizeJankenPlannerProgress({ "shop-1": { progress: { currentTier: 0 }, goals: {} } })).toBeNull();
+    expect(
+      normalizeJankenPlannerProgress({
+        "shop-1": {
+          progress: {
+            currentTier: 3,
+            heldEleph: 0,
+            cumulativeScore: 0,
+            equipmentTier: 1,
+            heldEquipmentCurrency: 0,
+            clearedStageUids: ["stage-2", "stage-2"],
+          },
+          goals: {
+            targetTier: null,
+            shopCurrencyMode: "linked",
+            manualShopCurrency: 0,
+            targetScore: null,
+            averageScore: null,
+            targetEquipmentTier: null,
+          },
+        },
+      })?.["shop-1"].progress.clearedStageUids,
+    ).toEqual(["stage-2"]);
+  });
+
   it("sorts planner records by event time while preserving same-time order", () => {
     const input = [
       { uid: "later", eventAt: "2026-09-03T00:00:00.000Z" },
@@ -145,6 +175,7 @@ describe("planner state projection", () => {
           overriddenRequiredQuantities: { "item-1": 11 },
         },
       },
+      jankenProgress: {},
       ap: null,
     });
   });
@@ -192,5 +223,96 @@ describe("planner state projection", () => {
         projectionRows({ eventShops: [{ ...shopRow, selectedBonusStudentUids: "not-an-array" }] }),
       ),
     ).toThrow("event_shop_states.selected_bonus_student_uids");
+  });
+});
+
+describe("pyroxene recruitment planning fields", () => {
+  const baseRows: PlannerStateProjectionRows = {
+    resources: [],
+    timelineItems: [],
+    plannerOptions: [],
+    collectedSources: [],
+    eventData: [],
+    eventShops: [],
+  };
+
+  it("keeps entered recruitment stacks and leaves them absent for older snapshots", () => {
+    const withStacks = projectPlannerStateDocument({
+      ...baseRows,
+      resources: [
+        {
+          inputAt: "2026-11-08T00:00:00.000Z",
+          pyroxene: 100,
+          oneTimeTicket: 0,
+          tenTimeTicket: 0,
+          recruitmentStacks: { regular: 40, limited: 120 },
+        },
+      ],
+    });
+    expect(withStacks.pyroxene.resources?.recruitmentStacks).toEqual({ regular: 40, limited: 120 });
+
+    const older = projectPlannerStateDocument({
+      ...baseRows,
+      resources: [{ inputAt: "2026-11-08T00:00:00.000Z", pyroxene: 100, oneTimeTicket: 0, tenTimeTicket: 0 }],
+    });
+    expect(older.pyroxene.resources).not.toHaveProperty("recruitmentStacks");
+  });
+
+  it("rejects stacks outside 0-199", () => {
+    expect(() =>
+      projectPlannerStateDocument({
+        ...baseRows,
+        resources: [
+          {
+            inputAt: "2026-11-08T00:00:00.000Z",
+            pyroxene: 0,
+            oneTimeTicket: 0,
+            tenTimeTicket: 0,
+            recruitmentStacks: { regular: 200, limited: 0 },
+          },
+        ],
+      }),
+    ).toThrow(PlannerStateProjectionError);
+  });
+
+  it("stores the event's own basis and target tiers canonically", () => {
+    const document = projectPlannerStateDocument({
+      ...baseRows,
+      eventData: [
+        {
+          eventUid: "event-1",
+          completed: false,
+          expectedTrials: null,
+          pickupChance: "ceil",
+          targetTiers: { "student-2": 9, "student-1": 3 },
+        },
+        { eventUid: "event-2", completed: false, expectedTrials: 40, pickupChance: null, targetTiers: {} },
+      ],
+    });
+    expect(document.pyroxene.eventData).toEqual({
+      "event-1": { completed: false, expectedTrials: null, pickupChance: "ceil", targetTiers: { "student-2": 9 } },
+      "event-2": { completed: false, expectedTrials: 40 },
+    });
+  });
+
+  it("rejects an unknown basis or tier", () => {
+    for (const row of [
+      { eventUid: "event-1", completed: false, expectedTrials: null, pickupChance: "lucky" },
+      { eventUid: "event-1", completed: false, expectedTrials: null, targetTiers: { "student-1": 10 } },
+    ]) {
+      expect(() => projectPlannerStateDocument({ ...baseRows, eventData: [row] })).toThrow(PlannerStateProjectionError);
+    }
+  });
+
+  it("patches one field without dropping the others and removes entries left at defaults", () => {
+    const eventData = { "event-1": { completed: false, expectedTrials: 60, targetTiers: { "student-1": 5 as const } } };
+    expect(withPyroxeneEventDataPatch(eventData, "event-1", { pickupChance: "average" })["event-1"]).toEqual({
+      completed: false,
+      expectedTrials: 60,
+      pickupChance: "average",
+      targetTiers: { "student-1": 5 },
+    });
+    const cleared = withPyroxeneEventDataPatch(eventData, "event-1", { expectedTrials: null, targetTiers: {} });
+    expect(cleared).toEqual({});
   });
 });

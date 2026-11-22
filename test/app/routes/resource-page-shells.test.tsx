@@ -34,7 +34,14 @@ describe("split resource planner page shells", () => {
     mockUseLoaderData.mockReturnValue({
       resources: [],
       ownedQuantities: {},
-      relationshipGiftRequirements: { items: [], characterExp: 0, credit: 0, skillUnavailable: false },
+      relationshipGiftRequirements: {
+        items: [],
+        characterExp: 0,
+        equipmentExp: 0,
+        weaponExp: { a: 0, b: 0, c: 0, none: 0 },
+        credit: 0,
+        skillUnavailable: false,
+      },
     });
     mockUseOutletContext.mockReturnValue({
       managedStudents: [],

@@ -13,6 +13,7 @@ import {
   deletePostgresPyroxeneEventData,
   deletePostgresPyroxeneTimelineItem,
   ensurePostgresCollectedSource,
+  updatePostgresCollectedSources,
   updatePostgresPyroxeneOneOffTimelineItem,
   upsertPostgresCollectedSource,
   upsertPostgresCollectedSources,
@@ -55,6 +56,7 @@ function baseDocument(): PlannerStateDocumentV1 {
       eventData: { "event-1": { completed: false, expectedTrials: 3 } },
     },
     eventShops: {},
+    jankenProgress: {},
     ap: null,
   };
 }
@@ -241,6 +243,43 @@ describe("PostgreSQL planner state writes", () => {
       (document) => expect(document.pyroxene.resources).toEqual(baseDocument().pyroxene.resources),
     ],
     [
+      "owned resource create with received-reward changes",
+      (client) =>
+        createPostgresPyroxeneOwnedResource(
+          env,
+          7,
+          { pyroxene: 900, oneTimeTicket: 2, tenTimeTicket: 1 },
+          {
+            inputAt: isoDate,
+            collectedSources: { add: ["source-new"], remove: ["source-existing"] },
+            createClient: () => client as unknown as Client,
+          },
+        ),
+      (document) => {
+        expect(document.pyroxene.resources).toEqual({
+          inputAt: isoDate,
+          pyroxene: 900,
+          oneTimeTicket: 2,
+          tenTimeTicket: 1,
+        });
+        expect(document.pyroxene.collectedSourceKeys).toEqual(["source-new"]);
+      },
+    ],
+    [
+      "collected sources update",
+      (client) =>
+        updatePostgresCollectedSources(
+          env,
+          7,
+          { add: ["source-two", "source-one", ""], remove: ["source-existing"] },
+          { createClient: () => client as unknown as Client },
+        ),
+      (document) => {
+        expect(document.pyroxene.collectedSourceKeys).toEqual(["source-one", "source-two"]);
+        expect(document.pyroxene.resources).toEqual(baseDocument().pyroxene.resources);
+      },
+    ],
+    [
       "collected source ensure",
       (client) =>
         ensurePostgresCollectedSource(env, 7, "source-one", { createClient: () => client as unknown as Client }),
@@ -392,6 +431,85 @@ describe("PostgreSQL planner state writes", () => {
 
     verify(storedDocument(client));
     expect(new Set(touchedTables(client))).toEqual(new Set(["planner_states"]));
+  });
+
+  it("keeps the recorded time for a one-off gain dated on the current game day", async () => {
+    const recordedAt = "2026-08-05T12:15:00.000Z"; // 21:15 KST on 08/05
+    jest.useFakeTimers({ now: new Date(recordedAt), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      const client = clientWithDocument();
+      const options = { createClient: () => client as unknown as Client };
+
+      await createPostgresOtherPyroxeneGain(env, 7, "2026-08-04T15:00:00.000Z", 20, 0, 0, "Today", "today", options);
+      await createPostgresBuyPyroxene(env, 7, "2026-08-04T15:00:00.000Z", 600, { ...options, uid: "buy-today" });
+      await createPostgresOtherPyroxeneGain(
+        env,
+        7,
+        "2026-08-05T15:00:00.000Z",
+        20,
+        0,
+        0,
+        "Tomorrow",
+        "tomorrow",
+        options,
+      );
+      await createPostgresPyroxeneApPackage(env, 7, "2026-08-04T15:00:00.000Z", false, "ap-today", options);
+
+      const eventAtByUid = Object.fromEntries(
+        storedDocument(client).pyroxene.records.map(({ uid, eventAt }) => [uid, eventAt]),
+      );
+      expect(eventAtByUid).toEqual(
+        expect.objectContaining({
+          today: recordedAt,
+          "buy-today": recordedAt,
+          tomorrow: "2026-08-05T19:00:00.000Z",
+          "ap-today::ap": "2026-08-04T19:00:00.000Z",
+        }),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("keeps a one-off gain's recorded time when an edit leaves its date on the same game day", async () => {
+    const recordedAt = "2026-08-05T12:15:00.000Z"; // 21:15 KST on 08/05
+    const noonOnRecordedDate = "2026-08-05T03:00:00.000Z"; // 12:00 KST on 08/05, as the quick edit sends it
+    const edit = (date: string, options: { createClient: () => Client }) =>
+      updatePostgresPyroxeneOneOffTimelineItem(
+        env,
+        7,
+        "today",
+        {
+          source: "other",
+          date,
+          description: "Edited",
+          pyroxeneDelta: 30,
+          oneTimeTicketDelta: 0,
+          tenTimeTicketDelta: 0,
+        },
+        options,
+      );
+    const storedEventAt = (client: FakePostgresClient) =>
+      storedDocument(client).pyroxene.records.find(({ uid }) => uid === "today")?.eventAt;
+    jest.useFakeTimers({ now: new Date(recordedAt), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      const client = clientWithDocument();
+      const options = { createClient: () => client as unknown as Client };
+      await createPostgresOtherPyroxeneGain(env, 7, "2026-08-04T15:00:00.000Z", 20, 0, 0, "Today", "today", options);
+
+      jest.setSystemTime(new Date("2026-08-05T13:00:00.000Z")); // later the same game day
+      await edit(noonOnRecordedDate, options);
+      expect(storedEventAt(client)).toBe(recordedAt);
+
+      jest.setSystemTime(new Date("2026-08-06T01:00:00.000Z")); // 10:00 KST the next day
+      await edit(noonOnRecordedDate, options);
+      expect(storedEventAt(client)).toBe(recordedAt);
+
+      await edit("2026-08-06T03:00:00.000Z", options); // moved to the edit's own game day
+      expect(storedEventAt(client)).toBe("2026-08-06T01:00:00.000Z");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("rejects a timeline record whose uid already exists", async () => {

@@ -14,6 +14,9 @@ const mockGetPyroxeneUserState = jest.fn<(...args: unknown[]) => Promise<unknown
 const mockGetPyroxenePlannerContents = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetTimelineContentDatesByContentUid = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetTimelineContents = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockGetPlannerState = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockGetAllStudents = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockGetUserResourceInventory = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
 jest.mock("~/models/event-content", () => ({
   getEventContentSchedule: mockGetEventContentSchedule,
@@ -22,11 +25,16 @@ jest.mock("~/models/event-content", () => ({
   getShopAvailableEvents: mockGetShopAvailableEvents,
 }));
 jest.mock("~/models/event-shop-state", () => ({ getEventShopStates: mockGetEventShopStates }));
+jest.mock("~/models/planner-state", () => ({ getPlannerState: mockGetPlannerState }));
 jest.mock("~/models/favorite-students", () => ({ getUserFavoritedStudents: mockGetUserFavoritedStudents }));
 jest.mock("~/models/recruitment-result.server", () => ({
   getRecruitmentResultsByRecruitmentGroupUids: mockGetRecruitmentResults,
 }));
 jest.mock("~/models/recruited-student", () => ({ getRecruitedStudents: mockGetRecruitedStudents }));
+jest.mock("~/models/student", () => ({ getAllStudents: mockGetAllStudents }));
+jest.mock("~/models/user-resource-inventory", () => ({
+  getUserResourceInventoryMapByItemUids: mockGetUserResourceInventory,
+}));
 jest.mock("~/models/recruitment", () => ({ getRecruitmentGroupsByUids: mockGetRecruitmentGroupsByUids }));
 jest.mock("~/models/pyroxene-planner", () => ({ getPyroxeneUserState: mockGetPyroxeneUserState }));
 jest.mock("~/views/pyroxene", () => ({ getPyroxenePlannerContents: mockGetPyroxenePlannerContents }));
@@ -36,6 +44,7 @@ jest.mock("~/models/timeline-content.server", () => ({
 }));
 
 import { getIntegratedPlannerData } from "~/views/integrated-planner";
+import { janken860Fixture } from "../domain/fixtures/janken-860";
 
 const env = {} as Env;
 const ctx = {} as ExecutionContext;
@@ -58,6 +67,9 @@ beforeEach(() => {
   mockGetEventShopStates.mockResolvedValue({});
   mockGetRecruitmentResults.mockResolvedValue([]);
   mockGetRecruitedStudents.mockResolvedValue([]);
+  mockGetPlannerState.mockResolvedValue({ jankenProgress: {}, ap: null });
+  mockGetAllStudents.mockResolvedValue([]);
+  mockGetUserResourceInventory.mockResolvedValue({});
   mockGetRecruitmentGroupsByUids.mockResolvedValue([]);
   mockGetPyroxeneUserState.mockResolvedValue({
     latestResources: null,
@@ -75,6 +87,52 @@ beforeEach(() => {
 });
 
 describe("integrated planner view", () => {
+  it("loads the janken progress and default inventory used by AP calculations", async () => {
+    const entry = {
+      progress: {
+        currentTier: 4,
+        heldEleph: 45,
+        cumulativeScore: 100_000,
+        equipmentTier: 1,
+        heldEquipmentCurrency: 0,
+        clearedStageUids: ["100860101"],
+      },
+      goals: {
+        targetTier: null,
+        shopCurrencyMode: "linked",
+        manualShopCurrency: 0,
+        targetScore: 500_000,
+        averageScore: 100_000,
+        targetEquipmentTier: null,
+      },
+    };
+    mockGetEventShopContent.mockResolvedValue({
+      shopResources: [{}],
+      stages: [],
+      eventRewardBonus: [],
+      minigameConfig: {
+        minigameType: "janken",
+        payment: { resourceType: "ITEM", resourceUid: "80860", quantity: 1 },
+        payments: [],
+        rewardGroups: [],
+        janken: janken860Fixture,
+      },
+    });
+    mockGetAllStudents.mockResolvedValue([{ uid: "26016", initialTier: 2 }]);
+    mockGetRecruitedStudents.mockResolvedValue([{ studentUid: "26016", tier: 4 }]);
+    mockGetUserResourceInventory.mockResolvedValue({ "26016": 45 });
+    mockGetPlannerState.mockResolvedValue({ jankenProgress: { "canonical-shop-1": entry }, ap: null });
+
+    const result = await getIntegratedPlannerData(env, 7, ctx);
+
+    expect(result.accountState?.jankenProgress["canonical-shop-1"]).toEqual(entry);
+    expect(result.shopEvents[0]).toMatchObject({
+      jankenStudentGrowthUid: "26016",
+      jankenDefaultProgress: { currentTier: 4, heldEleph: 45 },
+    });
+    expect(mockGetUserResourceInventory).toHaveBeenCalledWith(env, 7, ["26016"]);
+  });
+
   it("preserves an endless event's actual end_at separately from pyroxene schedules", async () => {
     const sourceEvent = {
       uid: "event-endless-ended",

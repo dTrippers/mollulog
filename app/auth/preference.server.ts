@@ -9,6 +9,7 @@ import {
   normalizeDesktopNavigationExpandedGroups,
   type DesktopNavigationExpandedGroups,
 } from "~/domain/desktop-navigation-preference";
+import { normalizeDismissedSiteBannerUids } from "~/domain/site-banner";
 
 let _preferenceCookie: Cookie;
 
@@ -20,6 +21,13 @@ export type Preference = {
   mobileNavigationIds?: MobileNavigationPair;
   desktopNavigationCollapsed?: boolean;
   desktopNavigationExpandedGroups?: DesktopNavigationExpandedGroups;
+  dismissedSiteBannerUids?: string[];
+};
+
+// A submission names one newly dismissed banner; the server appends it to the stored history, so a stale list in
+// another tab can never drop an earlier dismissal.
+export type PreferenceSubmission = Omit<Preference, "dismissedSiteBannerUids"> & {
+  dismissedSiteBannerUid?: string;
 };
 
 const defaultPreference = {
@@ -53,6 +61,7 @@ function normalizePreference(value: unknown): Preference {
     desktopNavigationCollapsed:
       typeof parsed.desktopNavigationCollapsed === "boolean" ? parsed.desktopNavigationCollapsed : undefined,
     desktopNavigationExpandedGroups: normalizeDesktopNavigationExpandedGroups(parsed.desktopNavigationExpandedGroups),
+    dismissedSiteBannerUids: normalizeDismissedSiteBannerUids(parsed.dismissedSiteBannerUids),
   };
 }
 

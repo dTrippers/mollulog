@@ -21,6 +21,27 @@ export function createResourceInventoryFilterState(): ResourceInventoryFilterSta
   };
 }
 
+/** The filter fields remembered across visits; the search text is intentionally left out. */
+export type StoredResourceInventoryFilter = Pick<ResourceInventoryFilterState, "rarities" | "shortageOnly">;
+export function normalizeStoredResourceInventoryFilter(value: unknown): Partial<StoredResourceInventoryFilter> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const filter = value as Partial<Record<keyof StoredResourceInventoryFilter, unknown>>;
+  const knownRarities = new Set<number>(RESOURCE_INVENTORY_RARITY_OPTIONS.map((option) => option.value));
+  const normalized: Partial<StoredResourceInventoryFilter> = {};
+  if (Array.isArray(filter.rarities)) {
+    normalized.rarities = [
+      ...new Set(filter.rarities.filter((rarity): rarity is number => knownRarities.has(rarity as number))),
+    ];
+  }
+  if (typeof filter.shortageOnly === "boolean") {
+    normalized.shortageOnly = filter.shortageOnly;
+  }
+  return normalized;
+}
+
 export type ResourceInventoryFilterable = {
   name: string;
   rarity: number;

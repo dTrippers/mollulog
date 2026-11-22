@@ -35,6 +35,29 @@ describe("guest event shop planner", () => {
     ).toBeNull();
   });
 
+  it("preserves road-puzzle start round, target round, and cost mode in guest plan exports", () => {
+    const state = {
+      ...createDefaultEventShopState([], []),
+      minigameStartRound: 3,
+      minigamePlayCount: 9,
+      minigamePaymentQuantityMode: "max" as const,
+    };
+    const envelope = createEmptyGuestEventShopPlanner();
+    const data = upsertGuestEventShopPlan(envelope.data, {
+      timelineUid: "road-puzzle-event",
+      shopStateUid: "road-puzzle-shop",
+      state,
+    });
+
+    expect(
+      parseGuestEventShopPlanner(JSON.stringify({ ...envelope, data }))?.data.plans["road-puzzle-shop"]?.state,
+    ).toMatchObject({
+      minigameStartRound: 3,
+      minigamePlayCount: 9,
+      minigamePaymentQuantityMode: "max",
+    });
+  });
+
   it("patches only current owned quantities and preserves newer guest edits during cleanup", () => {
     const envelope = createEmptyGuestEventShopPlanner();
     const defaults = createDefaultEventShopState([], ["student-1"]);

@@ -8,6 +8,7 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { installLayoutTestEnv } from "../components/v2/layout/layout-test-env";
 import { ErrorBoundary, default as PostDetailPage } from "~/routes/posts.$uid";
 import { routeError } from "~/lib/http-errors";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import type { PostDetailView } from "~/views/post-detail";
 
 jest.mock("~/lib/observability.client", () => ({ captureClientError: jest.fn() }));
@@ -20,14 +21,20 @@ const newsView: PostDetailView = {
     title: "9/8 업데이트 안내",
     content: "## 새로운 기능\n\n- 알림 이력을 확인할 수 있어요.\n\n![사진](https://mollulog.net/a.png)",
     thumbnailImageUrl: null,
-    createdAt: "2026-09-08T00:00:00.000Z",
+    publishedAt: "2026-09-08T00:00:00.000Z",
   },
   back: { kind: "news" },
   recent: {
     status: "success",
-    data: [{ uid: "post-2", title: "8/30 업데이트 안내", createdAt: "2026-08-30T00:00:00.000Z" }],
+    data: [{ uid: "post-2", title: "8/30 업데이트 안내", publishedAt: "2026-08-30T00:00:00.000Z" }],
   },
 };
+
+// The route loader renders the body on the server and sends it as HTML in place of the markdown.
+function toLoaderData(view: PostDetailView) {
+  const { content, ...post } = view.post;
+  return { ...view, post, contentHtml: renderMarkdownToSafeHtml(content) };
+}
 
 function renderPost(
   options: { view?: PostDetailView; loaderError?: unknown; state?: unknown; history?: boolean } = {},
@@ -43,7 +50,7 @@ function renderPost(
           if (options.loaderError) {
             throw options.loaderError;
           }
-          return loaderValue;
+          return loaderValue ? toLoaderData(loaderValue) : loaderValue;
         },
       },
       { path: "/news", element: <p>news list</p> },
@@ -175,7 +182,7 @@ describe("post detail screen", () => {
             if (attempts === 1) {
               throw new Error("connection reset by peer");
             }
-            return newsView;
+            return toLoaderData(newsView);
           },
         },
         { path: "/news", element: <p>news list</p> },

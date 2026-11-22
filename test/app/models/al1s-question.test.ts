@@ -24,14 +24,71 @@ describe("AL1S question result parser", () => {
     expect(
       parseQuestionRunResult({
         status: "answered",
-        answer: { text: "Answer", sources: [{ sourceId: "s1", kind: "student", label: "Student" }], limitations: [] },
+        answer: {
+          text: "Answer",
+          blocks: [{ type: "plaintext", text: "Answer" }],
+          sources: [{ sourceId: "s1", kind: "student", label: "Student" }],
+          limitations: [],
+        },
         run,
       }),
     ).toEqual({
       status: "answered",
-      answer: { text: "Answer", sources: [{ sourceId: "s1", kind: "student", label: "Student" }], limitations: [] },
+      answer: {
+        text: "Answer",
+        blocks: [{ type: "plaintext", text: "Answer" }],
+        sources: [{ sourceId: "s1", kind: "student", label: "Student" }],
+        limitations: [],
+      },
       run,
     });
+  });
+
+  it("preserves valid subjects and drops malformed optional subjects without dropping their sources", () => {
+    const result = parseQuestionRunResult({
+      status: "answered",
+      answer: {
+        text: "Answer",
+        sources: [
+          { sourceId: "s1", kind: "student", label: "Student", subject: { type: "student", uid: "101" } },
+          { sourceId: "s2", kind: "schedule", label: "Raid", subject: { type: "raid_boss", boss: "binah" } },
+          {
+            sourceId: "s3",
+            kind: "student",
+            label: "Old source",
+            subject: { type: "student", uid: "101", boss: "extra" },
+          },
+        ],
+        limitations: [],
+      },
+      sourceRecords: [
+        {
+          sourceId: "s1",
+          toolName: "get_student",
+          arguments: {},
+          kind: "student",
+          label: "Student",
+          facts: {},
+          modelView: {},
+          retrievedAt: "2026-10-29",
+          scope: {},
+          subject: { type: "student", uid: "101" },
+        },
+      ],
+      run,
+    });
+
+    expect(result).toMatchObject({
+      answer: {
+        sources: [
+          { sourceId: "s1", subject: { type: "student", uid: "101" } },
+          { sourceId: "s2", subject: { type: "raid_boss", boss: "binah" } },
+          { sourceId: "s3", label: "Old source" },
+        ],
+      },
+      sourceRecords: [{ subject: { type: "student", uid: "101" } }],
+    });
+    expect(result && result.status !== "failed" ? result.answer.sources[2] : undefined).not.toHaveProperty("subject");
   });
 
   it("accepts known failed results and rejects unknown shapes", () => {
@@ -41,6 +98,72 @@ describe("AL1S question result parser", () => {
     });
     expect(parseQuestionRunResult({ status: "unknown", run })).toBeNull();
     expect(parseQuestionRunResult({ status: "answered", answer: {}, run })).toBeNull();
+  });
+
+  it("keeps valid blocks, skips malformed blocks, and keeps text if every block is malformed", () => {
+    const result = parseQuestionRunResult({
+      status: "answered",
+      run,
+      answer: {
+        text: "Answer",
+        sources: [],
+        limitations: [],
+        blocks: [
+          { type: "markdown", text: "**Answer**" },
+          {
+            type: "bar_chart",
+            title: "broken",
+            unit: "percent",
+            categories: ["루나틱"],
+            series: [{ sourceId: "s1", name: "미카", values: ["bad"] }],
+          },
+          { type: "unknown", text: "discard" },
+        ],
+      },
+    });
+    expect(result).toMatchObject({ answer: { text: "Answer", blocks: [{ type: "markdown", text: "**Answer**" }] } });
+    expect(
+      parseQuestionRunResult({
+        status: "answered",
+        run,
+        answer: { text: "Kept", sources: [], limitations: [], blocks: [{ type: "unknown" }] },
+      }),
+    ).toMatchObject({ answer: { text: "Kept", blocks: [{ type: "plaintext", text: "Kept" }] } });
+  });
+
+  it("accepts one unnamed multi-source series, but not alongside other series", () => {
+    const pointsChart = (series: unknown[]) =>
+      parseQuestionRunResult({
+        status: "answered",
+        run,
+        answer: {
+          text: "Answer",
+          sources: [],
+          limitations: [],
+          blocks: [
+            { type: "markdown", text: "Answer" },
+            { type: "bar_chart", title: "사용률", unit: "percent", categories: ["아코", "히마리"], series },
+          ],
+        },
+      });
+    expect(pointsChart([{ name: null, sourceIds: ["s1", "s2"], values: [32.3, 40.1] }])).toMatchObject({
+      answer: {
+        blocks: [
+          { type: "markdown" },
+          { type: "bar_chart", series: [{ name: null, sourceIds: ["s1", "s2"], values: [32.3, 40.1] }] },
+        ],
+      },
+    });
+    for (const series of [
+      [
+        { name: null, sourceIds: ["s1", "s2"], values: [32.3, 40.1] },
+        { name: "미카", sourceId: "s3", values: [1, 2] },
+      ],
+      [{ name: null, sourceIds: [], values: [32.3, 40.1] }],
+      [{ name: null, sourceId: "s1", values: [32.3, 40.1] }],
+    ]) {
+      expect(pointsChart(series)).toMatchObject({ answer: { blocks: [{ type: "markdown" }] } });
+    }
   });
 
   it("maps missing bindings, thrown calls, and unexpected shapes to safe outcomes", async () => {
@@ -66,6 +189,80 @@ describe("AL1S question result parser", () => {
     await expect(runQuestion({ AL1S: { runQuestion: runQuestionMock } }, request)).resolves.toEqual({
       ok: false,
       reason: "unexpected_result",
+    });
+  });
+
+  it("accepts content sources in answers and completed tool events", async () => {
+    const contentSource = { sourceId: "c1", kind: "content", label: "Event rewards" };
+    const result = {
+      status: "answered",
+      answer: {
+        text: "Answer",
+        blocks: [{ type: "markdown", text: "Answer" }],
+        sources: [contentSource],
+        limitations: [],
+      },
+      run,
+    };
+    expect(parseQuestionRunResult(result)).toEqual(result);
+
+    const events: unknown[] = [];
+    const service = {
+      runQuestion: async (_request: unknown, onEvent?: (event: unknown) => void) => {
+        onEvent?.({
+          type: "tool_completed",
+          callId: "call-1",
+          round: 1,
+          toolName: "get_content",
+          ok: true,
+          sources: [contentSource],
+        });
+        return result;
+      },
+    };
+    const request = { question: "Question", context: { region: "gl", asOf: "2026-10-19" }, profile: "public" } as const;
+    await expect(runQuestion({ AL1S: service }, request, (event) => events.push(event))).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(events).toEqual([
+      {
+        type: "tool_completed",
+        callId: "call-1",
+        round: 1,
+        toolName: "get_content",
+        ok: true,
+        sources: [contentSource],
+      },
+    ]);
+  });
+
+  it("forwards only valid progress events and ignores observer failures", async () => {
+    const validResult = {
+      status: "answered",
+      answer: { text: "Answer", blocks: [{ type: "plaintext", text: "Answer" }], sources: [], limitations: [] },
+      run,
+    };
+    const events: unknown[] = [];
+    const service = {
+      runQuestion: async (_request: unknown, onEvent?: (event: unknown) => void) => {
+        onEvent?.({ type: "tool_started", callId: "call-1", round: 1, toolName: "get_student", target: "미카" });
+        onEvent?.({ type: "tool_started", callId: "call-2", round: 1, toolName: "get_student", target: 7 });
+        return validResult;
+      },
+    };
+    const request = { question: "Question", context: { region: "gl", asOf: "2026-10-19" }, profile: "public" } as const;
+    await expect(runQuestion({ AL1S: service }, request, (event) => events.push(event))).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(events).toEqual([
+      { type: "tool_started", callId: "call-1", round: 1, toolName: "get_student", target: "미카" },
+    ]);
+    await expect(
+      runQuestion({ AL1S: service }, request, () => {
+        throw new Error("observer");
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
     });
   });
 });

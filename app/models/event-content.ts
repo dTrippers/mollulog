@@ -9,13 +9,16 @@ import { ResourceTypeEnum, RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { cacheKey, cacheQuery, fetchLazySourceCached, fetchSourceCached } from "~/lib/cache";
 import { compareInstantAsc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
-import { getAllRecruitmentGroups, getRecruitmentGroupsByUids } from "~/models/recruitment";
+import { getAllRecruitmentGroups, getRecruitmentGroupsByUids, getRecruitmentGroupsByUidsStrict } from "~/models/recruitment";
 import { eventCardImageUrl } from "./assets";
 import type { RunType } from "./timeline-content";
 import { getTimelineContent, getTimelineContents } from "./timeline-content.server";
 
-const EVENT_CONTENTS_LIST_CACHE_KEY = cacheKey("source", "event-content", 1, "list");
+const EVENT_CONTENTS_LIST_CACHE_KEY = cacheKey("source", "event-content", 2, "list");
 const EVENT_STATIC_CONTENT_TTL = 7 * 24 * 60 * 60;
+// An upcoming event is often listed in BAQL before its shop or minigame is entered. Keeping that empty snapshot for
+// the static TTL would hide data entered later for a week, so an empty snapshot stays fresh only briefly.
+const EVENT_UNREGISTERED_CONTENT_TTL = 10 * 60;
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
   if (runType === "rerun") return RunTypeEnum.Rerun;
@@ -48,7 +51,8 @@ export async function getEventMetadata(env: Env, timelineUid: string, ctx?: Exec
   };
 }
 
-type EventMetadata = NonNullable<Awaited<ReturnType<typeof getEventMetadata>>>;
+export type EventShopMetadata = NonNullable<Awaited<ReturnType<typeof getEventMetadata>>>;
+type EventMetadata = EventShopMetadata;
 
 export type ShopAvailableEvent = {
   uid: string;
@@ -56,6 +60,7 @@ export type ShopAvailableEvent = {
   since: UtcIsoString;
   until: UtcIsoString | null;
   isSpoiler: boolean;
+  recruitments?: { student: { uid: string; name: string } | null; pickup: boolean; recruitmentType?: RecruitmentGroupsListQuery["recruitmentGroups"][number]["recruitments"][number]["recruitmentType"] }[];
 };
 
 const eventContentScheduleQuery = graphql(`
@@ -89,12 +94,12 @@ export async function getEventContentSchedule(
 ): Promise<EventContentSchedule | null> {
   const schedule = await fetchLazySourceCached<CachedEventContentSchedule | null>(
     env,
-    cacheKey("source", "event-content-schedule", 1, cacheQuery({ eventUid, region: "gl", runType })),
+    cacheKey("source", "event-content-schedule", 2, cacheQuery({ eventUid, region: "gl", runType })),
     async () => {
       const { data, error } = await runQuery(eventContentScheduleQuery, { eventUid });
-      if (error || !data?.eventContent) {
-        return null;
-      }
+      if (error) throw error;
+      if (!data) throw new Error("Failed to fetch event content schedule.");
+      if (!data.eventContent) return null;
 
       const schedules = data.eventContent.schedules;
       const schedule = schedules.find((item) => item.region === "gl" && item.runType === runType) ?? null;
@@ -120,19 +125,36 @@ export async function getEventContentSchedule(
 
 export async function getShopAvailableEvents(env: Env, ctx?: ExecutionContext): Promise<ShopAvailableEvent[]> {
   const contents = await getTimelineContents(env, undefined, { ctx });
-  return contents
-    .filter(
-      (content) =>
-        content.shopContentUid != null ||
-        (content.contentType === "event" && content.contentUid != null && content.runType !== "permanent"),
-    )
+  const shopContents = contents.filter(
+    (content) =>
+      content.shopContentUid != null ||
+      (content.contentType === "event" && content.contentUid != null && content.runType !== "permanent"),
+  );
+  const groups = await getRecruitmentGroupsByUidsStrict(
+    env,
+    shopContents.flatMap(({ recruitmentGroupUid }) => recruitmentGroupUid ? [recruitmentGroupUid] : []),
+  );
+  const groupsByUid = new Map(groups.map((group) => [group.uid, group]));
+
+  return shopContents
     .map((content) => {
+      const group = content.recruitmentGroupUid ? groupsByUid.get(content.recruitmentGroupUid) : undefined;
+      const studentUids = content.recruitmentStudentUids;
       return {
         uid: content.uid,
         name: content.name,
         since: content.startAt,
         until: content.endAt,
         isSpoiler: content.isSpoiler,
+        ...(group ? {
+          recruitments: group.recruitments
+            .filter(({ pickup, student }) => pickup && student && (studentUids === null || studentUids.includes(student.uid)))
+            .map(({ pickup, recruitmentType, student, studentName }) => ({
+              pickup,
+              recruitmentType,
+              student: student ? { uid: student.uid, name: student.name || studentName } : null,
+            })),
+        } : {}),
       };
     })
     .sort((a, b) => compareInstantAsc(a.since, b.since));
@@ -248,6 +270,21 @@ const eventContentShopContentQuery = graphql(`
         minigameType
         payment { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
         payments { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+        roadPuzzle {
+          instantClearRound
+          maps {
+            uid name
+            deck { straight longCurve shortCurve }
+            tiles { x y z type rotation }
+            fixedRails { x y z entranceIndex exitIndex rotation }
+          }
+          railSetReward { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+          rounds {
+            round isLoop mapUids
+            rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+            additionalRewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+          }
+        }
         treasureHunt {
           loopRound
           rounds {
@@ -288,6 +325,25 @@ const eventContentShopContentQuery = graphql(`
             rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
           }
         }
+        janken {
+          challengeMultipleUnlockScore
+          multipleMax
+          stages {
+            uid stageType stageNumber previousStageUid
+            entryCost { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+            rewards { amount probability tag resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+          }
+          scoreRewards {
+            tier score
+            rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+          }
+          equipmentUpgrade {
+            maxTier
+            costResource { type uid name ... on Emblem { imageUrl(lang: ko) } }
+            tierCosts { tier quantity }
+          }
+          equipments { uid unlockStageUid tiers { tier attackPower hitPoint } }
+        }
         rewardGroups {
           condition { type value values divisor remainders }
           payments {
@@ -310,9 +366,21 @@ const eventContentMinigameTypeQuery = graphql(`
       minigameConfigs(runType: $runType) {
         minigameType
       }
+      stages(runType: $runType) {
+        uid
+      }
+      shopResources(runType: $runType) {
+        uid
+      }
     }
   }
 `);
+
+type CachedEventMinigameType = {
+  minigameType: MinigameConfig["minigameType"] | null;
+  /** Whether BAQL had any stage, shop item, or minigame for the run when this was cached. */
+  registered: boolean;
+};
 
 type EventContentData = NonNullable<EventContentShopContentQuery["eventContent"]>;
 type EventStageRewardResource = NonNullable<EventContentData["stages"][number]["rewards"][number]["resource"]>;
@@ -450,6 +518,232 @@ function transformBonuses(bonuses: NonNullable<EventContentData>["bonuses"]) {
 type ServerCondition = NonNullable<EventContentData>["minigameConfigs"][number]["rewardGroups"][number]["condition"];
 type ServerTreasureHunt = NonNullable<EventContentData>["minigameConfigs"][number]["treasureHunt"];
 type ServerCardFlip = NonNullable<EventContentData>["minigameConfigs"][number]["cardFlip"];
+type ServerRoadPuzzle = NonNullable<EventContentData>["minigameConfigs"][number]["roadPuzzle"];
+type ServerJanken = NonNullable<EventContentData>["minigameConfigs"][number]["janken"];
+
+function transformJanken(janken: ServerJanken): MinigameConfig["janken"] {
+  if (!janken) return { status: "unavailable" };
+  const invalid = { status: "invalid" } as const;
+  if (
+    !Array.isArray(janken.stages) || !Array.isArray(janken.scoreRewards) ||
+    !janken.equipmentUpgrade || !Array.isArray(janken.equipmentUpgrade.tierCosts) ||
+    !Array.isArray(janken.equipments) ||
+    !Number.isSafeInteger(janken.multipleMax) || janken.multipleMax < 1 ||
+    !Number.isSafeInteger(janken.challengeMultipleUnlockScore) || janken.challengeMultipleUnlockScore < 0 ||
+    janken.stages.length === 0 || janken.scoreRewards.length === 0 ||
+    !Number.isSafeInteger(janken.equipmentUpgrade.maxTier) || janken.equipmentUpgrade.maxTier < 1 ||
+    janken.equipments.length === 0
+  ) return invalid;
+  if (janken.scoreRewards.some((tier) =>
+    !tier || !Array.isArray(tier.rewards) || tier.rewards.some((reward) =>
+      !reward?.resource || !Number.isFinite(reward.quantity) || reward.quantity < 0,
+    ),
+  )) return invalid;
+  if (janken.equipments.some((equipment) =>
+    !equipment || typeof equipment.uid !== "string" || !equipment.uid.trim() || !Array.isArray(equipment.tiers) || equipment.tiers.some((tier) =>
+      !tier || !Number.isSafeInteger(tier.tier) || tier.tier < 1 ||
+      !Number.isFinite(tier.attackPower) || !Number.isFinite(tier.hitPoint),
+    ),
+  )) return invalid;
+  const stageUids = new Set<string>();
+  const stages = janken.stages.map((stage) => {
+    if (!stage || typeof stage.uid !== "string" || !stage.uid.trim() || stageUids.has(stage.uid) || !Number.isSafeInteger(stage.stageNumber) || stage.stageNumber < 1 || !["story", "normal", "challenge"].includes(stage.stageType) || !Array.isArray(stage.rewards) || !stage.entryCost) return null;
+    stageUids.add(stage.uid);
+    const cost = stage.entryCost;
+    if (!cost.resource || typeof cost.resource.uid !== "string" || !cost.resource.uid.trim() || !Number.isSafeInteger(cost.quantity) || cost.quantity < 0) return null;
+    const rewards = stage.rewards.map((reward) => {
+      if (!reward?.resource || typeof reward.resource.uid !== "string" || !reward.resource.uid.trim() || !Number.isSafeInteger(reward.amount) || reward.amount < 0 || !Number.isFinite(reward.probability) || reward.probability < 0 || reward.probability > 1 || !["default", "first_clear", "three_star"].includes(reward.tag)) return null;
+      return {
+        resourceType: reward.resource.type,
+        resourceUid: reward.resource.uid,
+        resourceName: reward.resource.name,
+        imageUrl: getEmblemImageUrl(reward.resource),
+        quantity: reward.amount,
+        probability: reward.probability,
+        tag: reward.tag as "default" | "first_clear" | "three_star",
+      };
+    });
+    if (rewards.some((reward) => reward === null)) return null;
+    return {
+      uid: stage.uid,
+      stageType: stage.stageType as "story" | "normal" | "challenge",
+      stageNumber: stage.stageNumber,
+      previousStageUid: stage.previousStageUid,
+      entryCost: { resourceType: cost.resource.type, resourceUid: cost.resource.uid, resourceName: cost.resource.name, imageUrl: getEmblemImageUrl(cost.resource), quantity: cost.quantity },
+      rewards: rewards as NonNullable<(typeof rewards)[number]>[],
+    };
+  });
+  if (stages.some((stage) => stage === null)) return invalid;
+  if (stages.some((stage) => stage?.previousStageUid && !stageUids.has(stage.previousStageUid))) return invalid;
+  const stageByUid = new Map(stages.flatMap((stage) => stage ? [[stage.uid, stage] as const] : []));
+  for (const stage of stages) {
+    const seen = new Set<string>();
+    let current = stage;
+    while (current?.previousStageUid) {
+      if (seen.has(current.uid)) return invalid;
+      seen.add(current.uid);
+      current = stageByUid.get(current.previousStageUid) ?? null;
+    }
+  }
+  const scoreRewards = janken.scoreRewards.map((tier) => ({
+    tier: tier.tier,
+    score: tier.score,
+    rewards: tier.rewards.flatMap((reward) => reward.resource ? [{
+      resourceType: reward.resource.type,
+      resourceUid: reward.resource.uid,
+      resourceName: reward.resource.name,
+      imageUrl: getEmblemImageUrl(reward.resource),
+      quantity: reward.quantity,
+      rarity: reward.resource.rarity ?? undefined,
+    }] : []),
+  }));
+  if (scoreRewards.some((tier, index) => tier.rewards.length !== janken.scoreRewards[index].rewards.length)) return invalid;
+  if (scoreRewards.some((tier, index) => !Number.isSafeInteger(tier.tier) || tier.tier < 1 || !Number.isSafeInteger(tier.score) || tier.score < 0 || (index > 0 && (tier.tier <= scoreRewards[index - 1].tier || tier.score <= scoreRewards[index - 1].score)))) return invalid;
+  const { equipmentUpgrade } = janken;
+  if (!equipmentUpgrade.costResource || typeof equipmentUpgrade.costResource.uid !== "string" || !equipmentUpgrade.costResource.uid.trim() || equipmentUpgrade.tierCosts.some((cost) => !Number.isSafeInteger(cost.tier) || cost.tier < 2 || cost.tier > equipmentUpgrade.maxTier || !Number.isSafeInteger(cost.quantity) || cost.quantity < 0) || equipmentUpgrade.tierCosts.length !== equipmentUpgrade.maxTier - 1 || new Set(equipmentUpgrade.tierCosts.map(({ tier }) => tier)).size !== equipmentUpgrade.tierCosts.length || equipmentUpgrade.tierCosts.some((cost, index) => cost.tier !== index + 2)) return invalid;
+  const costResource = equipmentUpgrade.costResource;
+  return {
+    status: "available",
+    challengeMultipleUnlockScore: janken.challengeMultipleUnlockScore,
+    multipleMax: janken.multipleMax,
+    stages: stages as NonNullable<(typeof stages)[number]>[],
+    scoreRewards,
+    equipmentUpgrade: {
+      maxTier: equipmentUpgrade.maxTier,
+      costResource: costResource ? { resourceType: costResource.type, resourceUid: costResource.uid, resourceName: costResource.name, imageUrl: getEmblemImageUrl(costResource), quantity: 1 } : null,
+      tierCosts: equipmentUpgrade.tierCosts.map(({ tier, quantity }) => ({ tier, quantity })),
+    },
+    equipments: janken.equipments.map(({ uid, unlockStageUid, tiers }) => ({ uid, unlockStageUid, tiers: tiers.map(({ tier, attackPower, hitPoint }) => ({ tier, attackPower, hitPoint })) })),
+  };
+}
+
+function transformRoadPuzzleRewards(rewards: NonNullable<ServerRoadPuzzle>["railSetReward"]): RewardItem[] {
+  return rewards.map((reward) => {
+    if (!reward.resource) throw new Error("Road puzzle reward is missing its resource.");
+    return {
+      resourceType: reward.resource.type,
+      resourceUid: reward.resource.uid,
+      resourceName: reward.resource.name,
+      imageUrl: getEmblemImageUrl(reward.resource),
+      quantity: reward.quantity,
+      rarity:
+        "rarity" in reward.resource && typeof reward.resource.rarity === "number" ? reward.resource.rarity : undefined,
+    };
+  });
+}
+
+function transformRoadPuzzle(roadPuzzle: ServerRoadPuzzle): MinigameConfig["roadPuzzle"] {
+  if (!roadPuzzle) return null;
+  if (roadPuzzle.maps.length === 0 || roadPuzzle.rounds.length === 0) {
+    throw new Error("Road puzzle configuration is missing maps or rounds.");
+  }
+  if (!Number.isSafeInteger(roadPuzzle.instantClearRound) || roadPuzzle.instantClearRound < 0) {
+    throw new Error("Road puzzle instant clear round is invalid.");
+  }
+
+  const mapsByUid = new Set<string>();
+  const maps = roadPuzzle.maps.map((map) => {
+    if (!map.uid.trim() || mapsByUid.has(map.uid)) throw new Error("Road puzzle map UID is missing or duplicated.");
+    mapsByUid.add(map.uid);
+    const deck = { straight: map.deck.straight, longCurve: map.deck.longCurve, shortCurve: map.deck.shortCurve };
+    if (Object.values(deck).some((amount) => !Number.isSafeInteger(amount) || amount < 0)) {
+      throw new Error(`Road puzzle map ${map.uid} has an invalid deck.`);
+    }
+    const tileCoordinates = new Set<string>();
+    const tileTypes = new Map<string, number>();
+    for (const tile of map.tiles) {
+      const key = `${tile.x},${tile.y},${tile.z}`;
+      if (
+        tile.x + tile.y + tile.z !== 0 ||
+        tileCoordinates.has(key) ||
+        !Number.isSafeInteger(tile.type) ||
+        tile.type < 1 ||
+        tile.type > 5 ||
+        !Number.isSafeInteger(tile.rotation)
+      ) {
+        throw new Error(`Road puzzle map ${map.uid} has invalid terrain.`);
+      }
+      tileCoordinates.add(key);
+      tileTypes.set(key, tile.type);
+    }
+    const fixedRailCoordinates = new Set<string>();
+    for (const rail of map.fixedRails) {
+      const key = `${rail.x},${rail.y},${rail.z}`;
+      if (
+        !tileCoordinates.has(key) ||
+        fixedRailCoordinates.has(key) ||
+        !Number.isSafeInteger(rail.entranceIndex) ||
+        rail.entranceIndex < 0 ||
+        rail.entranceIndex > 5 ||
+        !Number.isSafeInteger(rail.exitIndex) ||
+        rail.exitIndex < 0 ||
+        rail.exitIndex > 5 ||
+        rail.entranceIndex === rail.exitIndex ||
+        !Number.isSafeInteger(rail.rotation)
+      ) {
+        throw new Error(`Road puzzle map ${map.uid} has invalid fixed rails.`);
+      }
+      fixedRailCoordinates.add(key);
+    }
+    const fixedTypes = [...tileTypes.values()];
+    if (
+      fixedTypes.filter((type) => type === 1).length !== 1 ||
+      fixedTypes.filter((type) => type === 2).length !== 1 ||
+      fixedTypes.filter((type) => type === 3).length === 0
+    ) {
+      throw new Error(`Road puzzle map ${map.uid} has invalid station terrain.`);
+    }
+    for (const [key, type] of tileTypes) {
+      if ((type === 1 || type === 2 || type === 3) !== fixedRailCoordinates.has(key)) {
+        throw new Error(`Road puzzle map ${map.uid} is missing or has an unexpected fixed rail.`);
+      }
+    }
+    return {
+      uid: map.uid,
+      name: map.name,
+      deck,
+      tiles: map.tiles.map(({ x, y, z, type, rotation }) => ({ x, y, z, type, rotation })),
+      fixedRails: map.fixedRails.map(({ x, y, z, entranceIndex, exitIndex, rotation }) => ({
+        x,
+        y,
+        z,
+        entranceIndex,
+        exitIndex,
+        rotation,
+      })),
+    };
+  });
+
+  const seenRounds = new Set<number>();
+  const rounds = roadPuzzle.rounds.map((round) => {
+    if (
+      !Number.isSafeInteger(round.round) ||
+      round.round < 1 ||
+      seenRounds.has(round.round) ||
+      round.mapUids.length === 0
+    ) {
+      throw new Error("Road puzzle round configuration is invalid.");
+    }
+    seenRounds.add(round.round);
+    if (round.mapUids.some((uid) => !mapsByUid.has(uid))) {
+      throw new Error(`Road puzzle round ${round.round} references a missing map.`);
+    }
+    return {
+      round: round.round,
+      isLoop: round.isLoop,
+      mapUids: [...round.mapUids],
+      rewards: transformRoadPuzzleRewards(round.rewards),
+      additionalRewards: transformRoadPuzzleRewards(round.additionalRewards),
+    };
+  });
+
+  return {
+    instantClearRound: roadPuzzle.instantClearRound,
+    railSetReward: transformRoadPuzzleRewards(roadPuzzle.railSetReward),
+    rounds: rounds.sort((left, right) => left.round - right.round),
+    maps: maps.sort((left, right) => Number(left.uid) - Number(right.uid)),
+  };
+}
 
 function resolveRounds(condition: ServerCondition): MinigameConfig["rewardGroups"][number]["rounds"] {
   if (condition.type === "exact" && condition.values) {
@@ -567,10 +861,7 @@ function transformCardFlip(cardFlip: ServerCardFlip): MinigameConfig["cardFlip"]
   }
 
   const flipCosts = [...cardFlip.flipCosts].sort((left, right) => left.flip - right.flip);
-  if (
-    flipCosts.length !== drawRules.maxDrawCount ||
-    flipCosts.some(({ flip }, index) => flip !== index + 1)
-  ) {
+  if (flipCosts.length !== drawRules.maxDrawCount || flipCosts.some(({ flip }, index) => flip !== index + 1)) {
     return { status: "invalid" };
   }
   const payments: MinigamePayment[][] = [];
@@ -604,7 +895,11 @@ function transformCardFlip(cardFlip: ServerCardFlip): MinigameConfig["cardFlip"]
     if (
       slots.some(
         ({ slot, weight }) =>
-          !Number.isSafeInteger(slot) || slot < 1 || slot > cardFlip.slotCount || !Number.isFinite(weight) || weight < 0,
+          !Number.isSafeInteger(slot) ||
+          slot < 1 ||
+          slot > cardFlip.slotCount ||
+          !Number.isFinite(weight) ||
+          weight < 0,
       ) ||
       new Set(slots.map(({ slot }) => slot)).size !== slots.length
     ) {
@@ -652,8 +947,12 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
   const serverConfig = configs[0];
   const transformedCardFlip =
     serverConfig.minigameType === "card_flip" ? transformCardFlip(serverConfig.cardFlip) : undefined;
+      const transformedRoadPuzzle =
+    serverConfig.minigameType === "road_puzzle" ? transformRoadPuzzle(serverConfig.roadPuzzle) : undefined;
+  const transformedJanken = serverConfig.minigameType === "janken" ? transformJanken(serverConfig.janken) : undefined;
   const cardFlipPayment =
     transformedCardFlip?.status === "available" ? transformedCardFlip.flipCosts[0]?.payments[0] : null;
+  const jankenPaymentResource = transformedJanken?.status === "available" ? transformedJanken.stages[0]?.entryCost : null;
   const paymentResource = cardFlipPayment
     ? {
         type: cardFlipPayment.resourceType,
@@ -661,8 +960,15 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
         name: cardFlipPayment.resourceName ?? "재화",
         imageUrl: cardFlipPayment.imageUrl,
       }
-    : serverConfig.payment.resource;
-  if (!paymentResource) return null;
+    : jankenPaymentResource
+      ? { type: jankenPaymentResource.resourceType, uid: jankenPaymentResource.resourceUid, name: jankenPaymentResource.resourceName ?? "재화", imageUrl: jankenPaymentResource.imageUrl }
+      : serverConfig.payment.resource;
+  if (!paymentResource) {
+    if (serverConfig.minigameType === "road_puzzle") {
+      throw new Error("Road puzzle placement payment is missing its resource.");
+    }
+    return null;
+  }
 
   const payments =
     transformedCardFlip?.status === "available"
@@ -685,12 +991,14 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
     minigameType: serverConfig.minigameType as MinigameConfig["minigameType"],
     treasureHunt: transformTreasureHunt(serverConfig.treasureHunt),
     cardFlip: transformedCardFlip,
+    ...(serverConfig.minigameType === "road_puzzle" ? { roadPuzzle: transformedRoadPuzzle } : {}),
+    ...(serverConfig.minigameType === "janken" ? { janken: transformedJanken ?? { status: "unavailable" as const } } : {}),
     payment: {
       resourceType: paymentResource.type,
       resourceUid: paymentResource.uid,
       resourceName: paymentResource.name,
       imageUrl: getEmblemImageUrl(paymentResource),
-      quantity: cardFlipPayment?.quantity ?? serverConfig.payment.quantity,
+      quantity: cardFlipPayment?.quantity ?? jankenPaymentResource?.quantity ?? serverConfig.payment.quantity,
     },
     payments,
     rewardGroups: serverConfig.rewardGroups.map((group) => ({
@@ -748,15 +1056,15 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
 
   return fetchLazySourceCached(
     env,
-    cacheKey("source", "event-shop", 4, cacheQuery({ contentUid: shopContentUid, runType })),
+    cacheKey("source", "event-shop", 6, cacheQuery({ contentUid: shopContentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,
         runType: toRunTypeEnum(runType),
       });
-      if (error || !data?.eventContent) {
-        return null;
-      }
+      if (error) throw error;
+      if (!data) throw new Error("Failed to fetch event shop metadata.");
+      if (!data.eventContent) return null;
 
       const { stages, shopResources, bonuses, minigameConfigs } = data.eventContent;
       return {
@@ -766,7 +1074,8 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
         minigameConfig: transformMinigameConfigs(minigameConfigs),
       };
     },
-    EVENT_STATIC_CONTENT_TTL,
+    // The shop screens show "no data" for a missing or itemless shop, so that snapshot must not outlive data entry.
+    (shop) => (shop === null || shop.shopResources.length === 0 ? EVENT_UNREGISTERED_CONTENT_TTL : EVENT_STATIC_CONTENT_TTL),
     forceRefresh,
   );
 }
@@ -783,9 +1092,9 @@ export async function getEventMinigameType(
   }
 
   const { runType } = metadata;
-  return fetchLazySourceCached(
+  const cached = await fetchLazySourceCached<CachedEventMinigameType>(
     env,
-    cacheKey("source", "event-minigame-type", 1, cacheQuery({ contentUid, runType })),
+    cacheKey("source", "event-minigame-type", 3, cacheQuery({ contentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentMinigameTypeQuery, {
         eventUid: contentUid,
@@ -795,10 +1104,17 @@ export async function getEventMinigameType(
         throw error ?? new Error("Failed to fetch event minigame type.");
       }
 
-      const minigameType = data.eventContent?.minigameConfigs[0]?.minigameType;
-      return (minigameType as MinigameConfig["minigameType"] | undefined) ?? null;
+      const content = data.eventContent;
+      const minigameType = (content?.minigameConfigs[0]?.minigameType as MinigameConfig["minigameType"] | undefined) ?? null;
+      return {
+        minigameType,
+        registered:
+          minigameType !== null || (content !== null && (content.stages.length > 0 || content.shopResources.length > 0)),
+      };
     },
-    EVENT_STATIC_CONTENT_TTL,
+    // Many events have no minigame at all, so only a run with nothing entered yet is rechecked soon.
+    ({ registered }) => (registered ? EVENT_STATIC_CONTENT_TTL : EVENT_UNREGISTERED_CONTENT_TTL),
     forceRefresh,
   );
+  return cached.minigameType;
 }

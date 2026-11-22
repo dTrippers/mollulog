@@ -7,8 +7,9 @@ import { PostListEmpty, PostListFailure } from "~/components/v2/features/posts/P
 import { PageHeader, PageMain, V2Page } from "~/components/v2/layout";
 import { Pagination } from "~/components/v2/primitives/Pagination";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import { captureClientError } from "~/lib/observability.client";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { getNewsPosts } from "~/models/post";
 import {
   getNewsScrollContainer,
@@ -34,7 +35,12 @@ function newsPageHref(page: number) {
 }
 
 export const meta: MetaFunction = ({ location }) => {
-  return [{ title: "업데이트 소식 | 몰루로그" }, canonicalLink(location.pathname)];
+  const title = "업데이트 소식";
+  return [
+    { title: `${title} | 몰루로그` },
+    ...socialMeta({ title, pathname: location.pathname }),
+    canonicalLink(location.pathname),
+  ];
 };
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -43,8 +49,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ctx: context.cloudflare.ctx,
   });
 
+  // Only the newest post on page 1 is shown in full, so the other bodies are not sent to the client.
+  const [latest] = postPage.items;
   return {
-    posts: postPage.items,
+    posts: postPage.items.map(({ uid, title, publishedAt }) => ({ uid, title, publishedAt })),
+    latestContentHtml: postPage.page === 1 && latest ? renderMarkdownToSafeHtml(latest.content) : null,
     page: postPage.page,
     totalPages: postPage.totalPages,
   };
@@ -72,7 +81,7 @@ export function ErrorBoundary() {
 }
 
 export default function News() {
-  const { posts, page, totalPages } = useLoaderData<typeof loader>();
+  const { posts, latestContentHtml, page, totalPages } = useLoaderData<typeof loader>();
   const timeZone = useDisplayTimeZone();
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -106,8 +115,13 @@ export default function News() {
       <PageMain>
         <div onClickCapture={saveScrollPosition}>
           {posts.length === 0 ? <PostListEmpty /> : null}
-          {isFirstPage && latest ? (
-            <PostLatest post={latest} timeZone={timeZone} linkState={newsListOriginState} />
+          {isFirstPage && latest && latestContentHtml !== null ? (
+            <PostLatest
+              post={latest}
+              contentHtml={latestContentHtml}
+              timeZone={timeZone}
+              linkState={newsListOriginState}
+            />
           ) : null}
           {isFirstPage && rows.length > 0 ? (
             <section aria-labelledby="older-posts-title" className="mt-8">

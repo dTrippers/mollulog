@@ -1,6 +1,7 @@
 import {
   CARD_FLIP_STRATEGIES,
   DEFAULT_CARD_FLIP_STRATEGY,
+  isSweepableStage,
   type BonusStudentSelectionMode,
   type CardFlipStrategy,
   type MinigamePaymentQuantityMode,
@@ -171,22 +172,26 @@ export function normalizeEventShopState(value: unknown): EventShopState | null {
   };
 }
 
+// A new plan sweeps the normal stages from the ninth on, which pay the most currency per AP.
+export function createDefaultEnabledStages(stages: readonly Stage[]): Record<string, boolean> {
+  const enabledStages: Record<string, boolean> = {};
+  for (const stage of stages) {
+    enabledStages[stage.uid] = isSweepableStage(stage) && Number.parseInt(stage.index, 10) >= 9;
+  }
+  return enabledStages;
+}
+
 export function createDefaultEventShopState(
   stages: readonly Stage[],
   recruitedStudentUids: readonly string[],
 ): EventShopState {
-  const enabledStages: Record<string, boolean> = {};
-  for (const stage of stages) {
-    enabledStages[stage.uid] = Number.parseInt(stage.index, 10) >= 9;
-  }
-
   return {
     itemQuantities: {},
     itemPurchaseDays: {},
     selectedBonusStudentUids: [...recruitedStudentUids],
     bonusStudentSelectionMode: "shared",
     selectedBonusStudentUidsByItem: {},
-    enabledStages,
+    enabledStages: createDefaultEnabledStages(stages),
     includeRecruitedStudents: true,
     existingPaymentItemQuantities: {},
     includeFirstClear: false,

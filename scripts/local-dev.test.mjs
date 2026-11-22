@@ -92,8 +92,10 @@ test("worker bindings expose only the explicit Worker allowlist", () => {
     PGPASSWORD: "secret-must-not-be-bound",
     OP_SERVICE_ACCOUNT_TOKEN: "token-must-not-be-bound",
     UNRELATED_SECRET: "unrelated-must-not-be-bound",
+    ANTHROPIC_API_KEY: "test-api-key",
   });
   assert.equal(bindings.HOST, "http://127.0.0.1:8787");
+  assert.equal(bindings.ANTHROPIC_API_KEY, "test-api-key");
   assert.equal(bindings.PGPASSWORD, undefined);
   assert.equal(bindings.OP_SERVICE_ACCOUNT_TOKEN, undefined);
   assert.equal(bindings.UNRELATED_SECRET, undefined);
@@ -200,7 +202,7 @@ test("Wrangler materializes only allowlisted development values as hidden secret
     assert.equal(values.OP_SERVICE_ACCOUNT_TOKEN, undefined);
     assert.equal(values.UNRELATED_SECRET, undefined);
     const logs = [];
-    unstable_printBindings(values, [], [], [], { log: (line) => logs.push(line), local: true });
+    unstable_printBindings(values, { log: (line) => logs.push(line), local: true });
     const output = logs.join("\n");
     assert.equal(output.includes("wrangler-sentinel-secret"), false);
     assert.match(output, /\(hidden\)/);

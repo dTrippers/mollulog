@@ -1,6 +1,7 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import {
   CalendarDaysIcon,
+  MapIcon,
   RectangleStackIcon,
   ShoppingCartIcon,
   SparklesIcon,
@@ -9,22 +10,29 @@ import {
 import { Link } from "react-router";
 import BlurhashPlaceholder from "~/components/media/BlurhashPlaceholder";
 import HaloModeNotice from "~/components/media/HaloModeNotice";
-import { useHaloMode } from "~/contexts/HaloModeContext";
 import { getFutureMediaTypeLabel } from "~/components/v2/features/futures/labels";
+import { TrailingIconText } from "~/components/v2/primitives/TrailingIconText";
+import { useHaloMode } from "~/contexts/HaloModeContext";
 import { getHomeEntryPoints, getHomeOngoingChip, getHomeUpcomingChip, type HomeEntryPoint } from "~/domain/home-portal";
 import type { UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
+import { uploadedImageProps } from "~/models/assets";
 import type { TimelineContent } from "~/models/timeline-content";
 import type { HomeEventsSource, HomeSourceResult } from "~/views/home";
 import { HomeEmpty, HomeRetryButton, HomeSection, HomeTile, HomeTimeChip } from "./HomePrimitives";
 
-const minigameLabel: Record<string, string> = { card_flip: "카드 뒤집기", treasure_hunt: "보물찾기" };
+const minigameLabel: Record<string, string> = {
+  card_flip: "카드 뒤집기",
+  treasure_hunt: "보물찾기",
+  road_puzzle: "철도 연결",
+};
 
 const entryIcon = {
   shop: ShoppingCartIcon,
   simulator: SparklesIcon,
   "card-flip": RectangleStackIcon,
   "treasure-hunt": Squares2X2Icon,
+  "road-puzzle": MapIcon,
 } as const;
 
 // The time chip of one event: ongoing shows the remaining time, upcoming the wait.
@@ -39,7 +47,8 @@ function eventChip(content: TimelineContent, now: UtcIsoString, timeZone: string
 function EventKindLine({ content, minigameType }: { content: TimelineContent; minigameType: string | null }) {
   const kind = getFutureMediaTypeLabel(content);
   const minigame = minigameType ? minigameLabel[minigameType] : undefined;
-  const MinigameIcon = minigameType === "treasure_hunt" ? Squares2X2Icon : RectangleStackIcon;
+  const MinigameIcon =
+    minigameType === "treasure_hunt" ? Squares2X2Icon : minigameType === "road_puzzle" ? MapIcon : RectangleStackIcon;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-1.5">
       <span>{kind}</span>
@@ -71,7 +80,7 @@ function EntryPoints({ points, className }: { points: HomeEntryPoint[]; classNam
           <li key={point.key} className="flex min-w-0 flex-auto">
             <Link
               to={point.href}
-              className="inline-flex h-8 w-full cursor-pointer md:h-auto md:min-h-v2-row-min items-center justify-center gap-1 rounded-md bg-v2-inset px-1.5 text-[0.8125rem] font-medium whitespace-nowrap text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-filled-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none md:flex-none md:w-auto md:gap-1.5 md:px-3 md:text-sm"
+              className="inline-flex h-8 w-full cursor-pointer md:h-auto md:min-h-v2-row-min items-center justify-center gap-1 rounded-md bg-v2-inset px-1.5 text-[0.8125rem] font-medium whitespace-nowrap text-v2-fg hover:bg-v2-filled-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus md:flex-none md:w-auto md:gap-1.5 md:px-3 md:text-sm v2-interaction-transition"
             >
               <Icon aria-hidden="true" className="size-3.5 shrink-0 md:size-4" />
               <span>{point.label}</span>
@@ -107,7 +116,13 @@ function EventHero({
         {content.imageUrl && haloMode ? (
           <BlurhashPlaceholder blurhash={content.imageBlurhash} />
         ) : content.imageUrl ? (
-          <img src={content.imageUrl} alt="" className="size-full object-cover" />
+          // The banner is the home page's largest paint, so it goes ahead of the images below it on a slow connection.
+          <img
+            {...uploadedImageProps(content.imageUrl, "(min-width: 1024px) 900px, 100vw")}
+            alt=""
+            fetchPriority="high"
+            className="size-full object-cover"
+          />
         ) : (
           <div className="flex size-full items-center justify-center">
             <CalendarDaysIcon aria-hidden="true" className="size-10 text-v2-fg-disabled" />
@@ -117,23 +132,22 @@ function EventHero({
           aria-hidden="true"
           className="absolute inset-0 bg-linear-to-t from-v2-scrim via-v2-scrim/30 to-transparent"
         />
-        {content.imageUrl && haloMode ? (
-          <HaloModeNotice />
-        ) : null}
-        <div className="absolute top-2.5 right-2.5 md:top-3 md:right-3">
+        {content.imageUrl && haloMode ? <HaloModeNotice placement="top-start" /> : null}
+        <div className="absolute top-2.5 right-2.5 flex md:top-3 md:right-3">
           <HomeTimeChip chip={chip} />
         </div>
         <div className="absolute inset-x-0 bottom-0 flex min-w-0 flex-col gap-1 p-3 md:max-w-[60%] md:p-4">
-          <p className="text-sm text-v2-on-media">
+          <p className="text-[0.8125rem] text-v2-on-media md:text-sm">
             <EventKindLine content={content} minigameType={minigameType} />
           </p>
-          <h3 className="text-xl font-semibold break-keep text-v2-on-media md:text-2xl">
+          <h3 className="text-lg font-semibold break-keep text-v2-on-media md:text-2xl">
             <Link
               to={`/events/${content.uid}`}
-              className="inline-flex items-center gap-1 rounded-sm underline decoration-transparent underline-offset-4 transition-colors duration-v2-fast ease-v2-standard hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+              className="rounded-sm whitespace-pre-line underline decoration-transparent underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
             >
-              <span className="whitespace-pre-line">{content.name}</span>
-              <ChevronRightIcon aria-hidden="true" className="size-4 shrink-0" />
+              <TrailingIconText text={content.name}>
+                <ChevronRightIcon aria-hidden="true" className="ml-1 inline-block size-4 align-middle" />
+              </TrailingIconText>
             </Link>
           </h3>
         </div>
@@ -153,7 +167,7 @@ function TogetherTile({ content, now, timeZone }: { content: TimelineContent; no
   return (
     <Link
       to={`/events/${content.uid}`}
-      className="flex min-w-0 gap-v2-media-gap rounded-lg bg-v2-surface p-2 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none md:p-2.5"
+      className="flex min-w-0 gap-v2-media-gap rounded-lg bg-v2-surface p-2 hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus md:p-2.5 v2-interaction-transition"
     >
       <div className="relative aspect-[3/2] w-20 shrink-0 overflow-hidden rounded-md bg-v2-inset md:w-24">
         {content.imageUrl && haloMode ? (
@@ -162,7 +176,12 @@ function TogetherTile({ content, now, timeZone }: { content: TimelineContent; no
             <HaloModeNotice />
           </>
         ) : content.imageUrl ? (
-          <img src={content.imageUrl} alt="" loading="lazy" className="size-full object-cover" />
+          <img
+            {...uploadedImageProps(content.imageUrl, "(min-width: 768px) 96px, 80px")}
+            alt=""
+            loading="lazy"
+            className="size-full object-cover"
+          />
         ) : (
           <div className="flex size-full items-center justify-center">
             <CalendarDaysIcon aria-hidden="true" className="size-6 text-v2-fg-disabled" />
@@ -171,15 +190,16 @@ function TogetherTile({ content, now, timeZone }: { content: TimelineContent; no
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 truncate text-sm text-v2-fg-tertiary">{getFutureMediaTypeLabel(content)}</p>
-          <HomeTimeChip chip={chip} />
+          <p className="min-w-0 truncate text-xs text-v2-fg-tertiary md:text-sm">{getFutureMediaTypeLabel(content)}</p>
+          <HomeTimeChip chip={chip} dense />
         </div>
-        <p className="text-lg font-semibold break-keep text-v2-fg">
-          <span className="whitespace-pre-line">{content.name}</span>
-          <ChevronRightIcon
-            aria-hidden="true"
-            className="ml-1 inline-block size-4 shrink-0 align-middle text-v2-fg-tertiary"
-          />
+        <p className="text-base leading-6 font-semibold break-keep whitespace-pre-line text-v2-fg md:text-lg md:leading-7">
+          <TrailingIconText text={content.name}>
+            <ChevronRightIcon
+              aria-hidden="true"
+              className="ml-1 inline-block size-4 align-middle text-v2-fg-tertiary"
+            />
+          </TrailingIconText>
         </p>
       </div>
     </Link>

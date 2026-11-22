@@ -36,11 +36,15 @@ export type RecruitmentPoolGroup = {
   }[];
 };
 
+export type PickupSimulationStudent = SimulationStudent & {
+  recruitmentType: RecruitmentTypeEnum;
+};
+
 export type RecruitmentPoolSnapshot = {
   recruitmentGroupUid: string;
   recruitmentType: RecruitmentTypeEnum;
   startAt: string;
-  pickupStudents: SimulationStudent[];
+  pickupStudents: PickupSimulationStudent[];
   nonPickupStudentsByTier: {
     tier1: SimulationStudent[];
     tier2: SimulationStudent[];
@@ -217,7 +221,10 @@ export function buildRecruitmentPoolSnapshot({
       (recruitment) =>
         recruitment.pickup && !isGivenRecruitmentType(recruitment.recruitmentType) && recruitment.student,
     )
-    .map((recruitment) => toSimulationStudent(recruitment.student as SimulationStudent));
+    .map((recruitment) => ({
+      ...toSimulationStudent(recruitment.student as SimulationStudent),
+      recruitmentType: recruitment.recruitmentType,
+    }));
   const pickupStudentUids = new Set(pickupStudents.map((student) => student.uid));
   const startTime = instantTime(recruitmentGroup.startAt);
   const nonPickupStudentsByTier = createEmptyTierGroups();
@@ -254,7 +261,7 @@ export function buildRecruitmentPoolSnapshot({
       continue;
     }
 
-    addStudentByTier(nonPickupStudentsByTier, student);
+    addStudentByTier(nonPickupStudentsByTier, toSimulationStudent(student));
     addedNonPickupStudentUids.add(student.uid);
   }
 
@@ -448,6 +455,29 @@ function drawRecruitmentSlot({
     pickup: false,
     student,
   };
+}
+
+export function drawRecruitmentSingleSlot({
+  snapshot,
+  activePickupStudentUid,
+  rateTable,
+  guaranteed = false,
+  random = Math.random,
+}: {
+  snapshot: RecruitmentPoolSnapshot;
+  activePickupStudentUid: string | null;
+  rateTable?: RecruitmentRateTable;
+  guaranteed?: boolean;
+  random?: () => number;
+}): RecruitmentDrawResult {
+  const effectiveRateTable = rateTable ?? createDefaultRecruitmentRateTable(snapshot, activePickupStudentUid);
+  return drawRecruitmentSlot({
+    snapshot,
+    slotRate: guaranteed ? effectiveRateTable.guaranteedSlot : effectiveRateTable.normalSlot,
+    pickupRates: effectiveRateTable.pickupRates,
+    activePickupStudentUid,
+    random,
+  });
 }
 
 export function drawRecruitmentTenPull({

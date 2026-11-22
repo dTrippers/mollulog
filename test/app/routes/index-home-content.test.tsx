@@ -48,6 +48,7 @@ function event(overrides: Partial<TimelineContent> & Pick<TimelineContent, "uid"
     isSpoiler: false,
     tags: [],
     earnablePyroxene: null,
+    featuredUntil: null,
     syncedAt: null,
     ...overrides,
   };
@@ -354,7 +355,7 @@ describe("home bottom and aside", () => {
               board: "news",
               timelineContentUid: null,
               thumbnailImageUrl: null,
-              createdAt: "2026-09-08T00:00:00.000Z",
+              publishedAt: "2026-09-08T00:00:00.000Z",
               updatedAt: "2026-09-08T00:00:00.000Z",
             },
           ],
@@ -414,7 +415,6 @@ describe("home bottom and aside", () => {
   it("separates a failed feed from an empty YouTube result, and links each channel in a new window", () => {
     const feed = render(<HomeFeedBlock feed={{ status: "error" }} timeZone={TZ} onRetry={noop} />);
     expect(feed).toContain("최근 피드를 불러오지 못했어요");
-    expect(feed).toContain("일시적인 문제일 수 있어요.");
     expect(feed).not.toContain('href="/community"');
 
     const youtube = render(
@@ -513,7 +513,7 @@ describe("home recruitment section", () => {
     recruitments: [],
   };
 
-  it("names a group without students as a banner row with its kind and event", () => {
+  it("names a group with its kind label and, on its own row, the event", () => {
     const markup = render(
       <HomeRecruitmentSection
         groups={{ status: "success", data: [group] }}
@@ -524,7 +524,10 @@ describe("home recruitment section", () => {
         onRetry={noop}
       />,
     );
-    expect(markup).toContain("복각 픽업 모집 · 하이랜더 철도 폭주 사건");
+    expect(markup).toContain(">복각 픽업 모집</p>");
+    expect(markup).toContain('href="/events/ev-1"');
+    expect(markup).toContain("하이랜더 철도 폭주 <span");
+    expect(markup).not.toContain("복각 픽업 모집 · ");
     expect(markup).toContain("11일 남음");
   });
 
@@ -559,7 +562,7 @@ describe("home recruitment section", () => {
       ...group,
       recruitments: [
         {
-          student: { uid: "kayoko", name: "카요코", attackType: "explode", defenseType: "pierce", role: "striker" },
+          student: { uid: "kayoko", name: "카요코", attackType: "explosive", defenseType: "light", role: "striker" },
           favoriteKey: "kayoko",
           contentUid: "ev-1",
           recruitmentType: "usual",
@@ -591,10 +594,18 @@ describe("home recruitment section", () => {
     );
     expect(markup).toContain("카요코");
     expect(markup).toContain("복각 픽업 모집");
+    expect(markup).toContain('href="/students/kayoko"');
+    expect(markup).toContain("평가/통계");
+    expect(markup).toContain('aria-label="관심"');
+    expect(markup).toContain("w-28");
+    expect(markup).toContain("rounded-lg bg-v2-inset");
+    expect(markup).toContain("from-v2-inset via-v2-inset/75");
+    expect(markup).toContain("bg-v2-surface");
+    expect(markup).toContain("text-v2-fg-secondary");
     expect(markup).not.toContain("일정을 불러오지 못했어요");
-    // The viewer's own favorite still shows, labelled without a number.
-    expect(markup).toContain('aria-label="관심 학생, 내 관심 등록"');
-    expect(markup).not.toMatch(/관심 학생 \d/);
+    // The viewer's own favorite remains exposed through the card button state, even while its count is unavailable.
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).not.toContain("—");
     expect(markup).not.toContain("명 등록");
   });
 });
@@ -810,7 +821,7 @@ describe("home feed item links and reference meta", () => {
 });
 
 describe("home event entry row", () => {
-  it("keeps every entry label on one line inside a 44px control on the inset token", () => {
+  it("keeps every entry label on one line in a compact row on the inset token", () => {
     const markup = render(
       <HomeEventSection
         events={{

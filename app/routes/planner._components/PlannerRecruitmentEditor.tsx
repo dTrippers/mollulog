@@ -2,8 +2,9 @@ import { ChevronRightIcon } from "@heroicons/react/24/outline";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { StudentCards } from "~/components/features/students";
 import { Button } from "~/components/primitives";
-import { formatInstant } from "~/lib/date-time";
 import StudentPortrait from "~/components/primitives/StudentPortrait";
+import { formatInstant } from "~/lib/date-time";
+import { uploadedImageProps } from "~/models/assets";
 import type { RunType } from "~/models/timeline-content";
 
 export type PlannerRecruitmentCandidate = {
@@ -215,7 +216,7 @@ function RecruitmentEventImageSource({
   return currentImageUrl ? (
     <img
       key={currentImageUrl}
-      src={currentImageUrl}
+      {...uploadedImageProps(currentImageUrl, "48px")}
       alt=""
       aria-hidden="true"
       className={`${className} object-cover`}

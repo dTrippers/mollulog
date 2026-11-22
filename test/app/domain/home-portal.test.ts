@@ -38,6 +38,7 @@ function content(overrides: Partial<TimelineContent> & Pick<TimelineContent, "ui
     isSpoiler: false,
     tags: [],
     earnablePyroxene: null,
+    featuredUntil: null,
     syncedAt: null,
     ...overrides,
   };
@@ -138,6 +139,11 @@ describe("getHomeEntryPoints", () => {
       "shop",
       "simulator",
       "treasure-hunt",
+    ]);
+    expect(getHomeEntryPoints(shopEvent, "road_puzzle").map((point) => point.key)).toEqual([
+      "shop",
+      "simulator",
+      "road-puzzle",
     ]);
 
     const permanent = content({ uid: "permanent", runType: "permanent", contentUid: "content-2" });

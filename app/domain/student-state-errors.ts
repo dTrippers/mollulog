@@ -1,6 +1,6 @@
 export const STUDENT_STATE_STALE_CODE = "STUDENT_STATE_STALE" as const;
 export const STUDENT_STATE_STALE_MESSAGE =
-  "페이지가 최신 상태가 아니라 저장하지 못했어요. 새로고침 후 다시 입력해 주세요.";
+  "페이지가 최신 상태가 아니라 저장하지 못했어요. 새로고침 후 다시 입력해주세요.";
 
 export class StaleStudentStateRequestError extends Error {
   readonly code = STUDENT_STATE_STALE_CODE;
@@ -26,8 +26,12 @@ export const STUDENT_STATE_MERGE_CONFLICT_MESSAGE = "다른 곳에서 값이 변
 
 /** Submitted student-state values no longer fit the stored values they are merged with at write time. */
 export class StudentStateMergeConflictError extends Error {
-  constructor() {
+  /** Names of the merged fields that break the tier rule, for logs; never their values. */
+  readonly fields: readonly string[];
+
+  constructor(fields: readonly string[] = []) {
     super(STUDENT_STATE_MERGE_CONFLICT_MESSAGE);
     this.name = "StudentStateMergeConflictError";
+    this.fields = fields;
   }
 }

@@ -1,34 +1,33 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { createElement, type ReactNode } from "react";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createStudentFilterState, type StudentFilterState } from "~/components/features/students/StudentFilter";
+import { Attack, Defense } from "~/graphql/graphql";
+import { defaultStudentDirectoryFilterState, type StudentDirectoryFilterState, type StudentDirectoryPersonalState } from "~/domain/student-directory";
 import type { StudentDirectoryStudent } from "~/models/student-directory";
 
-const mockStudentCards = jest.fn(
-  ({ students, layout, cardSize }: { students?: { label?: ReactNode }[]; layout?: string; cardSize?: string }) =>
-    createElement(
-      "div",
-      { "data-layout": layout, "data-card-size": cardSize },
-      students?.map((student, index) => createElement("div", { key: index }, student.label)),
-    ),
-);
 const mockUseOutletContext = jest.fn();
-const mockNavigate = jest.fn();
-
-jest.mock("~/components/features/students", () => ({
-  StudentCards: mockStudentCards,
-}));
-
+const mockRevalidate = jest.fn();
+const mockUseLocation = jest.fn(() => ({ pathname: "/students", search: "", hash: "", key: "test" }));
 jest.mock("react-router", () => {
   const actual = jest.requireActual<typeof import("react-router")>("react-router");
   return {
     ...actual,
-    useNavigate: () => mockNavigate,
+    useLocation: () => mockUseLocation(),
+    useNavigationType: () => "PUSH",
     useOutletContext: () => mockUseOutletContext(),
+    useRevalidator: () => ({ revalidate: mockRevalidate }),
+  };
+});
+jest.mock("~/components/v2/features/students/StudentThumb", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  return {
+    StudentThumb: ({ name, linkTo, scrimLabel, scrimAriaLabel }: { name: string; linkTo: string; scrimLabel?: React.ReactNode; scrimAriaLabel?: string }) =>
+      React.createElement("a", { href: linkTo, "aria-label": scrimAriaLabel }, scrimLabel, React.createElement("span", null, name)),
   };
 });
 
 import Students from "~/routes/students._index";
+import { V2Page } from "~/components/v2/layout/V2Page";
 
 function student(overrides: Partial<StudentDirectoryStudent> = {}): StudentDirectoryStudent {
   return {
@@ -39,134 +38,117 @@ function student(overrides: Partial<StudentDirectoryStudent> = {}): StudentDirec
     school: "millennium",
     initialTier: 3,
     order: 1,
-    attackType: "explosive",
-    defenseType: "light",
+    releaseAt: "2025-03-07T00:00:00.000Z",
+    attackType: Attack.Explosive,
+    defenseType: Defense.Light,
+    weaponType: "ar",
+    acquisitionType: "regular",
+    canUseCover: true,
+    skillEffectTags: [],
+    club: { uid: "club-1", name: "게임개발부" },
+    studentVariant: { primaryStudent: { uid: "student-a" } },
     position: "front",
     tacticRole: "attacker",
-    birthday: null,
+    birthday: "2000-01-01",
     role: "striker",
     equipments: ["hat", "bag", "shoes"],
-    released: true,
-    catalog: {
-      profile: { age: "17세", schoolYear: "2학년", height: "159.7cm" },
-      terrainAdaptations: { street: "SS", outdoor: "A", indoor: "B" },
-    },
+    released: false,
+    catalog: null,
     ...overrides,
-  } as StudentDirectoryStudent;
+  };
 }
 
-function renderList(overrides: Partial<StudentFilterState> = {}) {
+const personal: StudentDirectoryPersonalState = { status: "signed-out" };
+
+function renderList({
+  students = [student()],
+  results = students,
+  filterState = defaultStudentDirectoryFilterState,
+  listStatus = "loaded",
+  personalState = personal,
+}: {
+  students?: StudentDirectoryStudent[];
+  results?: StudentDirectoryStudent[];
+  filterState?: StudentDirectoryFilterState;
+  listStatus?: "loaded" | "failed";
+  personalState?: StudentDirectoryPersonalState;
+} = {}) {
   mockUseOutletContext.mockReturnValue({
-    students: [student()],
-    filterState: { ...createStudentFilterState("recent"), ...overrides },
+    students,
+    results,
+    listStatus,
+    filterState,
+    personalState,
+    setFilterState: jest.fn(),
+    onRequestSignIn: jest.fn(),
   });
-  return renderToStaticMarkup(createElement(Students));
+  return renderToStaticMarkup(createElement(V2Page, { width: "wide", children: createElement(Students) }));
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe("students list rendering", () => {
-  it("does not pass a card label when display is disabled", () => {
+describe("students directory main panel", () => {
+  it("shows the result count without reserving a card label slot by default", () => {
     const markup = renderList();
-    const { students } = mockStudentCards.mock.calls.at(-1)?.[0] as {
-      students: Array<{ label?: ReactNode }>;
-    };
-
-    expect(students[0]).not.toHaveProperty("label");
-    expect(markup).not.toContain("없음");
+    expect(markup).toContain('aria-live="polite"');
+    expect(markup).toContain('data-student-directory-toolbar="true"');
+    expect(markup).toContain(">1명</span>");
+    expect(markup).not.toContain('aria-label="2025/03/07 출시 예정"');
+    expect(markup).not.toContain(">예정</span>");
+    expect(markup).not.toContain("bg-v2-scrim");
+    expect(markup).toContain('href="/students/student-a"');
   });
 
-  it("passes the selected public value as the single card label without changing card layout", () => {
-    const markup = renderList({ displayBy: "height" });
-
-    expect(markup).toContain("159.7cm");
-    expect(markup).toContain('title="159.7cm"');
-    expect(markup).not.toContain('aria-label="159.7cm"');
-    expect(markup).toContain('data-layout="responsive-wrap"');
-    expect(markup).toContain('data-card-size="lg"');
+  it("renders compact and full released dates for the card layout's narrow and wide breakpoints", () => {
+    const markup = renderList({
+      students: [student({ released: true, releaseAt: "2025-03-07T00:00:00.000Z" })],
+      filterState: { ...defaultStudentDirectoryFilterState, sort: "release", displayBy: "sortValue" },
+    });
+    expect(markup).toContain('<span class="md:hidden">25/03/07</span>');
+    expect(markup).toContain('<span class="hidden md:inline">2025/03/07</span>');
+    expect(markup).toContain('aria-label="2025/03/07"');
   });
 
-  it("renders separate group sections while preserving the selected label", () => {
-    const markup = renderList({ groupBy: "school", displayBy: "equipment1" });
+  it("shows an explicit empty-results state and keeps reset in the result summary", () => {
+    const markup = renderList({
+      results: [],
+      filterState: { ...defaultStudentDirectoryFilterState, attackTypes: [Attack.Explosive] },
+    });
+    expect(markup).toContain(">0명</span>");
+    expect(markup).toContain("조건에 맞는 학생이 없어요");
+    expect(markup.match(/초기화/g)).toHaveLength(1);
+    expect(markup).toContain("폭발");
+  });
 
+  it("renders grouping headings and honors a selected card label", () => {
+    const first = student({ uid: "one", school: "millennium" });
+    const second = student({ uid: "two", school: "trinity", initialTier: 2 });
+    const markup = renderList({
+      students: [first, second],
+      results: [first, second],
+      filterState: { ...defaultStudentDirectoryFilterState, groupBy: "school", displayBy: "initialTier" },
+    });
     expect(markup).toContain("밀레니엄");
-    expect(markup).toContain("모자");
+    expect(markup).toContain("트리니티");
+    expect(markup).toContain("초기 성급 2성");
   });
 
-  it("uses the explicit missing-value label for absent catalog data", () => {
-    mockUseOutletContext.mockReturnValue({
-      students: [student({ catalog: null })],
-      filterState: { ...createStudentFilterState("recent"), displayBy: "age" },
-    });
-
-    const markup = renderToStaticMarkup(createElement(Students));
-
-    expect(markup).toContain("정보 없음");
+  it("keeps the public list visible after personal record failure without a false unrecruited label", () => {
+    const markup = renderList({ personalState: { status: "failed" } });
+    expect(markup).toContain("내 기록을 불러오지 못했어요");
+    expect(markup).toContain("다시 시도");
+    expect(markup).toContain(">1명</span>");
+    expect(markup).not.toContain("미모집");
   });
 
-  it("renders the initial tier with a yellow solid star and an accessible label", () => {
-    const markup = renderList({ displayBy: "initialTier" });
-
-    expect(markup).toContain('aria-label="초기 성급 3성"');
-    expect(markup).toContain('title="초기 성급 3성"');
-    expect(markup).toContain('class="size-3 shrink-0"');
-    expect(markup).toContain("text-yellow-300");
-    expect(markup).toContain(">3</span>");
-    expect(markup).toContain('data-layout="responsive-wrap"');
-    expect(markup).toContain('data-card-size="lg"');
-  });
-
-  it("keeps a missing initial tier accessible without a generic-span aria-label", () => {
-    mockUseOutletContext.mockReturnValue({
-      students: [student({ initialTier: 0 })],
-      filterState: { ...createStudentFilterState("recent"), displayBy: "initialTier" },
-    });
-
-    const markup = renderToStaticMarkup(createElement(Students));
-
-    expect(markup).toContain('<span class="sr-only">초기 성급 정보 없음</span>');
-    expect(markup).toContain('<span aria-hidden="true">정보 없음</span>');
-    expect(markup).not.toContain('aria-label="초기 성급 정보 없음"');
-    expect(markup).toContain('title="초기 성급 정보 없음"');
-  });
-
-  it("renders terrain adaptation as an icon with an accessible terrain and rank label", () => {
-    const markup = renderList({ displayBy: "street" });
-
-    expect(markup).toContain('src="https://assets.mollulog.net/assets/images/ui/terrain-SS.png"');
-    expect(markup).toContain('alt=""');
-    expect(markup).toContain('aria-label="시가지 적성 SS"');
-    expect(markup).toContain('title="시가지 적성 SS"');
-    expect(markup).not.toContain(">SS<");
-  });
-
-  it("keeps missing terrain values explicit and accessible", () => {
-    mockUseOutletContext.mockReturnValue({
-      students: [student({ catalog: null })],
-      filterState: { ...createStudentFilterState("recent"), displayBy: "street" },
-    });
-
-    const markup = renderToStaticMarkup(createElement(Students));
-
-    expect(markup).toContain("정보 없음");
-    expect(markup).toContain('<span class="sr-only">시가지 적성 정보 없음</span>');
-    expect(markup).toContain('<span aria-hidden="true">정보 없음</span>');
-    expect(markup).not.toContain('aria-label="시가지 적성 정보 없음"');
-    expect(markup).toContain('title="시가지 적성 정보 없음"');
-    expect(markup).not.toContain("terrain-SS.png");
-  });
-
-  it("uses semantic text colors for attack and defense labels without colored backgrounds", () => {
-    const attackMarkup = renderList({ displayBy: "attackType" });
-    expect(attackMarkup).toContain("폭발");
-    expect(attackMarkup).toContain("text-red-300");
-    expect(attackMarkup).not.toContain("bg-red-");
-
-    const defenseMarkup = renderList({ displayBy: "defenseType" });
-    expect(defenseMarkup).toContain("경장");
-    expect(defenseMarkup).toContain("text-red-300");
-    expect(defenseMarkup).not.toContain("bg-red-");
+  it("renders list failure in the route and disables search and sorting", () => {
+    const markup = renderList({ students: [], results: [], listStatus: "failed" });
+    expect(markup).toContain("학생 목록을 불러오지 못했어요");
+    expect(markup).toContain("다시 시도");
+    expect(markup).toContain("학생 이름");
+    expect(markup).toContain("disabled=");
+    expect(markup).not.toContain("aria-live=");
   });
 });

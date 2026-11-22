@@ -17,6 +17,13 @@ import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
 import type { OcrJobKind, OcrTaskMessage } from "~/domain/ocr";
 import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
+import type {
+  RaidRecordParty,
+  RaidRecordRaidType,
+  RaidRecordScore,
+  RaidRecordScoreMode,
+  RaidRecordServer,
+} from "~/domain/raid-record";
 import type { SiteBannerPreset, SiteBannerScreen } from "~/domain/site-banner";
 import type {
   MenuBadgeLabelMode,
@@ -25,6 +32,7 @@ import type {
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
 import type { ApiScope } from "~/domain/mollulog-api-spec";
+import type { ChatProgressStep } from "~/domain/chat-conversation";
 import type {
   WalkthroughTimelineDefenseType,
   WalkthroughTimelineDifficulty,
@@ -39,6 +47,7 @@ import type {
   CommunityPostOrigin,
   CommunityPostType,
   CommunityVisibility,
+  RecruitmentOpinionClassificationState,
 } from "~/models/community";
 import type { EventShopState } from "~/models/event-shop-state";
 import type {
@@ -85,7 +94,7 @@ export const pgSenseisTable = pgTable(
     questionMemberDataConsentedAt: timestamptz("question_member_data_consented_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
-    hideRecruitmentOpinions: boolean("hide_recruitment_opinions").notNull().default(false),
+    hideRecruitmentOpinions: boolean("hide_recruitment_opinions").notNull().default(true),
     labels: jsonb().$type<AccountLabel[]>().notNull().default([]),
   },
   (table) => [
@@ -228,6 +237,7 @@ export const pgTimelineContentsTable = pgTable(
     shopContentUid: text("shop_content_uid"),
     nameI18n: jsonb("name_i18n").$type<TimelineContentNameI18n>().notNull().default({}),
     recruitmentStudentUids: text("recruitment_student_uids").array(),
+    featuredUntil: timestamptz("featured_until"),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },
@@ -249,6 +259,7 @@ export type DiscordNotificationTrigger =
   | "reward-exchange-end"
   | "recruitment-start"
   | "shop-reset"
+  | "coupon-expiry"
   | "feedback-reply"
   | "event-opinion-reply";
 export type DiscordNotificationJobTrigger = DiscordNotificationTrigger | "connection-verification";
@@ -352,12 +363,16 @@ export const pgPostsTable = pgTable(
     board: text().notNull(),
     timelineContentUid: text("timeline_content_uid"),
     thumbnailImageUrl: text("thumbnail_image_url"),
+    // Null while the post is a draft. Drafts are visible only in the admin app.
+    publishedAt: timestamptz("published_at").default(sql`now()`),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },
   (table) => [
     uniqueIndex("posts_uid_uidx").on(table.uid),
-    index("posts_board_created_at_uid_idx").on(table.board, table.createdAt.desc(), table.uid.desc()),
+    index("posts_board_published_at_uid_idx")
+      .on(table.board, table.publishedAt.desc(), table.uid.desc())
+      .where(sql`${table.publishedAt} is not null`),
     index("posts_timeline_content_uid_idx").on(table.timelineContentUid),
   ],
 );
@@ -651,6 +666,7 @@ export const pgCommunityPostsTable = pgTable(
     displayAt: timestamptz("display_at"),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
+    recruitmentClassification: text("recruitment_classification").$type<RecruitmentOpinionClassificationState>(),
   },
   (table) => [
     uniqueIndex("community_posts_uid_uidx").on(table.uid),
@@ -665,33 +681,6 @@ export const pgCommunityPostsTable = pgTable(
     uniqueIndex("community_posts_student_review_per_user_uidx")
       .on(table.userId, table.subjectStudentUid)
       .where(sql`${table.postType} = 'student_review'`),
-  ],
-);
-
-export const pgCommunityPostRecruitmentOpinionsTable = pgTable(
-  "community_post_recruitment_opinions",
-  {
-    id: integer().primaryKey().generatedByDefaultAsIdentity(),
-    postUid: text("post_uid").notNull(),
-    recruitmentPeriodStartAt: timestamptz("recruitment_period_start_at"),
-    recruitmentOpinionClassificationStatus: text("recruitment_opinion_classification_status").$type<
-      "pending" | "completed" | "failed"
-    >(),
-    recruitmentOpinionClassification: text("recruitment_opinion_classification").$type<"RESULT_RELATED" | "OTHER">(),
-    recruitmentOpinionClassificationRevision: integer("recruitment_opinion_classification_revision")
-      .notNull()
-      .default(0),
-    recruitmentOpinionClassificationModel: text("recruitment_opinion_classification_model"),
-    recruitmentOpinionClassificationPromptVersion: text("recruitment_opinion_classification_prompt_version"),
-    recruitmentOpinionClassifiedAt: timestamptz("recruitment_opinion_classified_at"),
-    createdAt: timestamptz("created_at").notNull(),
-    updatedAt: timestamptz("updated_at").notNull(),
-  },
-  (table) => [
-    uniqueIndex("community_post_recruitment_opinions_post_uid_uidx").on(table.postUid),
-    index("community_post_recruitment_opinions_classification_status_idx").on(
-      table.recruitmentOpinionClassificationStatus,
-    ),
   ],
 );
 
@@ -949,6 +938,8 @@ export const pgStudentTargetsTable = pgTable(
     relationshipTargetLevel: integer("relationship_target_level"),
     giftPlan: jsonb("gift_plan").$type<Record<string, number>>().notNull().default({}),
     plannerAddedAt: exactTimestamptz("planner_added_at"),
+    // The student growth planner's manual order, ascending from the top. Null sits above every positioned row.
+    plannerPosition: integer("planner_position"),
     deletedAt: timestamptz("deleted_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
@@ -1553,5 +1544,94 @@ export const pgKnowledgeEntriesTable = pgTable(
     index("knowledge_entries_active_published_idx")
       .on(table.kind, table.id)
       .where(sql`${table.archivedAt} is null and ${table.publishedRevisionId} is not null`),
+  ],
+);
+
+export const pgChatConversationsTable = pgTable(
+  "chat_conversations",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    senseiId: integer("sensei_id").notNull(),
+    title: text().notNull(),
+    lastMessageAt: timestamptz("last_message_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("chat_conversations_sensei_last_message_idx").on(table.senseiId, table.lastMessageAt.desc()),
+  ],
+);
+
+export const pgChatMessagesTable = pgTable(
+  "chat_messages",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    conversationId: bigint("conversation_id", { mode: "number" })
+      .notNull()
+      .references(() => pgChatConversationsTable.id, { onDelete: "cascade" }),
+    seq: integer().notNull(),
+    question: text().notNull(),
+    personalMode: boolean("personal_mode").notNull(),
+    status: text().notNull(),
+    // The answer is validated when read, so the column stays untyped JSON here.
+    answer: jsonb(),
+    progress: jsonb().$type<ChatProgressStep[]>(),
+    failureCode: text("failure_code"),
+    runId: text("run_id"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    completedAt: timestamptz("completed_at"),
+  },
+  (table) => [uniqueIndex("chat_messages_conversation_seq_uidx").on(table.conversationId, table.seq)],
+);
+
+// Recruitment ticket cards shown on the 상품 / 패키지 › 모집권 tab; only shown cards have a row. A product card is
+// (productUid, itemUid). A card outside products has one row per item with a null productUid.
+export const pgRecruitTicketsTable = pgTable(
+  "recruit_tickets",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    productUid: text("product_uid"),
+    itemUid: text("item_uid").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("recruit_tickets_product_item_uidx")
+      .on(table.productUid, table.itemUid)
+      .where(sql`${table.productUid} is not null`),
+    uniqueIndex("recruit_tickets_item_uidx").on(table.itemUid).where(sql`${table.productUid} is null`),
+  ],
+);
+
+// A Sensei's own result in one 총력전 or 대결전 season on one game server; one row per (user, server, raid type, season).
+export const pgRaidRecordsTable = pgTable(
+  "raid_records",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    server: text().$type<RaidRecordServer>().notNull(),
+    raidType: text("raid_type").$type<RaidRecordRaidType>().notNull(),
+    seasonIndex: integer("season_index").notNull(),
+    scores: jsonb().$type<RaidRecordScore[]>().notNull(),
+    scoreMode: text("score_mode").$type<RaidRecordScoreMode>().notNull().default("defense_type"),
+    totalScore: integer("total_score"),
+    rank: integer(),
+    rankRecordedAt: exactTimestamptz("rank_recorded_at"),
+    memo: text().notNull().default(""),
+    parties: jsonb().$type<RaidRecordParty[]>().notNull().default([]),
+    createdAt: exactTimestamptz("created_at").notNull().defaultNow(),
+    updatedAt: exactTimestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("raid_records_uid_uidx").on(table.uid),
+    uniqueIndex("raid_records_user_server_raid_season_uidx").on(
+      table.userId,
+      table.server,
+      table.raidType,
+      table.seasonIndex,
+    ),
   ],
 );

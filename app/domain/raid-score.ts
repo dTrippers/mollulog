@@ -64,6 +64,7 @@ export const TOTAL_ASSAULT_BOSS_UIDS = [
   "geburah",
   "yesod",
   "drumbarka",
+  "nightmare",
 ] as const;
 
 export type Boss = (typeof TOTAL_ASSAULT_BOSS_UIDS)[number];
@@ -74,6 +75,8 @@ export const LEGACY_BOSS_UIDS: Partial<Record<string, Boss>> = {
   perorozilla: "perorodzilla",
   "kaiten-fx-mk0": "kaiten",
   "myouki-kurokage": "kurokage",
+  // 악몽 열차 is `nightmare` in BAQL's gl schedules and `nightmare_train` in its jp ones.
+  nightmare_train: "nightmare",
 };
 
 export function normalizeBossUid(boss: string): Boss | null {

@@ -1,6 +1,8 @@
 import type { ElementType } from "react";
 import { Link } from "react-router";
+import { withObjectParticle } from "~/lib/korean";
 import { cn } from "~/lib/utils";
+import { HintChip } from "../primitives/HintChip";
 import { getV2LinkTransitionProps, runV2StateTransition } from "./screen-transition";
 import { v2FocusRing } from "./styles";
 
@@ -34,18 +36,18 @@ export function ScreenNavigationItemRenderer({
   const className =
     orientation === "horizontal"
       ? cn(
-          "relative flex min-h-v2-row-min shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm whitespace-nowrap hover:bg-v2-hover",
+          "relative flex min-h-v2-row-min shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm whitespace-nowrap hover:bg-v2-hover v2-interaction-transition",
           item.active ? "v2-tab-active font-semibold text-v2-fg" : "font-medium text-v2-fg-secondary",
           item.hiddenStacked && "v2-hidden-stacked",
           item.disabled && "cursor-not-allowed text-v2-fg-disabled hover:bg-transparent",
           v2FocusRing,
         )
       : cn(
-          "relative flex min-h-v2-row-min items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-sm transition-colors duration-v2-fast",
+          "relative flex min-h-v2-row-min items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-left text-sm v2-interaction-transition",
           item.active ? "bg-v2-inset font-semibold text-v2-fg" : "font-medium text-v2-fg-secondary",
           item.hiddenStacked && "v2-hidden-stacked",
           item.disabled
-            ? "cursor-not-allowed text-left text-v2-fg-disabled"
+            ? "cursor-not-allowed text-v2-fg-disabled"
             : item.active
               ? "cursor-pointer hover:bg-v2-inset hover:text-v2-fg"
               : "cursor-pointer hover:bg-v2-hover hover:text-v2-fg",
@@ -56,9 +58,26 @@ export function ScreenNavigationItemRenderer({
       <Icon className={cn("size-4 shrink-0", item.active ? "text-v2-fg" : "text-v2-fg-tertiary")} aria-hidden="true" />
       <span className={orientation === "vertical" ? "min-w-0 flex-1 truncate" : undefined}>{item.text}</span>
       {item.label ? <span className="text-xs tabular-nums text-v2-fg-tertiary">{item.label}</span> : null}
-      {item.disabled && item.disabledReason ? <span className="sr-only">{item.disabledReason}</span> : null}
     </>
   );
+
+  // A disabled tab with a reason keeps the tab dimmed and puts the reason behind an ⓘ button, so the row stays short.
+  if (item.disabled && item.disabledReason) {
+    return (
+      <span
+        aria-disabled="true"
+        className={cn(className, "cursor-default")}
+        data-v2-screen-navigation-item={responsiveNavigation ? item.key : undefined}
+      >
+        {content}
+        <HintChip
+          variant="info"
+          label={`${withObjectParticle(item.text)} 쓸 수 없어요`}
+          description={item.disabledReason}
+        />
+      </span>
+    );
+  }
 
   if (item.disabled) {
     return (

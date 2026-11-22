@@ -22,6 +22,7 @@ type DiscordNotificationSettingsKey =
   | "rewardExchangeEndEnabled"
   | "recruitmentStartEnabled"
   | "shopResetEnabled"
+  | "couponExpiryEnabled"
   | "feedbackReplyEnabled"
   | "eventOpinionReplyEnabled";
 
@@ -34,6 +35,7 @@ const PREFERENCE_KEYS: ReadonlyArray<{
   { type: "reward-exchange-end", key: "rewardExchangeEndEnabled" },
   { type: "recruitment-start", key: "recruitmentStartEnabled" },
   { type: "shop-reset", key: "shopResetEnabled" },
+  { type: "coupon-expiry", key: "couponExpiryEnabled" },
   { type: "feedback-reply", key: "feedbackReplyEnabled" },
   { type: "event-opinion-reply", key: "eventOpinionReplyEnabled" },
 ];
@@ -139,6 +141,7 @@ function mapPreferences(rows: readonly QueryRow[], now: Date): MappedPreferences
     rewardExchangeEndEnabled: byType.get("reward-exchange-end")?.enabled ?? false,
     recruitmentStartEnabled: byType.get("recruitment-start")?.enabled ?? false,
     shopResetEnabled: byType.get("shop-reset")?.enabled ?? false,
+    couponExpiryEnabled: byType.get("coupon-expiry")?.enabled ?? false,
     feedbackReplyEnabled: byType.get("feedback-reply")?.enabled ?? false,
     eventOpinionReplyEnabled: byType.get("event-opinion-reply")?.enabled ?? false,
     leadHours: resolvedLeadHours,
@@ -159,6 +162,7 @@ export function parseDiscordNotificationSettingsForm(formData: FormData): Discor
     rewardExchangeEndEnabled: booleanValue("rewardExchangeEndEnabled"),
     recruitmentStartEnabled: booleanValue("recruitmentStartEnabled"),
     shopResetEnabled: booleanValue("shopResetEnabled"),
+    couponExpiryEnabled: booleanValue("couponExpiryEnabled"),
     feedbackReplyEnabled: booleanValue("feedbackReplyEnabled"),
     eventOpinionReplyEnabled: booleanValue("eventOpinionReplyEnabled"),
     leadHours: Number(leadHoursValue ?? Number.NaN),

@@ -3,6 +3,12 @@ import type { FurnitureInteractionStudent } from "./furniture-catalog";
 
 export const FIRST_CLEAR_REWARD_REQUIREMENT = "FirstClear";
 
+// Event stage difficulties: 0 is a story stage that pays once, 1 a normal quest, 2 a challenge that pays no currency.
+// Only normal quests can be swept, so the shop plans its repeated runs on them alone.
+export function isSweepableStage(stage: Pick<Stage, "difficulty">): boolean {
+  return stage.difficulty === 1;
+}
+
 export const MINIGAME_PAYMENT_QUANTITY_MODES = ["expected", "min", "max"] as const;
 
 export type MinigamePaymentQuantityMode = (typeof MINIGAME_PAYMENT_QUANTITY_MODES)[number];
@@ -109,7 +115,9 @@ export type MinigameConfig = {
     | "fortune_gacha"
     | "box_gacha"
     | "clue_search"
-    | "treasure_hunt";
+    | "treasure_hunt"
+    | "road_puzzle"
+    | "janken";
   payment: {
     resourceType: ResourceTypeEnum;
     resourceUid: string;
@@ -122,7 +130,81 @@ export type MinigameConfig = {
   dice?: DiceMinigameConfig;
   treasureHunt?: TreasureHuntConfig | null;
   cardFlip?: CardFlipData;
+  roadPuzzle?: RoadPuzzleConfig | null;
+  janken?: JankenConfig;
 };
+
+export type RoadPuzzleCoordinate = { x: number; y: number; z: number };
+
+export type RoadPuzzleDeck = {
+  straight: number;
+  longCurve: number;
+  shortCurve: number;
+};
+
+export type RoadPuzzleTile = RoadPuzzleCoordinate & {
+  type: number;
+  rotation: number;
+};
+
+export type RoadPuzzleFixedRail = RoadPuzzleCoordinate & {
+  entranceIndex: number;
+  exitIndex: number;
+  rotation: number;
+};
+
+export type RoadPuzzleMap = {
+  uid: string;
+  name: string;
+  deck: RoadPuzzleDeck;
+  tiles: RoadPuzzleTile[];
+  fixedRails: RoadPuzzleFixedRail[];
+};
+
+export type RoadPuzzleRound = {
+  round: number;
+  isLoop: boolean;
+  mapUids: string[];
+  rewards: RewardItem[];
+  additionalRewards: RewardItem[];
+};
+
+export type RoadPuzzleConfig = {
+  instantClearRound: number;
+  railSetReward: RewardItem[];
+  rounds: RoadPuzzleRound[];
+  maps: RoadPuzzleMap[];
+};
+
+export type JankenStage = {
+  uid: string;
+  stageType: "story" | "normal" | "challenge";
+  stageNumber: number;
+  previousStageUid: string | null;
+  entryCost: MinigamePayment;
+  rewards: (RewardItem & { probability: number; tag: "default" | "first_clear" | "three_star" })[];
+};
+
+export type JankenConfig =
+  | {
+      status: "available";
+      challengeMultipleUnlockScore: number;
+      multipleMax: number;
+      stages: JankenStage[];
+      scoreRewards: { tier: number; score: number; rewards: RewardItem[] }[];
+      equipmentUpgrade: {
+        maxTier: number;
+        costResource: RewardItem | null;
+        tierCosts: { tier: number; quantity: number }[];
+      };
+      equipments: {
+        uid: string;
+        unlockStageUid: string | null;
+        tiers: { tier: number; attackPower: number; hitPoint: number }[];
+      }[];
+    }
+  | { status: "unavailable" }
+  | { status: "invalid" };
 
 export type MinigamePayment = {
   resourceType: ResourceTypeEnum;

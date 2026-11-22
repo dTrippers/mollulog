@@ -4,15 +4,30 @@ import {
   normalizePyroxenePlannerOptions,
   type PyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
+import {
+  buildRecruitmentOwnedSnapshot,
+  getRecruitmentTargetCopies,
+  type RecruitmentOwnedStates,
+  type RecruitmentStacks,
+} from "~/domain/pyroxene-recruitment-goal";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import {
   buildTimeline,
   calculatePickupTrialMoments,
   type PickupResources,
   type PyroxeneTimelineBandMode,
+  type PyroxeneTimelineEventData,
 } from "~/domain/pyroxene-timeline";
 import type { RecruitmentRuleSet } from "~/domain/recruitment-cost";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
+
+// Pull distributions are sampled, so quantiles may differ from the exact values by a few pulls.
+const SAMPLED_QUANTILE_TOLERANCE_PULLS = 3;
+
+function expectSampledPyroxene(actual: number | undefined, exact: number) {
+  expect(actual).toBeDefined();
+  expect(Math.abs((actual ?? 0) - exact)).toBeLessThanOrEqual(SAMPLED_QUANTILE_TOLERANCE_PULLS * 120);
+}
 
 jest.mock("~/models/recruitment", () => ({
   getRecruitmentGroupsByUids: jest.fn(),
@@ -47,12 +62,14 @@ const defaultOptions: PyroxenePlannerOptions = {
 function pickupRecruitment({
   initialTier = 3,
   name = "픽업 학생",
+  recruitmentType = RecruitmentTypeEnum.Usual,
 }: {
   initialTier?: number;
   name?: string;
+  recruitmentType?: RecruitmentTypeEnum;
 } = {}): NonNullable<PyroxeneScheduleItem["event"]>["recruitments"][number] {
   return {
-    recruitmentType: RecruitmentTypeEnum.Usual,
+    recruitmentType,
     pickup: true,
     rerun: false,
     until: "2026-07-05T00:00:00.000Z",
@@ -125,19 +142,25 @@ function raidItem({
 function buildTestTimeline({
   initialResources = { pyroxene: 100_000, oneTimeTicket: 0, tenTimeTicket: 0 },
   initialDate = new Date("2026-07-01T00:00:00.000Z"),
-  eventDataMap = new Map<string, { completed: boolean; expectedTrials: number | null }>(),
+  eventDataMap = new Map<string, PyroxeneTimelineEventData>(),
   scheduleItems = [eventItem({ uid: "event-a" })],
   options = defaultOptions,
   bandMode,
   collectedSourceKeys = [],
+  recruitmentStacks,
+  ownedStates,
+  ownedReadAt = "2026-07-01T00:00:00.000Z",
 }: {
   initialResources?: PickupResources;
   initialDate?: Date;
-  eventDataMap?: Map<string, { completed: boolean; expectedTrials: number | null }>;
+  eventDataMap?: Map<string, PyroxeneTimelineEventData>;
   scheduleItems?: PyroxeneScheduleItem[];
   options?: PyroxenePlannerOptions;
   bandMode?: PyroxeneTimelineBandMode;
   collectedSourceKeys?: string[];
+  recruitmentStacks?: RecruitmentStacks;
+  ownedStates?: RecruitmentOwnedStates;
+  ownedReadAt?: string;
 } = {}) {
   return buildTimeline(
     initialResources,
@@ -147,6 +170,9 @@ function buildTestTimeline({
     options,
     bandMode,
     collectedSourceKeys,
+    undefined,
+    recruitmentStacks,
+    ownedStates ? { readAt: ownedReadAt, states: ownedStates } : undefined,
   );
 }
 
@@ -478,7 +504,7 @@ describe("buildTimeline pyroxene balance band", () => {
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(83_200);
     expect(eventEntry?.accumulatedResourcesBand?.optimistic.pyroxene).toBeGreaterThan(83_200);
     // 천장 미반영 모드는 3성 픽업의 90분위가 200회를 넘어섭니다.
-    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(60_640);
+    expectSampledPyroxene(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene, 60_640);
   });
 
   it("uses the average_pity DP central path from actual pickup probability", () => {
@@ -547,6 +573,37 @@ describe("buildTimeline pyroxene balance band", () => {
     expect(eventEntry?.resourceDelta.pyroxene).toBe(-1_200);
   });
 
+  it("subtracts 200 free recruits before perks for manual total recruitment input", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 300 }]]),
+      scheduleItems: [
+        eventItem({
+          uid: "event-a",
+          recruitmentRuleSet: "call_charge_v1",
+          tags: ["recruit_free_200"],
+        }),
+      ],
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    // 300 total - 200 free - 50 perk recruits (70, 130, 150, 170, 270) = 50 paid recruits.
+    expect(eventEntry?.resourceDelta.pyroxene).toBe(-6_000);
+  });
+
+  it("applies 200 free recruits to the call-charge ceiling scenario", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [eventItem({ uid: "event-a", recruitmentRuleSet: "call_charge_v1", tags: ["recruit_free_200"] })],
+      options: {
+        ...defaultOptions,
+        event: { pickupChance: "ceil" },
+      },
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    // 200 total - 200 free leaves nothing to pay.
+    expect(eventEntry?.resourceDelta.pyroxene).toBe(0);
+  });
+
   it("applies recruitment perks to the call-charge ceiling scenario", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [eventItem({ uid: "event-a", recruitmentRuleSet: "call_charge_v1" })],
@@ -582,6 +639,30 @@ describe("buildTimeline pyroxene balance band", () => {
     const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
     expect(eventEntry?.resourceDelta.pyroxene).toBe(-24_000);
+  });
+
+  it("does not apply 200 free recruits to archive recruitment in the call-charge DP", () => {
+    const archiveRecruitment = {
+      ...pickupRecruitment(),
+      recruitmentType: RecruitmentTypeEnum.Archive,
+    };
+    const buildWithTags = (tags: string[]) =>
+      buildTestTimeline({
+        scheduleItems: [
+          eventItem({
+            uid: "event-a",
+            recruitmentRuleSet: "call_charge_v1",
+            recruitments: [archiveRecruitment],
+            tags,
+          }),
+        ],
+        options: {
+          ...defaultOptions,
+          event: { pickupChance: "average_pity" },
+        },
+      }).find((entry) => entry.source.event?.uid === "event-a")?.resourceDelta.pyroxene;
+
+    expect(buildWithTags(["recruit_free_200"])).toBe(buildWithTags([]));
   });
 
   it("uses the average-mode linear central path while keeping ticket spending order unchanged", () => {
@@ -668,6 +749,46 @@ describe("buildTimeline pyroxene balance band", () => {
 
     expect(eventEntry?.resourceDelta.pyroxene).toBe(-4_320);
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(95_680);
+  });
+
+  it("subtracts 200 free recruitment trials from the average-mode linear central path", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [
+        eventItem({
+          uid: "event-a",
+          tags: ["recruit_free_200"],
+          until: "2026-07-05T00:00:00.000Z",
+        }),
+      ],
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    // 140 average trials are fully covered by 200 free recruits.
+    expect(eventEntry?.resourceDelta.pyroxene).toBe(0);
+  });
+
+  it("keeps separate average_pity expectations for 100 and 200 free recruits of the same event", () => {
+    const buildWithTag = (tag: string) =>
+      buildTestTimeline({
+        scheduleItems: [
+          eventItem({
+            uid: "event-a",
+            tags: [tag],
+            until: "2026-07-05T00:00:00.000Z",
+            recruitments: [pickupRecruitment(), pickupRecruitment({ name: "픽업 학생 B" })],
+          }),
+        ],
+        options: {
+          ...defaultOptions,
+          event: { pickupChance: "average_pity" },
+        },
+      }).find((entry) => entry.source.event?.uid === "event-a")?.resourceDelta.pyroxene ?? 0;
+
+    const free100 = buildWithTag("recruit_free_100");
+    const free200 = buildWithTag("recruit_free_200");
+
+    expect(free200).toBeGreaterThan(free100);
+    expect(free200).toBeLessThan(0);
   });
 
   it("does not add a probability band for ceiling mode", () => {
@@ -767,7 +888,7 @@ describe("buildTimeline pyroxene balance band", () => {
     const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(66_400);
-    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(34_000);
+    expectSampledPyroxene(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene, 34_000);
   });
 
   it("keeps uncapped average bands wide when ticket spending requires resource-state tracking", () => {
@@ -823,8 +944,8 @@ describe("buildTimeline pyroxene balance band", () => {
     const firstEventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
     const secondEventEntry = timeline.find((entry) => entry.source.event?.uid === "event-b");
 
-    expect(firstEventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(60_640);
-    expect(secondEventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(34_800);
+    expectSampledPyroxene(firstEventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene, 60_640);
+    expectSampledPyroxene(secondEventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene, 34_800);
   });
 
   it("keeps the simplified ticket band close to resource-state bands on representative fixtures", () => {
@@ -881,7 +1002,7 @@ describe("buildTimeline pyroxene balance band", () => {
     }
   });
 
-  it("uses shared pickup DP for same-banner multi-pickup average_pity central path and bands", () => {
+  it("uses the shared pickup distribution for same-banner multi-pickup average_pity central path and bands", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [
         eventItem({
@@ -898,7 +1019,282 @@ describe("buildTimeline pyroxene balance band", () => {
     const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(77_080);
-    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(61_240);
+    expectSampledPyroxene(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene, 61_240);
     expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBeGreaterThan(56_560);
+  });
+});
+
+describe("buildTimeline recruitment rework planning", () => {
+  const ceilOptions = { ...defaultOptions, event: { pickupChance: "ceil" as const } };
+  const limitedRecruitment = pickupRecruitment({ name: "한정 학생", recruitmentType: RecruitmentTypeEnum.Limited });
+
+  function callChargeEvent(uid: string, since: string, recruitments = [pickupRecruitment()]) {
+    const until = new Date(new Date(since).getTime() + 86_400_000).toISOString();
+    return eventItem({ uid, since, until, recruitmentRuleSet: "call_charge_v1", recruitments });
+  }
+
+  function eventCost(timeline: ReturnType<typeof buildTestTimeline>, uid: string): number | undefined {
+    return timeline.find((entry) => entry.source.type === "event" && entry.source.event?.uid === uid)?.resourceDelta
+      .pyroxene;
+  }
+
+  it("maps target tiers to the copies an unowned student needs", () => {
+    expect([3, 4, 5, 6, 7, 8, 9].map((tier) => getRecruitmentTargetCopies(tier as 3))).toEqual([1, 1, 3, 3, 4, 6, 8]);
+  });
+
+  it("starts the first event of a scope from the entered stack", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [callChargeEvent("event-a", "2026-07-02T00:00:00.000Z")],
+      options: ceilOptions,
+      recruitmentStacks: { regular: 50, limited: 0 },
+    });
+    // 150 pulls earn the 70 and 130 mileage tickets, leaving 130 paid pulls.
+    expect(eventCost(timeline, "event-a")).toBe(-15_600);
+  });
+
+  it("spends a one-time ticket for the last pull a carried stack leaves", () => {
+    const timeline = buildTestTimeline({
+      initialResources: { pyroxene: 1_000, oneTimeTicket: 1, tenTimeTicket: 0 },
+      scheduleItems: [callChargeEvent("event-a", "2026-07-02T00:00:00.000Z")],
+      options: ceilOptions,
+      recruitmentStacks: { regular: 199, limited: 0 },
+    });
+    const entry = timeline.find((item) => item.source.event?.uid === "event-a");
+    expect(entry?.resourceDelta).toEqual({ pyroxene: 0, oneTimeTicket: -1, tenTimeTicket: 0 });
+  });
+
+  it("carries a manual count over to the next event of the same scope", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 60 }]]),
+      scheduleItems: [
+        callChargeEvent("event-b", "2026-07-04T00:00:00.000Z"),
+        callChargeEvent("event-a", "2026-07-02T00:00:00.000Z"),
+      ],
+      options: ceilOptions,
+    });
+    expect(eventCost(timeline, "event-a")).toBe(-7_200);
+    // 140 pulls from a carried stack of 60; the 70 and 130 tickets leave 120 paid pulls.
+    expect(eventCost(timeline, "event-b")).toBe(-14_400);
+  });
+
+  it("resets the stack after an automatic event and keeps scopes independent", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 80 }]]),
+      scheduleItems: [
+        callChargeEvent("event-a", "2026-07-02T00:00:00.000Z", [limitedRecruitment]),
+        callChargeEvent("event-b", "2026-07-04T00:00:00.000Z"),
+        callChargeEvent("event-c", "2026-07-06T00:00:00.000Z"),
+      ],
+      options: ceilOptions,
+      recruitmentStacks: { regular: 100, limited: 0 },
+    });
+    // The limited event leaves the regular stack at 100: 100 pulls, one 70 ticket, 90 paid.
+    expect(eventCost(timeline, "event-b")).toBe(-10_800);
+    expect(eventCost(timeline, "event-c")).toBe(-19_200);
+  });
+
+  it("does not move the stack for a completed event", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: true, expectedTrials: 150 }]]),
+      scheduleItems: [
+        callChargeEvent("event-a", "2026-07-02T00:00:00.000Z"),
+        callChargeEvent("event-b", "2026-07-04T00:00:00.000Z"),
+      ],
+      options: ceilOptions,
+    });
+    expect(eventCost(timeline, "event-a")).toBe(0);
+    expect(eventCost(timeline, "event-b")).toBe(-19_200);
+  });
+
+  it("wraps a carried stack past the 200th pull guarantee", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 100 }]]),
+      scheduleItems: [
+        callChargeEvent("event-a", "2026-07-02T00:00:00.000Z"),
+        callChargeEvent("event-b", "2026-07-04T00:00:00.000Z"),
+      ],
+      options: ceilOptions,
+      recruitmentStacks: { regular: 150, limited: 0 },
+    });
+    // 150 + 100 passes the guaranteed 200th pull, so event-b starts from 50: 150 pulls, 130 paid.
+    expect(eventCost(timeline, "event-b")).toBe(-15_600);
+  });
+
+  it("earns mileage tickets separately for each scope", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([
+        ["event-a", { completed: false, expectedTrials: null, targetTiers: { "student-3-한정 학생": 5 } }],
+      ]),
+      scheduleItems: [
+        callChargeEvent("event-a", "2026-07-02T00:00:00.000Z", [pickupRecruitment(), limitedRecruitment]),
+      ],
+      options: ceilOptions,
+    });
+    // Regular: 200 pulls, 4 tickets. Limited ★5: 3 copies × 200 = 600 pulls, 8 tickets.
+    expect(eventCost(timeline, "event-a")).toBe(-(160 + 520) * 120);
+  });
+
+  it("plans every copy a target tier needs under the legacy rules", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([
+        ["event-a", { completed: false, expectedTrials: null, targetTiers: { "student-3-픽업 학생": 9 } }],
+      ]),
+      scheduleItems: [eventItem({ uid: "event-a", recruitmentRuleSet: "legacy_points" })],
+      options: ceilOptions,
+    });
+    expect(eventCost(timeline, "event-a")).toBe(-8 * 200 * 120);
+  });
+
+  it("uses the event's own basis over the global basis", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: null, pickupChance: "ceil" }]]),
+      scheduleItems: [callChargeEvent("event-a", "2026-07-02T00:00:00.000Z")],
+      options: { ...defaultOptions, event: { pickupChance: "average_pity" } },
+    });
+    const entry = timeline.find((item) => item.source.event?.uid === "event-a");
+    expect(entry?.resourceDelta.pyroxene).toBe(-19_200);
+    expect(entry?.accumulatedResourcesBand).toBeUndefined();
+  });
+
+  it("lowers the expected cost of a later event when an earlier manual count carries a stack", () => {
+    const options = { ...defaultOptions, event: { pickupChance: "average_pity" as const } };
+    const scheduleItems = [
+      callChargeEvent("event-a", "2026-07-02T00:00:00.000Z"),
+      callChargeEvent("event-b", "2026-07-04T00:00:00.000Z"),
+    ];
+    const withoutCarry = buildTestTimeline({ scheduleItems, options });
+    const withCarry = buildTestTimeline({
+      scheduleItems,
+      options,
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 90 }]]),
+    });
+    expect(eventCost(withCarry, "event-b")!).toBeGreaterThan(eventCost(withoutCarry, "event-b")!);
+  });
+});
+
+describe("recruitment target copies from the owned state", () => {
+  const ceilOptions = { ...defaultOptions, event: { pickupChance: "ceil" as const } };
+  const pickupUid = "student-3-픽업 학생";
+  const legacyEvent = eventItem({ uid: "event-a", recruitmentRuleSet: "legacy_points" });
+
+  function eventEntry(timeline: ReturnType<typeof buildTestTimeline>) {
+    return timeline.find((entry) => entry.source.type === "event" && entry.source.event?.uid === "event-a");
+  }
+
+  function targetData(targetTier: 3 | 4 | 5 | 6 | 7 | 8 | 9, expectedTrials: number | null = null) {
+    return new Map<string, PyroxeneTimelineEventData>([
+      [
+        "event-a",
+        { completed: false, expectedTrials, targetTiers: targetTier === 3 ? {} : { [pickupUid]: targetTier } },
+      ],
+    ]);
+  }
+
+  it("keeps the unowned counts when no owned state is given", () => {
+    const tiers = [3, 4, 5, 6, 7, 8, 9] as const;
+    expect(tiers.map((tier) => getRecruitmentTargetCopies(tier, undefined))).toEqual([1, 1, 3, 3, 4, 6, 8]);
+    expect(tiers.map((tier) => getRecruitmentTargetCopies(tier, { tier: null, eleph: 0 }))).toEqual([
+      1, 1, 3, 3, 4, 6, 8,
+    ]);
+  });
+
+  it("subtracts held eleph from an unowned student but still needs the first copy", () => {
+    // ★5 needs 220 eleph from ★3; 150 held plus the 100 first-acquisition bonus cover it.
+    expect(getRecruitmentTargetCopies(5, { tier: null, eleph: 150 })).toBe(1);
+    // ★9 needs 720; 300 held and the bonus leave 320, so four duplicates follow the first copy.
+    expect(getRecruitmentTargetCopies(9, { tier: null, eleph: 300 })).toBe(5);
+  });
+
+  it("starts an owned student from its tier, counting duplicate and bonus eleph on the first copy", () => {
+    // Owned ★3 to ★4 needs 100 eleph; the first copy gives 200.
+    expect(getRecruitmentTargetCopies(4, { tier: 3, eleph: 0 })).toBe(1);
+    // Owned ★4 with 50 eleph to ★5 needs 70 more.
+    expect(getRecruitmentTargetCopies(5, { tier: 4, eleph: 50 })).toBe(1);
+    // Owned ★4 with 50 eleph to ★9 needs 570 more: 200 from the first copy, then 4 × 100.
+    expect(getRecruitmentTargetCopies(9, { tier: 4, eleph: 50 })).toBe(5);
+  });
+
+  it("needs no copy when the owned tier or held eleph already reaches the target", () => {
+    expect(getRecruitmentTargetCopies(3, { tier: 3, eleph: 0 })).toBe(0);
+    expect(getRecruitmentTargetCopies(5, { tier: 7, eleph: 0 })).toBe(0);
+    expect(getRecruitmentTargetCopies(5, { tier: 4, eleph: 120 })).toBe(0);
+  });
+
+  it("merges owned tiers and held eleph and reports an unavailable source as null", () => {
+    const readAt = "2026-07-01T00:00:00.000Z";
+    expect(buildRecruitmentOwnedSnapshot(readAt, ["a", "b", "c", "a"], { a: 4 }, { a: 30, b: 120 })).toEqual({
+      readAt,
+      states: { a: { tier: 4, eleph: 30 }, b: { tier: null, eleph: 120 } },
+    });
+    // Eleph without an inventory record is null (not entered); a recorded 0 stays 0.
+    expect(buildRecruitmentOwnedSnapshot(readAt, ["a", "b", "c"], { a: 4 }, { b: 0 })).toEqual({
+      readAt,
+      states: { a: { tier: 4, eleph: null }, b: { tier: null, eleph: 0 } },
+    });
+    expect(buildRecruitmentOwnedSnapshot(readAt, ["a"], null, {})).toBeNull();
+    expect(buildRecruitmentOwnedSnapshot(readAt, ["a"], { a: 4 }, null)).toBeNull();
+  });
+
+  it("keeps the unowned start for an event that began before the owned state was read", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: targetData(9),
+      scheduleItems: [legacyEvent],
+      options: ceilOptions,
+      ownedStates: { [pickupUid]: { tier: 4, eleph: 50 } },
+      ownedReadAt: "2026-07-02T12:00:00.000Z",
+    });
+    expect(eventEntry(timeline)?.resourceDelta.pyroxene).toBe(-8 * 200 * 120);
+  });
+
+  it("plans fewer pulls for an owned ★4 student with eleph", () => {
+    const unowned = buildTestTimeline({
+      eventDataMap: targetData(9),
+      scheduleItems: [legacyEvent],
+      options: ceilOptions,
+    });
+    const owned = buildTestTimeline({
+      eventDataMap: targetData(9),
+      scheduleItems: [legacyEvent],
+      options: ceilOptions,
+      ownedStates: { [pickupUid]: { tier: 4, eleph: 50 } },
+    });
+    expect(eventEntry(unowned)?.resourceDelta.pyroxene).toBe(-8 * 200 * 120);
+    expect(eventEntry(owned)?.resourceDelta.pyroxene).toBe(-5 * 200 * 120);
+  });
+
+  it("keeps a reached target as a target event with no pulls and leaves the stacks", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: targetData(3),
+      scheduleItems: [eventItem({ uid: "event-a", recruitmentRuleSet: "call_charge_v1" })],
+      options: ceilOptions,
+      recruitmentStacks: { regular: 40, limited: 0 },
+      ownedStates: { [pickupUid]: { tier: 3, eleph: 0 } },
+    });
+    const entry = eventEntry(timeline);
+    expect(entry?.resourceDelta).toEqual({ pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 });
+    expect(entry?.pickupPlan).toEqual({ basis: "ceil", basisOverridden: false, pulls: 0, freePulls: 0, stacks: [] });
+  });
+
+  it("still spends a manual count when the target is already reached", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: targetData(3, 30),
+      scheduleItems: [legacyEvent],
+      options: ceilOptions,
+      ownedStates: { [pickupUid]: { tier: 5, eleph: 0 } },
+    });
+    expect(eventEntry(timeline)?.resourceDelta.pyroxene).toBe(-30 * 120);
+    expect(eventEntry(timeline)?.pickupPlan?.basis).toBe("manual");
+  });
+
+  it("keeps one copy for a ★2 pickup student whatever its owned state", () => {
+    const tier2 = pickupRecruitment({ initialTier: 2 });
+    const event = eventItem({ uid: "event-a", recruitmentRuleSet: "legacy_points", recruitments: [tier2] });
+    const withoutOwned = buildTestTimeline({ scheduleItems: [event], options: ceilOptions });
+    const withOwned = buildTestTimeline({
+      scheduleItems: [event],
+      options: ceilOptions,
+      ownedStates: { "student-2-픽업 학생": { tier: 5, eleph: 500 } },
+    });
+    expect(eventEntry(withOwned)?.resourceDelta).toEqual(eventEntry(withoutOwned)?.resourceDelta);
   });
 });

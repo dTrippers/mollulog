@@ -18,6 +18,7 @@ import {
 import { getRaidSchedule } from "~/models/raid";
 import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents, type RecruitmentGroup } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
+import { getStudentDirectoryStudents } from "~/models/student-directory";
 import type { TimelineContent, TimelineContentType } from "~/models/timeline-content";
 import {
   findEventsForRecruitmentStudent,
@@ -50,7 +51,14 @@ export type PyroxenePlannerContent =
         pickup: boolean;
         rerun: boolean;
         until: UtcIsoString | null;
-        student: { uid: string; imageUid: string | null; name: string; initialTier: number } | null;
+        student: {
+          uid: string;
+          imageUid: string | null;
+          name: string;
+          initialTier: number | null;
+          // BAQL acquisition type for the GL region (regular, limited, festival, ...). Null when unknown.
+          acquisitionType: string | null;
+        } | null;
         // Which event this recruitment "belongs to" when its group is shared by multiple
         // events. Only set on the merged recruitment entry (see buildGroupRecruitmentContent);
         // absent elsewhere, where recruitment.uid === content.uid already disambiguates.
@@ -142,6 +150,7 @@ type PyroxeneRecruitmentDetail = PyroxeneEventVariant["recruitments"][number];
 function toRecruitmentDetail(
   recruitment: RecruitmentGroup["recruitments"][number],
   studentsMap: Awaited<ReturnType<typeof getAllStudentsMap>>,
+  acquisitionTypes: Map<string, string | null>,
   sourceContentUid?: string,
 ): PyroxeneRecruitmentDetail {
   return {
@@ -154,9 +163,11 @@ function toRecruitmentDetail(
           uid: getRecruitmentFavoriteKey(recruitment),
           imageUid: recruitment.student?.uid ?? null,
           name: recruitment.student?.name ?? recruitment.studentName,
+          // A pickup whose student is not in the catalog yet has no confirmed tier.
           initialTier: recruitment.student
-            ? (studentsMap[recruitment.student.uid]?.initialTier ?? recruitment.student.initialTier ?? 3)
-            : 3,
+            ? (studentsMap[recruitment.student.uid]?.initialTier ?? recruitment.student.initialTier ?? null)
+            : null,
+          acquisitionType: recruitment.student ? (acquisitionTypes.get(recruitment.student.uid) ?? null) : null,
         }
       : null,
     ...(sourceContentUid ? { sourceContentUid } : {}),
@@ -201,11 +212,13 @@ export async function getPyroxenePlannerContents(
   ].sort((a, b) => compareInstantAsc(getContentStartAt(a), getContentStartAt(b)));
 
   const recruitmentGroupUids = allContents.map(getContentRecruitmentGroupUid).filter((uid) => uid !== null) as string[];
-  const [recruitmentGroups, studentsMap, recruitmentPoolStudents] = await Promise.all([
+  const [recruitmentGroups, studentsMap, recruitmentPoolStudents, directoryStudents] = await Promise.all([
     getRecruitmentGroupsByUids(env, recruitmentGroupUids, forceRefresh),
     getAllStudentsMap(env, true),
     getRecruitmentPoolStudents(env, forceRefresh),
+    getStudentDirectoryStudents(env, true),
   ]);
+  const acquisitionTypes = new Map(directoryStudents.map((student) => [student.uid, student.acquisitionType]));
 
   const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
   const eventsByRecruitmentGroupUid = groupTimelineContentsByRecruitmentGroupUid(eventContents);
@@ -242,7 +255,7 @@ export async function getPyroxenePlannerContents(
           const recruitments = filterRecruitmentsByStudentUids(
             group?.recruitments ?? [],
             content.recruitmentStudentUids,
-          ).map((r) => toRecruitmentDetail(r, studentsMap));
+          ).map((r) => toRecruitmentDetail(r, studentsMap, acquisitionTypes));
 
           return [
             {
@@ -289,6 +302,7 @@ export async function getPyroxenePlannerContents(
           toRecruitmentDetail(
             r,
             studentsMap,
+            acquisitionTypes,
             findEventsForRecruitmentStudent(siblingEvents, r.student?.uid ?? null)[0]?.uid,
           ),
         );

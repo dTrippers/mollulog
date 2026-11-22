@@ -465,7 +465,7 @@ describe("pickup history index loader", () => {
     ]);
   });
 
-  it("fails loudly when a recruited student cannot be resolved", async () => {
+  it("reports a record whose recruited student cannot be resolved as unavailable instead of failing the page", async () => {
     mockedGetSenseiByUsername.mockResolvedValue({
       id: 1,
       uid: "sensei-1",
@@ -509,23 +509,16 @@ describe("pickup history index loader", () => {
       },
     ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
 
-    await expect(loader(createLoaderArgs() as never)).rejects.toMatchObject({
-      type: "DataWithResponseInit",
-      data: {
-        error: {
-          code: "pickup_history.student_missing",
-          details: {
-            recruitmentResultUid: "history-1",
-            recruitmentGroupUid: "hidden-heritage-rerun",
-            studentUid: "missing-student",
-          },
-        },
-      },
-      init: { status: 500 },
+    const result = await loader(createLoaderArgs() as never);
+
+    expect(result).toMatchObject({
+      recruitmentHistories: [],
+      unavailableRecords: [{ uid: "history-1", since: "2025-03-04T02:00:00.000Z" }],
+      recruitmentStats: { trial: 0, tier3Count: 0 },
     });
   });
 
-  it("fails loudly when a pickup history has no timeline content row", async () => {
+  it("reports a record without a timeline content row as unavailable instead of failing the page", async () => {
     mockedGetSenseiByUsername.mockResolvedValue({
       id: 1,
       uid: "sensei-1",
@@ -551,17 +544,11 @@ describe("pickup history index loader", () => {
     mockedGetRecruitmentGroupsByUids.mockResolvedValue([]);
     mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([]);
 
-    await expect(loader(createLoaderArgs() as never)).rejects.toMatchObject({
-      type: "DataWithResponseInit",
-      data: {
-        error: {
-          code: "pickup_history.timeline_content_missing",
-          details: {
-            eventId: "missing-recruitment-group",
-          },
-        },
-      },
-      init: { status: 500 },
+    const result = await loader(createLoaderArgs() as never);
+
+    expect(result).toMatchObject({
+      recruitmentHistories: [],
+      unavailableRecords: [{ uid: "history-1", since: "2025-03-04T02:00:00.000Z" }],
     });
   });
 
@@ -895,5 +882,35 @@ describe("pickup history index action", () => {
       init: { status: 400 },
     });
     expect(mockedDeleteRecruitmentResult).not.toHaveBeenCalled();
+  });
+
+  it("returns an in-place failure for the record when deletion throws", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetSenseiByUsername.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getSenseiByUsername>>);
+    mockedDeleteRecruitmentResult.mockRejectedValueOnce(new Error("db down"));
+
+    const formData = new FormData();
+    formData.set("uid", "history-1");
+    const result = await action(
+      createActionArgs(
+        new Request("https://mollulog.net/@sensei/pickups?index", { method: "DELETE", body: formData }),
+      ) as never,
+    );
+
+    expect(result).toMatchObject({
+      type: "DataWithResponseInit",
+      data: { error: "pickup_history.delete_failed", uid: "history-1" },
+      init: { status: 500 },
+    });
+    consoleError.mockRestore();
   });
 });

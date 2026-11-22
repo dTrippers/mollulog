@@ -26,6 +26,7 @@ function timelineContent(overrides: Partial<TimelineContent> & { uid: string }):
     isSpoiler: false,
     tags: [],
     earnablePyroxene: null,
+    featuredUntil: null,
     syncedAt: null,
     ...overrides,
   };

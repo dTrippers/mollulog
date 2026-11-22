@@ -14,8 +14,20 @@ function postRow(
   createdAt = "2026-07-14T00:00:00.000Z",
   timelineContentUid: string | null = null,
   board = "news",
+  publishedAt: string | null = createdAt,
 ) {
-  return [1, uid, "제목", "본문", board, timelineContentUid, null, new Date(createdAt), new Date(createdAt)];
+  return [
+    1,
+    uid,
+    "제목",
+    "본문",
+    board,
+    timelineContentUid,
+    null,
+    publishedAt ? new Date(publishedAt) : null,
+    new Date(createdAt),
+    new Date(createdAt),
+  ];
 }
 
 describe("PostgreSQL posts read", () => {
@@ -38,14 +50,14 @@ describe("PostgreSQL posts read", () => {
         board: "news",
         timelineContentUid: null,
         thumbnailImageUrl: null,
-        createdAt: "2026-07-14T00:00:00.000Z",
+        publishedAt: "2026-07-14T00:00:00.000Z",
         updatedAt: "2026-07-14T00:00:00.000Z",
       },
     ]);
 
     const [{ text }, values] = (client.query as jest.Mock).mock.calls[0] as [{ text: string }, unknown[]];
-    expect(text).toContain('where "posts"."board" = $1');
-    expect(text).toContain('order by "posts"."created_at" desc, "posts"."uid" desc');
+    expect(text).toContain('where ("posts"."published_at" is not null and "posts"."board" = $1)');
+    expect(text).toContain('order by "posts"."published_at" desc, "posts"."uid" desc');
     expect(values).toEqual(["news"]);
     expect(client.end).toHaveBeenCalledTimes(1);
   });
@@ -72,8 +84,8 @@ describe("PostgreSQL posts read", () => {
     });
 
     const [{ text }, values] = (client.query as jest.Mock).mock.calls[0] as [{ text: string }, unknown[]];
-    expect(text).toContain('where "posts"."timeline_content_uid" = $1');
-    expect(text).toContain('order by "posts"."created_at" desc, "posts"."uid" desc');
+    expect(text).toContain('where ("posts"."published_at" is not null and "posts"."timeline_content_uid" = $1)');
+    expect(text).toContain('order by "posts"."published_at" desc, "posts"."uid" desc');
     expect(values).toEqual(["live-stream-1", 1]);
   });
 
@@ -97,7 +109,7 @@ describe("PostgreSQL posts read", () => {
     });
 
     const [{ text }, values] = (client.query as jest.Mock).mock.calls[0] as [{ text: string }, unknown[]];
-    expect(text).toContain('where "posts"."uid" = $1');
+    expect(text).toContain('where ("posts"."published_at" is not null and "posts"."uid" = $1)');
     expect(text).toContain("limit $2");
     expect(values).toEqual(["notice-1", 1]);
     expect(client.end).toHaveBeenCalledTimes(1);
@@ -150,7 +162,7 @@ describe("PostgreSQL posts read", () => {
 
     const [{ text }, values] = (client.query as jest.Mock).mock.calls[0] as [{ text: string }, unknown[]];
     expect(text).toContain('"posts"."uid" <> $2');
-    expect(text).toContain('order by "posts"."created_at" desc, "posts"."uid" desc');
+    expect(text).toContain('order by "posts"."published_at" desc, "posts"."uid" desc');
     expect(text).toContain("limit $3");
     expect(values).toEqual(["news", "post-1", 3]);
     expect(client.end).toHaveBeenCalledTimes(1);
@@ -173,5 +185,47 @@ describe("PostgreSQL posts read", () => {
       new Date("2026-07-14T00:00:00.000Z"),
     );
     await expect(getPostgresLatestPostTime(env, "empty", options)).resolves.toBeNull();
+
+    // The news badge counts from the publish time, so a draft saved later must not move it.
+    const [{ text }] = query.mock.calls[0] as [{ text: string }];
+    expect(text).toContain('select "published_at" from "posts"');
+    expect(text).toContain('where ("posts"."published_at" is not null and "posts"."board" = $1)');
+    expect(text).toContain('order by "posts"."published_at" desc, "posts"."uid" desc');
+  });
+
+  it("counts and lists only published news posts", async () => {
+    const query = jest.fn(async (config: { text: string }, _values?: unknown[]) =>
+      config.text.includes("count") ? { rows: [[1]], rowCount: 1 } : { rows: [postRow("post-1")], rowCount: 1 },
+    );
+    const client = {
+      connect: jest.fn(async () => undefined),
+      end: jest.fn(async () => undefined),
+      query,
+    } as unknown as Client;
+
+    await getPostgresNewsPosts({ HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive }, 1, 5, {
+      createClient: () => client,
+    });
+
+    for (const [config] of query.mock.calls) {
+      expect((config as { text: string }).text).toContain('"posts"."published_at" is not null');
+    }
+  });
+
+  it("fails instead of exposing a draft row that reaches a public read", async () => {
+    const client = {
+      connect: jest.fn(async () => undefined),
+      end: jest.fn(async () => undefined),
+      query: jest.fn(async () => ({
+        rows: [postRow("draft-1", "2026-07-26T00:00:00.000Z", null, "news", null)],
+        rowCount: 1,
+      })),
+    } as unknown as Client;
+
+    await expect(
+      getPostgresPostByUid({ HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive }, "draft-1", {
+        createClient: () => client,
+      }),
+    ).rejects.toThrow("Draft post draft-1 reached a public read");
   });
 });

@@ -2,7 +2,7 @@ import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type LoaderFunctionArgs, useLoaderData, useOutletContext, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { RaidRankScreen } from "~/components/features/raids";
+import { buildRaidPartyStudentMap, RaidRankScreen } from "~/components/features/raids";
 import RaidRankFilter, {
   mergeFilteredStudents,
   type RaidRankFilterState,
@@ -15,7 +15,7 @@ import { fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import { trackGoogleAnalyticsEvent, trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
 import type { RaidType } from "~/models/content.d";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
-import { getAllStudentsMap } from "~/models/student";
+import { getAllStudentsMap, getStudentForms } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import RaidUnavailableState from "./raids.$raidType.$seasonIndex._components/RaidUnavailableState";
 import {
@@ -26,18 +26,8 @@ import {
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const rawAllStudents = await getAllStudentsMap(env, true);
-  const allStudents = Object.fromEntries(
-    Object.entries(rawAllStudents).map(([uid, student]) => [
-      uid,
-      {
-        name: student.name,
-        attackType: student.attackType,
-        defenseType: student.defenseType,
-        role: student.role,
-      },
-    ]),
-  );
+  const [rawAllStudents, studentForms] = await Promise.all([getAllStudentsMap(env, true), getStudentForms(env)]);
+  const allStudents = buildRaidPartyStudentMap(rawAllStudents, studentForms);
 
   const sensei = await getActiveSensei(env, request);
   const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};

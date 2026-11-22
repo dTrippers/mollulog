@@ -37,7 +37,23 @@ type RectMetrics = NumberInputFlowNavigationRect & {
 
 const SAME_ROW_EPSILON = 1;
 
-export function useNumberInputFlowNavigation({ selectOnFocus = true }: { selectOnFocus?: boolean } = {}) {
+// `enterMovesDown` makes Enter move to the cell below, the way a spreadsheet does, for screens that are a table of
+// entries rather than a form Enter would submit. `tabMovesBetweenInputs` makes Tab and Shift+Tab go to the next and
+// previous member of the flow in document order, past the step buttons between them; past the last member Tab leaves
+// the flow as usual. `tabScopeAttribute` names an attribute that splits the flow into parts, such as the rows of one
+// student: Tab moves between members only within one part, and past its end the browser handles Tab, so the controls
+// between the parts stay reachable.
+export function useNumberInputFlowNavigation({
+  selectOnFocus = true,
+  enterMovesDown = false,
+  tabMovesBetweenInputs = false,
+  tabScopeAttribute,
+}: {
+  selectOnFocus?: boolean;
+  enterMovesDown?: boolean;
+  tabMovesBetweenInputs?: boolean;
+  tabScopeAttribute?: string;
+} = {}) {
   const gridId = useId();
 
   const selectInputValue = useCallback(
@@ -70,11 +86,26 @@ export function useNumberInputFlowNavigation({ selectOnFocus = true }: { selectO
       },
       onKeyDown: (event) => {
         onKeyDown?.(event);
-        if (event.defaultPrevented || disabled || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        if (event.defaultPrevented || disabled || event.metaKey || event.ctrlKey || event.altKey) {
           return;
         }
 
-        const direction = getDirection(event.key);
+        if (tabMovesBetweenInputs && event.key === "Tab") {
+          const targetInput = findTabTarget(event.currentTarget, gridId, event.shiftKey ? -1 : 1, tabScopeAttribute);
+          if (!targetInput) {
+            return;
+          }
+          event.preventDefault();
+          targetInput.focus();
+          selectInputValue(targetInput);
+          return;
+        }
+
+        if (event.shiftKey) {
+          return;
+        }
+
+        const direction = enterMovesDown && event.key === "Enter" ? "down" : getDirection(event.key);
         if (!direction) {
           return;
         }
@@ -89,7 +120,7 @@ export function useNumberInputFlowNavigation({ selectOnFocus = true }: { selectO
         selectInputValue(targetInput);
       },
     }),
-    [gridId, selectInputValue],
+    [gridId, selectInputValue, enterMovesDown, tabMovesBetweenInputs, tabScopeAttribute],
   );
 
   return { getInputProps };
@@ -130,6 +161,31 @@ function getDirection(key: string): NumberInputFlowDirection | null {
     default:
       return null;
   }
+}
+
+function findTabTarget(
+  currentInput: HTMLElement,
+  gridId: string,
+  step: -1 | 1,
+  scopeAttribute: string | undefined,
+): HTMLElement | null {
+  const scopeOf = (element: HTMLElement) =>
+    scopeAttribute ? (element.closest(`[${scopeAttribute}]`)?.getAttribute(scopeAttribute) ?? null) : null;
+  const scope = scopeOf(currentInput);
+  const inputs = Array.from(
+    currentInput.ownerDocument.querySelectorAll<HTMLElement>("[data-number-input-flow]"),
+  ).filter(
+    (input) =>
+      input.dataset.numberInputFlow === gridId &&
+      !(input as HTMLInputElement).disabled &&
+      input.getClientRects().length > 0 &&
+      scopeOf(input) === scope,
+  );
+  const currentIndex = inputs.indexOf(currentInput);
+  if (currentIndex === -1) {
+    return null;
+  }
+  return inputs[currentIndex + step] ?? null;
 }
 
 function findNavigationTarget(

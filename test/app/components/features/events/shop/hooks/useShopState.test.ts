@@ -1,10 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
+import { isTreasureHuntTargetRoundOverLimit } from "~/domain/event-shop/treasure-hunt";
 import {
   getInitialItemPurchaseDays,
   getInitialMinigameStartRound,
   getPostSignInState,
-} from "../../../../../../../app/components/features/events/shop/hooks/useShopState";
-import { isTreasureHuntTargetRoundOverLimit } from "../../../../../../../app/components/features/events/shop/treasure-hunt";
+} from "~/lib/event-shop/hooks/useShopState";
 import type { ShopResource } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 import type { EventShopState } from "../../../../../../../app/models/event-shop-state";

@@ -3,6 +3,13 @@ import {
   ABILITY_RELEASE_WB_UIDS,
   TARGET_ABILITY_RELEASE_WB_UIDS,
 } from "~/domain/student-growth-state";
+import {
+  calculateEquipmentTierUpExp,
+  calculateWeaponLevelUpExp,
+  emptyWeaponExpByBonusFamily,
+  WEAPON_EXP_BONUS_FAMILIES,
+  type WeaponExpByBonusFamily,
+} from "~/domain/growth-material-exp";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 
 export type GrowthResourceSource = "level" | "skill" | "equipment" | "tier" | "gear" | "relationship" | "ability";
@@ -29,6 +36,10 @@ export type GrowthResourceKindInput = {
 export type StudentGrowthResourceRequirements = {
   items: GrowthResourceItem[];
   characterExp: number;
+  /** Enhancement-stone EXP, assuming every tier is leveled to its max. */
+  equipmentExp: number;
+  /** Unique-weapon EXP, grouped by the material family that gives the weapon bonus EXP. */
+  weaponExp: WeaponExpByBonusFamily;
   credit: number;
   skillUnavailable: boolean;
 };
@@ -49,6 +60,8 @@ export type RelationshipGiftResourceMetadata = {
 export type AggregatedGrowthResourceRequirements = {
   items: GrowthResourceItem[];
   characterExp: number;
+  equipmentExp: number;
+  weaponExp: WeaponExpByBonusFamily;
   credit: number;
   skillUnavailable: boolean;
 };
@@ -623,6 +636,26 @@ export function calculateEquipmentResourceItems(
   return Array.from(items.values());
 }
 
+/** Enhancement-stone EXP for the three equipment slots, assuming every tier is leveled to its max. */
+export function calculateEquipmentRequiredExp(
+  student: Pick<
+    GrowthResourceStudentInput,
+    "equip1" | "targetEquip1" | "equip2" | "targetEquip2" | "equip3" | "targetEquip3"
+  >,
+): number {
+  return (
+    calculateEquipmentTierUpExp(student.equip1, student.targetEquip1) +
+    calculateEquipmentTierUpExp(student.equip2, student.targetEquip2) +
+    calculateEquipmentTierUpExp(student.equip3, student.targetEquip3)
+  );
+}
+
+export function calculateWeaponRequiredExp(
+  student: Pick<GrowthResourceStudentInput, "weaponLevel" | "targetWeaponLevel">,
+): number {
+  return calculateWeaponLevelUpExp(student.weaponLevel, student.targetWeaponLevel);
+}
+
 export function calculateGearResourceItems(
   student: Pick<GrowthResourceStudentInput, "equipSpecial" | "targetEquipSpecial">,
   gearData: StudentGearData | null,
@@ -786,6 +819,7 @@ export function normalizeStudentGrowthInputForCalculation(
       useMinimumCurrentGrowth,
     ),
     skillSub: coerceCurrentGrowthValue(student.skillSub, student.targetSkillSub, 1, useMinimumCurrentGrowth),
+    weaponLevel: coerceCurrentGrowthValue(student.weaponLevel, student.targetWeaponLevel, 0, useMinimumCurrentGrowth),
     abilityHp: coerceCurrentGrowthValue(student.abilityHp, student.targetAbilityHp, 0, useMinimumCurrentGrowth),
     abilityAtk: coerceCurrentGrowthValue(student.abilityAtk, student.targetAbilityAtk, 0, useMinimumCurrentGrowth),
     abilityHeal: coerceCurrentGrowthValue(student.abilityHeal, student.targetAbilityHeal, 0, useMinimumCurrentGrowth),
@@ -1096,10 +1130,16 @@ export function aggregateGrowthResourceRequirements(
 ): AggregatedGrowthResourceRequirements {
   const aggregatedItems = new Map<string, GrowthResourceItem>();
   let characterExp = 0;
+  let equipmentExp = 0;
+  const weaponExp = emptyWeaponExpByBonusFamily();
   let credit = 0;
 
   for (const requirement of requirements) {
     characterExp += requirement.characterExp;
+    equipmentExp += requirement.equipmentExp;
+    for (const family of WEAPON_EXP_BONUS_FAMILIES) {
+      weaponExp[family] += requirement.weaponExp[family];
+    }
     credit += requirement.credit;
     for (const item of requirement.items) {
       const resourceKey = `${item.type}:${item.uid}`;
@@ -1119,6 +1159,8 @@ export function aggregateGrowthResourceRequirements(
   return {
     items: sortGrowthResourceItems(Array.from(aggregatedItems.values())),
     characterExp,
+    equipmentExp,
+    weaponExp,
     credit,
     skillUnavailable: requirements.some((requirement) => requirement.skillUnavailable),
   };
@@ -1157,6 +1199,8 @@ export function buildRelationshipGiftResourceRequirements(
       }),
     ),
     characterExp: 0,
+    equipmentExp: 0,
+    weaponExp: emptyWeaponExpByBonusFamily(),
     credit: 0,
     skillUnavailable: false,
   };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { formatApChargeExceptionPeriod } from "~/components/features/futures/PyroxenePlannerSourcePanel";
+import { formatApChargeExceptionPeriod } from "~/components/v2/features/pyroxene/IncomePlan";
 
 describe("AP charge exception period label", () => {
   it("uses the integrated planner's date-time range format for game reset dates", () => {

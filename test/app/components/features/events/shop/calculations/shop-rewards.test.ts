@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { calculateBoughtResourceQuantities } from "../../../../../../../app/components/features/events/shop/calculations/shop-rewards";
+import { calculateBoughtResourceQuantities } from "~/domain/event-shop/calculations/shop-rewards";
 import type { ShopResource } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 

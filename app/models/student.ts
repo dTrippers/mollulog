@@ -1,3 +1,4 @@
+import { isStudentReleased } from "~/domain/student-release";
 import { graphql } from "~/graphql";
 import type { Attack, Defense, StudentGrowthVisualsQuery, StudentSkillTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
@@ -8,6 +9,7 @@ import {
   fetchLazySourceCachedBatch,
   fetchSourceCached,
 } from "~/lib/cache";
+import { toUtcIso } from "~/lib/date-time";
 import type { Position, TacticRole } from "./content.d";
 
 export type Role = "striker" | "special";
@@ -23,18 +25,23 @@ export type Student = {
   defenseType: Defense;
   position: Position;
   tacticRole: TacticRole;
-  birthday: Date;
+  birthday: string | null;
   role: Role;
   equipments: string[];
+  weaponType: string | null;
+  /** Decided from the GL release time when the student is read, not stored in the source cache. */
   released: boolean;
 };
+
+/** A student as the source cache stores it: the release time instead of a release state that goes stale. */
+type CachedStudent = Omit<Student, "released"> & { releaseAt: string | null };
 
 export type StudentMap = { [id: string]: Student };
 
 const allStudentsQuery = graphql(`
   query AllStudents {
     students {
-      uid name familyName altNames school initialTier order attackType defenseType position tacticRole birthday role equipments released
+      uid name familyName altNames school initialTier order attackType defenseType position tacticRole birthday role equipments weaponType releaseAt
     }
   }
 `);
@@ -81,12 +88,14 @@ const studentDetailQuery = graphql(`
       studentVariant {
         uid
         isMulticlass
-        primaryStudent { uid name }
+        primaryStudent {
+          uid name
+          # A multiclass form is recruited as its primary form, so a non-primary form has no recruitments of its own.
+          recruitments {
+            recruitmentGroup { uid }
+          }
+        }
         students { uid name position tacticRole }
-      }
-      recruitments {
-        since rerun
-        recruitmentGroup { uid startAt endAt }
       }
       catalog {
         profile {
@@ -182,6 +191,7 @@ const studentGrowthEquipmentQuery = graphql(`
         uid
         category
         tier
+        maxLevel
       }
     }
   }
@@ -235,7 +245,7 @@ const studentHeaderQuery = graphql(`
         uid
         isMulticlass
         primaryStudent { uid name }
-        students { uid name }
+        students { uid name tacticRole }
       }
     }
   }
@@ -268,6 +278,18 @@ const studentFormUidsQuery = graphql(`
   }
 `);
 
+const studentFormsQuery = graphql(`
+  query StudentForms {
+    students {
+      studentVariant {
+        isMulticlass
+        primaryStudent { uid }
+        students { uid name attackType defenseType role }
+      }
+    }
+  }
+`);
+
 const studentGradeDetailQuery = graphql(`
   query StudentGradeDetail($uid: String!) {
     student(uid: $uid) {
@@ -277,25 +299,21 @@ const studentGradeDetailQuery = graphql(`
 `);
 
 export async function getAllStudents(env: Env, includeUnreleased = false): Promise<Student[]> {
-  const rawStudents = await getRawStudents(env);
-  if (includeUnreleased) {
-    return rawStudents;
-  }
-  return rawStudents.filter(({ released }) => released);
+  const students = await getRawStudents(env);
+  return includeUnreleased ? students : students.filter(({ released }) => released);
 }
 
 export async function getAllStudentsMap(env: Env, includeUnreleased = false): Promise<StudentMap> {
-  const rawStudents = await getRawStudents(env);
-  const students = includeUnreleased ? rawStudents : rawStudents.filter(({ released }) => released);
+  const students = await getAllStudents(env, includeUnreleased);
   return students.reduce((acc, student) => {
     acc[student.uid] = student;
     return acc;
   }, {} as StudentMap);
 }
 
-const rawStudentsKey = cacheKey("source", "student", 1, "all");
+const rawStudentsKey = cacheKey("source", "student", 3, "all");
 
-async function fetchStudentsFromBaql(): Promise<Student[]> {
+async function fetchStudentsFromBaql(): Promise<CachedStudent[]> {
   const result = await runQuery(allStudentsQuery, {});
   if (result.error) {
     throw result.error;
@@ -303,17 +321,29 @@ async function fetchStudentsFromBaql(): Promise<Student[]> {
   if (!result.data || !Array.isArray(result.data.students)) {
     throw new Error("BAQL student catalog response is missing students");
   }
-  return result.data.students satisfies Student[];
+  return result.data.students.map(
+    ({ releaseAt, ...student }) =>
+      ({ ...student, releaseAt: releaseAt === null ? null : toUtcIso(releaseAt) }) satisfies CachedStudent,
+  );
+}
+
+function toStudents(cachedStudents: CachedStudent[], now = Date.now()): Student[] {
+  return cachedStudents.map(({ releaseAt, ...student }) => ({
+    ...student,
+    released: isStudentReleased(releaseAt, now),
+  }));
 }
 
 export async function syncRawStudents(env: Env, forceRefresh = true): Promise<Student[]> {
-  return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, forceRefresh, {
-    rejectOnForcedRefresh: true,
-  });
+  return toStudents(
+    await fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, forceRefresh, {
+      rejectOnForcedRefresh: true,
+    }),
+  );
 }
 
 async function getRawStudents(env: Env): Promise<Student[]> {
-  return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, false);
+  return toStudents(await fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, false));
 }
 
 export async function getStudentDetail(env: Env, uid: string) {
@@ -337,7 +367,7 @@ export type StudentGrowthVisuals = {
   skills: Array<{ uid: string; skillType: StudentSkillTypeEnum; iconUrl: string | null; maxLevel: number }>;
 };
 
-export type StudentGrowthEquipment = Array<{ uid: string; category: string; tier: number }>;
+export type StudentGrowthEquipment = Array<{ uid: string; category: string; tier: number; maxLevel: number }>;
 
 const STUDENT_GROWTH_VISUALS_TTL = 7 * 24 * 60 * 60;
 
@@ -385,7 +415,7 @@ export async function getStudentGrowthVisualsBatch(
   );
 }
 
-const studentGrowthEquipmentKey = cacheKey("source", "student-growth-equipment", 1, "all");
+const studentGrowthEquipmentKey = cacheKey("source", "student-growth-equipment", 2, "all");
 
 async function fetchStudentGrowthEquipmentFromBaql(): Promise<StudentGrowthEquipment> {
   const { data, error } = await runQuery(studentGrowthEquipmentQuery, {});
@@ -475,27 +505,80 @@ export async function getStudentOtherFormUids(env: Env): Promise<Record<string, 
   return fetchLazySourceCached(env, studentFormUidsKey, fetchStudentFormUidsFromBaql, STUDENT_FORM_UIDS_TTL);
 }
 
+export type StudentForm = {
+  uid: string;
+  name: string;
+  attackType: Attack;
+  defenseType: Defense;
+  role: Role;
+  primaryUid: string;
+  /** 1-based position within the student variant, matching the in-game form number. */
+  formIndex: number;
+};
+
+const studentFormsKey = cacheKey("source", "student-forms", 1, "all");
+
+async function fetchStudentFormsFromBaql(): Promise<Record<string, StudentForm>> {
+  const { data, error } = await runQuery(studentFormsQuery, {});
+  if (error) {
+    throw error;
+  }
+  if (!data || !Array.isArray(data.students)) {
+    throw new Error("BAQL student form response is missing students");
+  }
+  // The catalog lists only representatives, so each multiclass variant appears once.
+  return Object.fromEntries(
+    data.students.flatMap(({ studentVariant }) =>
+      studentVariant.isMulticlass
+        ? studentVariant.students.map((form, index): [string, StudentForm] => [
+            form.uid,
+            { ...form, primaryUid: studentVariant.primaryStudent.uid, formIndex: index + 1 },
+          ])
+        : [],
+    ),
+  );
+}
+
+/**
+ * Maps every record of a multiclass student variant, including the records the student catalog omits, to its
+ * representative and in-game form number. Students without another form are absent.
+ */
+export async function getStudentForms(env: Env): Promise<Record<string, StudentForm>> {
+  return fetchLazySourceCached(env, studentFormsKey, fetchStudentFormsFromBaql, STUDENT_FORM_UIDS_TTL);
+}
+
+const studentPrimaryUidQuery = graphql(`
+  query StudentPrimaryUid($uid: String!) {
+    student(uid: $uid) {
+      uid
+      studentVariant { primaryStudent { uid } }
+    }
+  }
+`);
+
+// Records shared by every form of a multiclass student (gradings, growth state) are keyed by the primary form's uid.
+// Read uncached from BAQL: a stale or incomplete form cache would file a form's records under its own uid.
+// Returns null when BAQL has no such student.
+export async function getPrimaryStudentUid(_env: Env, uid: string): Promise<string | null> {
+  const { data, error } = await runQuery(studentPrimaryUidQuery, { uid });
+  if (error) {
+    throw error;
+  }
+  if (!data) {
+    throw new Error("BAQL student primary uid response is missing data");
+  }
+  if (!data.student) {
+    return null;
+  }
+  return data.student.studentVariant.primaryStudent.uid;
+}
+
 export async function getStudentGradeDetail(_env: Env, uid: string) {
   const { data, error } = await runQuery(studentGradeDetailQuery, { uid });
   if (error) {
     throw error;
   }
   return data?.student;
-}
-
-const maximumTiers: Record<string, number> = {
-  "2025-12-22": 9,
-};
-
-export function getMaxTierAt(date: Date | string): number {
-  const targetDate = date instanceof Date ? date : new Date(date);
-  const dates = Object.keys(maximumTiers).sort();
-  for (let i = dates.length - 1; i >= 0; i--) {
-    if (targetDate >= new Date(dates[i])) {
-      return maximumTiers[dates[i]];
-    }
-  }
-  return 8;
 }
 
 const STUDENT_SKILL_ITEMS_TTL = 7 * 24 * 60 * 60;
@@ -531,7 +614,11 @@ function buildStudentSkillItemsCacheKey(uid: string): string {
 }
 
 async function fetchStudentSkillItemsFromBaql(uids: string[]): Promise<Map<string, StudentSkillItems>> {
-  const { data } = await runQuery(studentSkillItemsQuery, { uids });
+  // A failed query must not be cached as students without skill items.
+  const { data, error } = await runQuery(studentSkillItemsQuery, { uids });
+  if (error) {
+    throw error;
+  }
   const itemsByUid = new Map<string, StudentSkillItems>(
     (data?.students ?? []).map((student) => [
       student.uid,
@@ -608,55 +695,4 @@ export async function getStudentWeaponAvailability(
     STUDENT_WEAPON_AVAILABILITY_TTL,
     forceRefresh,
   );
-}
-
-export function parseVisibleNames(name: string): string[] {
-  const visibleNames = [];
-  if (name === "하츠네 미쿠") {
-    visibleNames.push("미쿠");
-  } else if (name === "미사카 미코토") {
-    visibleNames.push("미사카");
-  } else if (name === "쇼쿠호 미사키") {
-    visibleNames.push("쇼쿠호");
-  } else if (name === "사텐 루이코") {
-    visibleNames.push("사텐");
-  } else if (name === "시로코*테러") {
-    visibleNames.push("시로코", "테러");
-  } else if (name?.includes("(")) {
-    const splits = name.split("(");
-    visibleNames.push(splits[0], splits[1].replace(")", ""));
-  } else if (name) {
-    visibleNames.push(name);
-  }
-  return visibleNames;
-}
-
-export function formatVisibleName(name: string): string {
-  const visibleNames = parseVisibleNames(name);
-  if (visibleNames.length === 2) {
-    return `${visibleNames[0]}(${visibleNames[1]})`;
-  }
-  return visibleNames.join(" ");
-}
-
-export function formatStudentFullName({
-  uid,
-  name,
-  familyName,
-}: {
-  uid?: string | null;
-  name: string;
-  familyName?: string | null;
-}): string {
-  const trimmedFamilyName = familyName?.trim();
-  if (!trimmedFamilyName) {
-    return name;
-  }
-  if (uid === "10100" || name === "시로코*테러") {
-    return name;
-  }
-  if (name.startsWith(`${trimmedFamilyName} `)) {
-    return name;
-  }
-  return `${trimmedFamilyName} ${name}`;
 }

@@ -73,6 +73,15 @@ describe("V2Page layout parts", () => {
     expect(screen.getByRole("complementary", { name: "보조 도구" })).toBeTruthy();
   });
 
+  it("floats the pinned toolbar on a translucent canvas with a backdrop blur", () => {
+    const { container } = renderLayout(<Layout />);
+    const toolbar = container.querySelector<HTMLElement>(".v2-toolbar");
+
+    expect(toolbar?.className).toContain("bg-v2-canvas");
+    expect(toolbar?.className).toContain("data-[sticky=true]:bg-v2-canvas/94");
+    expect(toolbar?.className).toContain("data-[sticky=true]:backdrop-blur-md");
+  });
+
   it("renders no Aside element when the screen omits PageAside", () => {
     const { container } = renderLayout(<Layout withAside={false} />);
 
@@ -87,7 +96,25 @@ describe("V2Page layout parts", () => {
     const main = container.querySelector(".v2-main");
 
     expect(header?.textContent).toContain("일본 서버를 바탕으로 추정된 일정");
+    expect(container.querySelector(".v2-header h1")?.classList.contains("sr-only")).toBe(false);
     expect(header && main ? header.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING : 0).toBeTruthy();
+  });
+
+  it("visually hides the title and meta while retaining the title and back link accessibly", () => {
+    const { container } = renderLayout(
+      <V2Page width="reading">
+        <PageHeader title="이벤트 이름" meta="이벤트 · 날짜 · 남은 기간" back={{ title: "이벤트", to: "/events" }} titleHidden />
+      </V2Page>,
+    );
+    const heading = container.querySelector(".v2-header h1");
+    const meta = container.querySelector(".v2-header div.sr-only");
+    const back = screen.getByRole("link", { name: "이벤트" });
+
+    expect(heading?.classList.contains("sr-only")).toBe(true);
+    expect(screen.getByRole("heading", { name: "이벤트 이름" })).toBeTruthy();
+    expect(meta?.textContent).toBe("이벤트 · 날짜 · 남은 기간");
+    expect(back.getAttribute("href")).toBe("/events");
+    expect(back.classList.contains("mb-2")).toBe(false);
   });
 
   it("renders the back link as a router link", () => {
@@ -163,5 +190,49 @@ describe("V2Page layout parts", () => {
     } finally {
       globalThis.ResizeObserver = original;
     }
+  });
+
+  it("keeps a trailing action beside the heading at every width only when asked to", () => {
+    const { container, rerender } = renderLayout(
+      <V2Page width="wide">
+        <PageHeader title="프로필" trailing={<button type="button">관리</button>} />
+      </V2Page>,
+    );
+    expect(container.querySelector(".v2-header")?.className).toContain("flex-col");
+
+    rerender(
+      <MemoryRouter>
+        <V2Page width="wide">
+          <PageHeader title="프로필" trailing={<button type="button">관리</button>} trailingInline />
+        </V2Page>
+      </MemoryRouter>,
+    );
+    const header = container.querySelector(".v2-header");
+    expect(header?.className).toContain("flex-row");
+    expect(header?.className).not.toContain("flex-col");
+    expect(screen.getByRole("button", { name: "관리" })).toBeTruthy();
+  });
+
+  it("puts details under the heading row at full width and centers a lone title beside the media", () => {
+    const { container } = render(
+      <MemoryRouter>
+        <V2Page width="wide">
+          <PageHeader
+            title="프로필"
+            media={<span>아바타</span>}
+            trailing={<button type="button">관리</button>}
+            trailingInline
+            details={<p>소개</p>}
+          />
+        </V2Page>
+      </MemoryRouter>,
+    );
+    const header = container.querySelector(".v2-header") as HTMLElement;
+    const [row, details] = Array.from(header.children);
+    expect(row.className).toContain("flex-row");
+    expect(row.className).toContain("items-center");
+    expect(row.contains(screen.getByRole("button", { name: "관리" }))).toBe(true);
+    expect(details.textContent).toBe("소개");
+    expect(row.contains(screen.getByText("소개"))).toBe(false);
   });
 });

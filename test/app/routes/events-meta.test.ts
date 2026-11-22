@@ -30,7 +30,7 @@ jest.mock("~/views/navigation", () => ({}));
 jest.mock("~/views/site-banner", () => ({}));
 jest.mock("react-top-loading-bar", () => ({ __esModule: true, default: () => null }));
 jest.mock("../../../app/tailwind.css?url", () => "tailwind.css", { virtual: true });
-jest.mock("../../../app/routes/events.$uid._components/EventComment", () => () => null);
+jest.mock("../../../app/routes/events.$uid._components/EventOpinions", () => ({ EventOpinions: () => null }));
 
 function RootLayoutRoute() {
   return createElement(Layout, null, createElement(Outlet));
@@ -94,6 +94,11 @@ function openGraphImageTags(head: string) {
 }
 
 describe("event detail Open Graph image metadata", () => {
+  it("hides the page header title on the event overview, whose artwork carries the title", () => {
+    expect(eventRouteHandle).toHaveProperty("v2HeaderTitleHidden", true);
+    expect(eventRouteHandle).not.toHaveProperty("v2Width");
+  });
+
   it("renders the event image exactly once", () => {
     const head = renderDocumentHead("/events/event-1", "https://cdn.example.test/event.png");
     const images = openGraphImageTags(head);

@@ -72,8 +72,13 @@ function getStoredPlannerDocument(client: FakePostgresClient): PlannerStateDocum
 
 describe("PostgreSQL event shop state", () => {
   it("loads a deduplicated batch from planner_states without querying legacy shop rows", async () => {
-    const savedState = { ...createDefaultEventShopState([], ["student-1"]), itemQuantities: { "daily-ticket": 60 } };
-    const client = createProjectionClient([{ uid: "shop-state-1", userId: 7, eventUid: "shop-1", ...savedState }]);
+    const savedState = {
+      ...createDefaultEventShopState([], ["student-1"]),
+      itemQuantities: { "daily-ticket": 60 },
+    };
+    const client = createProjectionClient([
+      { uid: "shop-state-1", userId: 7, eventUid: "shop-1", ...savedState, jankenStagePlays: { "100860204": 2 } },
+    ]);
 
     const states = await getEventShopStates(env, 7, ["shop-1", "shop-2", "shop-1"], {
       createClient: () => client as unknown as Client,

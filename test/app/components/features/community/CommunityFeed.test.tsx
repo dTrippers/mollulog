@@ -15,6 +15,7 @@ function createPost(overrides: Partial<CommunityFeedPostItem> = {}): CommunityFe
     pinned: false,
     subjectStudentUid: "student-1",
     subjectContentUid: null,
+    subjectContentType: null,
     subjectRaidType: null,
     subjectSeasonIndex: null,
     blocks: [],

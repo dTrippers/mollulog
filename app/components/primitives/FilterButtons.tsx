@@ -41,6 +41,7 @@ export default function FilterButtons({
             subText={prop.subText}
             color={prop.color}
             active={actives[index]}
+            disabled={prop.disabled}
             onToggle={(activated) => {
               const nextActives = getNextActiveStates({
                 actives,
@@ -72,6 +73,7 @@ export type FilterButtonProps = {
   subText?: string;
   color?: AttributeBadgeColor;
   active?: boolean;
+  disabled?: boolean;
   onToggle: (activated: boolean) => void;
 };
 
@@ -108,6 +110,7 @@ function FilterButton({
   subText,
   color,
   active,
+  disabled,
   onToggle,
   size = "md",
   surface,
@@ -121,6 +124,7 @@ function FilterButton({
     <button
       type="button"
       aria-pressed={active}
+      disabled={disabled}
       className={cn(`
         inline-flex items-center gap-x-1 rounded-md px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
         ${
@@ -130,6 +134,7 @@ function FilterButton({
               ? "bg-card text-foreground shadow-sm shadow-black/5 hover:bg-foreground/10 dark:bg-muted dark:shadow-none"
               : "bg-muted text-foreground hover:bg-foreground/10"
         }
+        disabled:pointer-events-none disabled:opacity-60
         ${color ? `relative overflow-hidden pl-2.5 before:absolute before:inset-y-0 before:left-0 before:w-1 ${semanticColorStripeClass[color]}` : ""}
       `)}
       data-colored={color ? "true" : undefined}

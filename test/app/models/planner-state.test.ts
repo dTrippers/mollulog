@@ -4,10 +4,13 @@ import { PlannerStateRevisionConflictError } from "~/db/postgres/planner-states"
 import { type PlannerStateDocumentV1, projectPlannerStateDocument } from "~/domain/planner-state";
 import {
   getEventShopPlannerState,
+  getGrowthPlannerSortOrder,
   getPlannerState,
   getPyroxenePlannerState,
   isPlannerStateRevisionConflictError,
   PLANNER_STATE_REVISION_CONFLICT_MESSAGE,
+  saveGrowthPlannerSortOrder,
+  saveJankenPlannerEntry,
   updateApPlannerState,
 } from "~/models/planner-state";
 import { FakePostgresClient } from "../../helpers/fake-postgres";
@@ -29,6 +32,69 @@ function createClient() {
 }
 
 describe("planner state model", () => {
+  it("saves one janken entry, accepts identical concurrent input, and conflicts on a different edit", async () => {
+    const client = createClient();
+    const options = { createClient: () => client as unknown as Client };
+    const entry = {
+      progress: {
+        currentTier: 3,
+        heldEleph: 4,
+        cumulativeScore: 0,
+        equipmentTier: 1,
+        heldEquipmentCurrency: 0,
+        clearedStageUids: [],
+      },
+      goals: {
+        targetTier: null,
+        shopCurrencyMode: "linked" as const,
+        manualShopCurrency: 0,
+        targetScore: null,
+        averageScore: null,
+        targetEquipmentTier: null,
+      },
+    };
+    expect(await saveJankenPlannerEntry(env, 7, "shop-1", entry, null, options)).toEqual(entry);
+    expect(await saveJankenPlannerEntry(env, 7, "shop-1", entry, null, options)).toEqual(entry);
+    await expect(
+      saveJankenPlannerEntry(
+        env,
+        7,
+        "shop-1",
+        { ...entry, progress: { ...entry.progress, heldEleph: 5 } },
+        null,
+        options,
+      ),
+    ).rejects.toBeInstanceOf(PlannerStateRevisionConflictError);
+    const document = await getPlannerState(env, 7, options);
+    expect(document.jankenProgress["shop-1"]).toEqual(entry);
+    expect(document.pyroxene).toBeDefined();
+  });
+
+  it("stores the growth planner sort choice and preserves the other sections", async () => {
+    const client = createClient();
+    const options = { createClient: () => client as unknown as Client };
+    const before = await getPlannerState(env, 7, options);
+
+    expect(await getGrowthPlannerSortOrder(env, 7, options)).toEqual({ sortOrder: "manual", stored: false });
+    await saveGrowthPlannerSortOrder(env, 7, "name", options);
+
+    expect(await getGrowthPlannerSortOrder(env, 7, options)).toEqual({ sortOrder: "name", stored: true });
+    const document = await getPlannerState(env, 7, options);
+    expect(document.pyroxene).toEqual(before.pyroxene);
+    expect(document.eventShops).toEqual(before.eventShops);
+  });
+
+  it("rejects an unknown stored growth sort choice instead of falling back", async () => {
+    const client = createClient();
+    const row = client.tables.planner_states?.[0];
+    if (!row) throw new Error("Expected a planner state row");
+    row.document = { ...(row.document as PlannerStateDocumentV1), growth: { sortOrder: "unknown" } };
+
+    await expect(
+      getGrowthPlannerSortOrder(env, 7, { createClient: () => client as unknown as Client }),
+    ).rejects.toThrow("Unable to read planner state document");
+  });
+
   it("identifies revision conflicts and exports the shared message", () => {
     expect(isPlannerStateRevisionConflictError(new PlannerStateRevisionConflictError())).toBe(true);
     expect(isPlannerStateRevisionConflictError(new Error("unrelated failure"))).toBe(false);

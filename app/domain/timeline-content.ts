@@ -9,6 +9,7 @@ export type TimelineContentType =
   | "pickup"
   | "main_story"
   | "mini_story"
+  | "ko_voice"
   | "campaign"
   | "joint_firing_drill"
   | "raid"
@@ -47,6 +48,7 @@ export type TimelineContent = {
   isSpoiler: boolean;
   tags: string[];
   earnablePyroxene: number | null;
+  featuredUntil: UtcIsoString | null;
   syncedAt: UtcIsoString | null;
 };
 

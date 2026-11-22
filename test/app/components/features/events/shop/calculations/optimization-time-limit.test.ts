@@ -11,8 +11,8 @@ import {
   OPTIMIZATION_TIMEOUT_MS,
   OPTIMIZATION_TOLERANCE,
   optimizeStageRuns,
-} from "../../../../../../../app/components/features/events/shop/calculations/optimization";
-import type { StageInfo } from "../../../../../../../app/components/features/events/shop/calculations/types";
+} from "~/domain/event-shop/calculations/optimization";
+import type { StageInfo } from "~/domain/event-shop/calculations/types";
 
 function stage(uid: string, entryAp: number, rewards: Record<string, number>): StageInfo {
   return {

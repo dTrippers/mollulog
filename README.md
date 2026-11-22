@@ -28,7 +28,8 @@ local database.
 pnpm codegen       # Update GraphQL types
 pnpm typecheck     # Type check
 pnpm lint          # Biome lint and format
-pnpm test          # Run tests
+pnpm test          # Run regular tests
+pnpm test:slow     # Run full-sample simulation tests
 pnpm staging:deploy
 pnpm prod:deploy
 ```

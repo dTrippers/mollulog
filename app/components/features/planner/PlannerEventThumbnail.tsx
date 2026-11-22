@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import BlurhashPlaceholder from "~/components/primitives/BlurhashPlaceholder";
 import HaloModeNotice from "~/components/primitives/HaloModeNotice";
 import { useHaloMode } from "~/contexts/HaloModeContext";
+import { uploadedImageProps } from "~/models/assets";
 
 type Props = {
   imageUrl?: string | null;
@@ -92,7 +93,7 @@ function PlannerEventThumbnailImage({
   return (
     <img
       key={currentImageUrl}
-      src={currentImageUrl}
+      {...uploadedImageProps(currentImageUrl, "48px")}
       alt=""
       ref={imageRef}
       className={

@@ -55,6 +55,12 @@ export type StudentBossUsageSummary = {
   rows: StudentBossUsage[];
 };
 
+export type StudentAnalysisFailedAreas = {
+  bossUsage: boolean;
+  difficultyUsage: boolean;
+  synergy: boolean;
+};
+
 const DIFFICULTIES: Difficulty[] = [
   "normal",
   "hard",
@@ -110,6 +116,24 @@ export function buildStudentAnalysisScopeLookup({
   }
 
   return lookup;
+}
+
+export function getStudentAnalysisFailedAreas({
+  response,
+  scopeLookup,
+}: {
+  response: StudentAnalysisResponse;
+  scopeLookup: StudentAnalysisScopeLookup;
+}): StudentAnalysisFailedAreas {
+  const hasFailedRaidScope = response.scopes.some(
+    (scope) => !scope.loaded && scopeLookup.has(getStudentAnalysisScopeKey(scope.raid)),
+  );
+  const hasFailedDifficultyScope = response.scopes.some((scope) => !scope.loaded);
+  return {
+    bossUsage: hasFailedRaidScope,
+    difficultyUsage: hasFailedDifficultyScope,
+    synergy: false,
+  };
 }
 
 export function aggregateDifficultyUsage({

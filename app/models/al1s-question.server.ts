@@ -4,18 +4,30 @@ import type {
   FailureCode,
   JsonValue,
   QuestionRequest,
+  QuestionRunEvent,
   QuestionRunResult,
   RunInfo,
   RunUsage,
   SourceKind,
   SourceRecord,
 } from "./al1s-question-contract";
+import { parseAnswerBlocks, parseSourceSubject } from "./al1s-question-contract";
+import { renderChatMarkdownToSafeHtml } from "~/lib/markdown.server";
 
 export type QuestionServiceCall =
   | { ok: true; result: QuestionRunResult }
   | { ok: false; reason: "unavailable" | "unexpected_result" };
 
-const sourceKinds = new Set<SourceKind>(["knowledge", "student", "schedule", "raid_stats", "member"]);
+export function renderQuestionAnswer(answer: import("./al1s-question-contract").Answer) {
+  return {
+    ...answer,
+    blocks: answer.blocks.map((block) => block.type === "markdown"
+      ? { ...block, html: renderChatMarkdownToSafeHtml(block.text) }
+      : block),
+  };
+}
+
+const sourceKinds = new Set<SourceKind>(["knowledge", "student", "schedule", "raid_stats", "member", "content"]);
 const answerStatuses = new Set<AnswerStatus>(["answered", "needs_clarification", "insufficient_evidence"]);
 const failureCodes = new Set<FailureCode>([
   "invalid_request",
@@ -73,6 +85,8 @@ function parseRun(value: unknown): RunInfo | null {
     typeof usage.complete !== "boolean"
   )
     return null;
+  const metrics = record(run.answerBlockMetrics);
+  if (metrics && ["chartBlocksChecked", "chartBlocksPassed", "chartBlocksDropped", "chartRewriteCount", "unsupportedMarkdownCount"].some((key) => !Number.isInteger(metrics[key]) || (metrics[key] as number) < 0)) return null;
   return {
     runId: run.runId,
     provider: run.provider,
@@ -89,6 +103,7 @@ function parseRun(value: unknown): RunInfo | null {
       costUsd: usage.costUsd,
       complete: usage.complete,
     } satisfies RunUsage,
+    ...(metrics === null || metrics === undefined ? {} : { answerBlockMetrics: metrics as unknown as NonNullable<RunInfo["answerBlockMetrics"]> }),
   };
 }
 
@@ -111,6 +126,7 @@ function parseSourceRecord(value: unknown): SourceRecord | null {
     (scope.asOf !== undefined && !string(scope.asOf))
   )
     return null;
+  const subject = parseSourceSubject(source.subject);
   return {
     sourceId: source.sourceId,
     toolName: source.toolName,
@@ -124,6 +140,59 @@ function parseSourceRecord(value: unknown): SourceRecord | null {
       ...(string(scope.region) ? { region: scope.region } : {}),
       ...(string(scope.asOf) ? { asOf: scope.asOf } : {}),
     },
+    ...(subject === undefined ? {} : { subject }),
+  };
+}
+
+function parseQuestionRunEvent(value: unknown): QuestionRunEvent | null {
+  const event = record(value);
+  if (
+    !event ||
+    !nonEmptyString(event.callId) ||
+    !Number.isInteger(event.round) ||
+    (event.round as number) < 0 ||
+    !nonEmptyString(event.toolName)
+  ) return null;
+  if (event.type === "tool_started") {
+    if (event.target !== null && !string(event.target)) return null;
+    const subject = event.subject === undefined ? undefined : parseSourceSubject(event.subject);
+    if (event.subject !== undefined && subject === undefined) return null;
+    return {
+      type: "tool_started",
+      callId: event.callId,
+      round: event.round as number,
+      toolName: event.toolName,
+      target: event.target as string | null,
+      ...(subject ? { subject } : {}),
+    };
+  }
+  if (event.type !== "tool_completed" || typeof event.ok !== "boolean" || !Array.isArray(event.sources)) return null;
+  const sources = event.sources.map((value) => {
+    const source = record(value);
+    if (
+      !source ||
+      !nonEmptyString(source.sourceId) ||
+      !string(source.kind) ||
+      !sourceKinds.has(source.kind as SourceKind) ||
+      !nonEmptyString(source.label)
+    ) return null;
+    const subject = source.subject === undefined ? undefined : parseSourceSubject(source.subject);
+    if (source.subject !== undefined && subject === undefined) return null;
+    return {
+      sourceId: source.sourceId,
+      kind: source.kind as SourceKind,
+      label: source.label,
+      ...(subject ? { subject } : {}),
+    };
+  });
+  if (sources.some((source) => source === null)) return null;
+  return {
+    type: "tool_completed",
+    callId: event.callId,
+    round: event.round as number,
+    toolName: event.toolName,
+    ok: event.ok,
+    sources: sources as NonNullable<(typeof sources)[number]>[],
   };
 }
 
@@ -152,7 +221,13 @@ export function parseQuestionRunResult(value: unknown): QuestionRunResult | null
     ) {
       return null;
     }
-    sources.push({ sourceId: source.sourceId, kind: source.kind as SourceKind, label: source.label });
+    const subject = parseSourceSubject(source.subject);
+    sources.push({
+      sourceId: source.sourceId,
+      kind: source.kind as SourceKind,
+      label: source.label,
+      ...(subject === undefined ? {} : { subject }),
+    });
   }
   if (!answer.limitations.every(string)) return null;
   if (result.sourceRecords !== undefined && !Array.isArray(result.sourceRecords)) return null;
@@ -160,7 +235,7 @@ export function parseQuestionRunResult(value: unknown): QuestionRunResult | null
   if (sourceRecords?.some((source) => source === null)) return null;
   return {
     status: result.status as AnswerStatus,
-    answer: { text: answer.text, sources, limitations: answer.limitations as string[] },
+    answer: { text: answer.text, blocks: parseAnswerBlocks(answer.blocks, answer.text), sources, limitations: answer.limitations as string[] },
     run,
     ...(sourceRecords ? { sourceRecords: sourceRecords as SourceRecord[] } : {}),
   };
@@ -169,10 +244,21 @@ export function parseQuestionRunResult(value: unknown): QuestionRunResult | null
 export async function runQuestion(
   env: Partial<Pick<Env, "AL1S">>,
   request: QuestionRequest,
+  onEvent?: (event: QuestionRunEvent) => void,
 ): Promise<QuestionServiceCall> {
   if (!env.AL1S) return { ok: false, reason: "unavailable" };
   try {
-    const result = parseQuestionRunResult(await env.AL1S.runQuestion(request));
+    const result = parseQuestionRunResult(
+      await env.AL1S.runQuestion(request, (value) => {
+        const event = parseQuestionRunEvent(value);
+        if (!event) return;
+        try {
+          onEvent?.(event);
+        } catch {
+          // Progress reporting must not interrupt the answer run.
+        }
+      }),
+    );
     return result ? { ok: true, result } : { ok: false, reason: "unexpected_result" };
   } catch {
     return { ok: false, reason: "unavailable" };

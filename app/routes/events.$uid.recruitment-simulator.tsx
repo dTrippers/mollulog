@@ -1,24 +1,53 @@
-import { EnvelopeIcon, SparklesIcon } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { type LoaderFunctionArgs, type MetaFunction, useLoaderData } from "react-router";
-import { StudentCard } from "~/components/features/students";
-import { Button, EmptyView, FloatingActionBar, HorizontalScroll, Input, SubTitle } from "~/components/primitives";
+import { CheckCircleIcon } from "@heroicons/react/16/solid";
+import { ArrowPathIcon, EnvelopeIcon, SparklesIcon } from "@heroicons/react/24/outline";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type LoaderFunctionArgs, type MetaFunction, redirect, useLoaderData } from "react-router";
+import { RECRUITMENT_STACK_LABELS, ResourceIcon } from "~/components/v2/features/pyroxene/pyroxene-ui";
+import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
+import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
+import { PageActionBar, PageMain } from "~/components/v2/layout";
+import { Button } from "~/components/v2/primitives/Button";
+import { Dialog } from "~/components/v2/primitives/Dialog";
+import { SearchInput } from "~/components/v2/primitives/SearchInput";
+import type { FavoriteLabelState } from "~/domain/futures/futures-view-model";
+import {
+  CALL_CHARGE_CEILING,
+  CALL_CHARGE_MIDPOINT,
+  type CallChargeAdjustment,
+  simulateCallChargeTenPull,
+} from "~/domain/recruitment-call-charge-simulation";
+import {
+  CALL_CHARGE_ANCHOR_TIMELINE_UID,
+  getRecruitmentChargeScope,
+  getRecruitmentRuleSet,
+  type RecruitmentChargeScope,
+  type RecruitmentRuleSet,
+} from "~/domain/recruitment-cost";
 import {
   buildRecruitmentPoolSnapshotFromBaql,
   drawRecruitmentTenPull,
   type RecruitmentDrawResult,
+  type RecruitmentPoolSnapshot,
   type SimulationStudent,
 } from "~/domain/recruitment-simulator";
-import { cn } from "~/lib/utils";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { socialMeta } from "~/lib/seo";
+import { cn } from "~/lib/utils";
 import { getRecruitmentGroupByUid, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getTimelineContent } from "~/models/timeline-content.server";
+
+type SimulatedResult = RecruitmentDrawResult & {
+  // 1-based position across the whole simulation.
+  index: number;
+  adjustment: CallChargeAdjustment | null;
+  resetCharge: boolean;
+};
 
 type PullRow = {
   id: string;
   type: "pull";
   startCount: number;
-  results: RecruitmentDrawResult[];
+  results: SimulatedResult[];
 };
 
 type ExchangeRow = {
@@ -30,89 +59,59 @@ type ExchangeRow = {
 
 type SimulatorRow = PullRow | ExchangeRow;
 
-export const loader = async ({ params, context }: LoaderFunctionArgs) => {
+type TargetStatus = { kind: "running" } | { kind: "stopped" } | { kind: "found"; index: number };
+
+export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
   const timelineUid = params.uid;
-  if (!timelineUid) {
-    throw new Response("Not Found", { status: 404 });
-  }
+  if (!timelineUid) throw new Response("Not Found", { status: 404 });
 
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = env;
-  const content = await getTimelineContent(publicReadEnv, timelineUid, { ctx });
-  if (!content || !content.recruitmentGroupUid) {
-    throw new Response("Not Found", { status: 404 });
-  }
+  const content = await getTimelineContent(env, timelineUid, { ctx });
+  if (content?.contentType === "live")
+    return redirect(`/lives/${timelineUid}${new URL(request.url).search}`, { status: 301 });
+  if (!content?.recruitmentGroupUid) throw new Response("Not Found", { status: 404 });
 
-  const [recruitmentGroup, students] = await Promise.all([
+  const [recruitmentGroup, students, callChargeAnchor] = await Promise.all([
     getRecruitmentGroupByUid(env, content.recruitmentGroupUid),
     getRecruitmentPoolStudents(env),
+    getTimelineContent(env, CALL_CHARGE_ANCHOR_TIMELINE_UID, { ctx }),
   ]);
-  if (!recruitmentGroup) {
-    throw new Response("Not Found", { status: 404 });
+  if (!recruitmentGroup) throw new Response("Not Found", { status: 404 });
+  if (!callChargeAnchor) {
+    throw new Error(`call-charge anchor timeline is missing: ${CALL_CHARGE_ANCHOR_TIMELINE_UID}`);
   }
 
-  return {
-    eventName: content.name,
-    snapshot: buildRecruitmentPoolSnapshotFromBaql({
-      recruitmentGroup,
-      students,
-    }),
-  };
+  const snapshot = buildRecruitmentPoolSnapshotFromBaql({ recruitmentGroup, students });
+  const ruleSet = getRecruitmentRuleSet(snapshot.startAt, callChargeAnchor.startAt);
+  if (ruleSet === "call_charge_v1") {
+    const unscoped = snapshot.pickupStudents.find((student) => !getRecruitmentChargeScope(student.recruitmentType));
+    if (unscoped) {
+      throw new Error(`pickup ${unscoped.uid} has no call-charge scope for type ${unscoped.recruitmentType}`);
+    }
+  }
+
+  return { eventName: content.name, snapshot, ruleSet };
 };
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
+export const meta: MetaFunction<typeof loader> = ({ loaderData, location }) => {
   const title = loaderData?.eventName ? `${loaderData.eventName} - 모집 시뮬레이션` : "모집 시뮬레이션";
+  const description = "블루 아카이브 모집 결과를 저장 없이 시뮬레이션해보세요.";
   return [
     { title: `${title} | 몰루로그` },
-    { name: "description", content: "블루 아카이브 모집 결과를 저장 없이 시뮬레이션해보세요." },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
   ];
 };
 
-function countPulls(rows: SimulatorRow[]) {
-  return rows.reduce((count, row) => count + (row.type === "pull" ? row.results.length : 0), 0);
-}
+const LEGACY_EXCHANGE_INTERVAL = 200;
+const UNTIL_TARGET_INTERVAL_MS = 500;
+const REVEAL_DELAY_MS = 450;
 
-function countTier3Pulls(rows: SimulatorRow[]) {
-  return rows.reduce(
-    (count, row) => count + (row.type === "pull" ? row.results.filter((result) => result.rarity === 3).length : 0),
-    0,
-  );
-}
-
-function createPullRowId(totalCount: number) {
-  return `pull-${totalCount + 1}-${Date.now()}`;
-}
-
-function createExchangeRowId(totalCount: number) {
-  return `exchange-${totalCount}-${Date.now()}`;
-}
-
-function appendPullRows(rows: SimulatorRow[], results: RecruitmentDrawResult[]): SimulatorRow[] {
-  const totalCount = countPulls(rows);
-  const nextTotalCount = totalCount + results.length;
-  const nextRows: SimulatorRow[] = [
-    {
-      id: createPullRowId(totalCount),
-      type: "pull",
-      startCount: totalCount + 1,
-      results,
-    },
-  ];
-
-  if (nextTotalCount % 200 === 0) {
-    nextRows.push({
-      id: createExchangeRowId(nextTotalCount),
-      type: "exchange",
-      count: nextTotalCount,
-      selectedStudentUid: null,
-    });
-  }
-
-  return [...rows, ...nextRows];
-}
-
-function hasTargetStudent(results: RecruitmentDrawResult[], targetStudentUid: string | null) {
-  return Boolean(targetStudentUid && results.some((result) => result.student.uid === targetStudentUid));
+function chargeScopeOf(student: RecruitmentPoolSnapshot["pickupStudents"][number]): RecruitmentChargeScope {
+  const scope = getRecruitmentChargeScope(student.recruitmentType);
+  // The loader rejects call-charge periods with an unscoped pickup, so this only guards the type.
+  if (!scope) throw new Error(`pickup ${student.uid} has no call-charge scope`);
+  return scope;
 }
 
 function calculatePyroxeneCost(totalRecruitmentCount: number) {
@@ -120,24 +119,10 @@ function calculatePyroxeneCost(totalRecruitmentCount: number) {
 }
 
 function formatTier3Rate(tier3Count: number, totalRecruitmentCount: number) {
-  if (totalRecruitmentCount === 0) {
-    return "0.00%";
-  }
-
-  return `${((tier3Count / totalRecruitmentCount) * 100).toFixed(2)}%`;
+  return totalRecruitmentCount === 0 ? "0.00%" : `${((tier3Count / totalRecruitmentCount) * 100).toFixed(2)}%`;
 }
 
-function getTierAccentClassName(tier: number) {
-  if (tier <= 1) {
-    return "bg-blue-600 dark:bg-blue-400";
-  }
-  if (tier === 2) {
-    return "bg-amber-500 dark:bg-amber-400";
-  }
-  return "bg-purple-700 dark:bg-purple-500";
-}
-
-function getNonPickupPoolStudents(snapshot: ReturnType<typeof buildRecruitmentPoolSnapshotFromBaql>) {
+function getNonPickupPoolStudents(snapshot: RecruitmentPoolSnapshot) {
   const pickupStudentUids = new Set(snapshot.pickupStudents.map((student) => student.uid));
   return [
     ...snapshot.nonPickupStudentsByTier.tier3,
@@ -150,87 +135,156 @@ function normalizeSearchText(value: string) {
   return value.trim().toLocaleLowerCase();
 }
 
+function prefersReducedMotion() {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 export default function EventRecruitmentSimulator() {
-  const { snapshot } = useLoaderData<typeof loader>();
+  const { snapshot, ruleSet } = useLoaderData<typeof loader>();
   const [selectedPickupStudentUid, setSelectedPickupStudentUid] = useState<string | null>(null);
   const [targetChooserOpen, setTargetChooserOpen] = useState(false);
   const [targetStudentUid, setTargetStudentUid] = useState<string | null>(null);
+  const [targetStatus, setTargetStatus] = useState<TargetStatus | null>(null);
   const [targetSearchText, setTargetSearchText] = useState("");
   const [rows, setRows] = useState<SimulatorRow[]>([]);
-  const [runningUntilTarget, setRunningUntilTarget] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [tier3Count, setTier3Count] = useState(0);
+  const [charge, setCharge] = useState(0);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  // The repeat timer reads the latest totals synchronously, so they live in a ref beside the rendered state.
+  const simulationRef = useRef({ total: 0, tier3: 0, charge: 0 });
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const actionsRef = useRef<HTMLDivElement | null>(null);
-  const totalCount = useMemo(() => countPulls(rows), [rows]);
-  const tier3Count = useMemo(() => countTier3Pulls(rows), [rows]);
+  const actionBarRef = useRef<HTMLDivElement | null>(null);
   const nonPickupPoolStudents = useMemo(() => getNonPickupPoolStudents(snapshot), [snapshot]);
-  const hasPickupStudents = snapshot.pickupStudents.length > 0;
+  const callCharge = ruleSet === "call_charge_v1";
+  const pickupScopes = useMemo(
+    () => (callCharge ? new Set(snapshot.pickupStudents.map(chargeScopeOf)) : new Set<RecruitmentChargeScope>()),
+    [callCharge, snapshot],
+  );
+  const mixedScopes = pickupScopes.size > 1;
+  const selectedPickup = snapshot.pickupStudents.find((student) => student.uid === selectedPickupStudentUid) ?? null;
+  const stackScope: RecruitmentChargeScope | null = !callCharge
+    ? null
+    : selectedPickup
+      ? chargeScopeOf(selectedPickup)
+      : mixedScopes
+        ? null
+        : ([...pickupScopes][0] ?? null);
+  const stackLabel = selectedPickup && callCharge ? RECRUITMENT_STACK_LABELS[chargeScopeOf(selectedPickup)] : null;
 
-  const stopUntilTarget = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setRunningUntilTarget(false);
+  const clearRepeatTimer = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
   };
 
-  const appendTenPull = (targetUid: string | null) => {
-    if (!selectedPickupStudentUid) {
-      return false;
+  const resetSimulation = () => {
+    clearRepeatTimer();
+    simulationRef.current = { total: 0, tier3: 0, charge: 0 };
+    setRows([]);
+    setTotalCount(0);
+    setTier3Count(0);
+    setCharge(0);
+    setTargetStudentUid(null);
+    setTargetStatus(null);
+    setTargetChooserOpen(false);
+    setTargetSearchText("");
+  };
+
+  // Draws ten slots and appends them. Returns the position of the target student when one appeared.
+  const appendTenPull = (pickupUid: string, targetUid: string | null): number | null => {
+    const current = simulationRef.current;
+    let drawn: Omit<SimulatedResult, "index">[];
+    let nextCharge = current.charge;
+    if (callCharge) {
+      const pull = simulateCallChargeTenPull({
+        snapshot,
+        activePickupStudentUid: pickupUid,
+        startingCharge: current.charge,
+      });
+      drawn = pull.results;
+      nextCharge = pull.charge;
+    } else {
+      drawn = drawRecruitmentTenPull({ snapshot, activePickupStudentUid: pickupUid }).map((result) => ({
+        ...result,
+        adjustment: null,
+        resetCharge: false,
+      }));
     }
 
-    const results = drawRecruitmentTenPull({ snapshot, activePickupStudentUid: selectedPickupStudentUid });
-    setRows((currentRows) => appendPullRows(currentRows, results));
-    return hasTargetStudent(results, targetUid);
+    const startCount = current.total + 1;
+    const results = drawn.map((result, offset) => ({ ...result, index: startCount + offset }));
+    const nextTotal = current.total + results.length;
+    const newRows: SimulatorRow[] = [{ id: `pull-${startCount}`, type: "pull", startCount, results }];
+    if (!callCharge && nextTotal % LEGACY_EXCHANGE_INTERVAL === 0) {
+      newRows.push({ id: `exchange-${nextTotal}`, type: "exchange", count: nextTotal, selectedStudentUid: null });
+    }
+
+    simulationRef.current = {
+      total: nextTotal,
+      tier3: current.tier3 + results.filter((result) => result.rarity === 3).length,
+      charge: nextCharge,
+    };
+    setRows((currentRows) => [...currentRows, ...newRows]);
+    setTotalCount(simulationRef.current.total);
+    setTier3Count(simulationRef.current.tier3);
+    setCharge(simulationRef.current.charge);
+
+    if (!targetUid) return null;
+    return results.find((result) => result.student.uid === targetUid)?.index ?? null;
   };
 
   const handleTenPull = () => {
-    stopUntilTarget();
-    if (!selectedPickupStudentUid) return;
-    appendTenPull(null);
+    if (!selectedPickupStudentUid || intervalRef.current) return;
+    const foundIndex = appendTenPull(selectedPickupStudentUid, targetStudentUid);
+    // A target that shows up in a manual pull after stopping still counts as drawn.
+    if (foundIndex !== null && targetStatus?.kind === "stopped") setTargetStatus({ kind: "found", index: foundIndex });
     trackGoogleAnalyticsEvent("recruitment_simulated", { mode: "ten_pull" });
-  };
-
-  const handleOpenTargetChooser = () => {
-    stopUntilTarget();
-    setTargetChooserOpen(true);
-  };
-
-  const handleResetRecruitment = () => {
-    stopUntilTarget();
-    setTargetStudentUid(null);
-    setTargetChooserOpen(false);
-    setTargetSearchText("");
-    setRows([]);
   };
 
   const handleRunUntilTarget = (studentUid: string) => {
     if (!selectedPickupStudentUid) return;
-    stopUntilTarget();
+    clearRepeatTimer();
     setTargetStudentUid(studentUid);
     setTargetChooserOpen(false);
     setTargetSearchText("");
-    const found = appendTenPull(studentUid);
     trackGoogleAnalyticsEvent("recruitment_simulated", { mode: "until_target" });
-    if (found) {
+
+    const pickupUid = selectedPickupStudentUid;
+    const firstFound = appendTenPull(pickupUid, studentUid);
+    if (firstFound !== null) {
+      setTargetStatus({ kind: "found", index: firstFound });
       return;
     }
 
-    setRunningUntilTarget(true);
+    setTargetStatus({ kind: "running" });
     intervalRef.current = setInterval(() => {
-      const nextFound = appendTenPull(studentUid);
-      if (nextFound) {
-        stopUntilTarget();
-      }
-    }, 500);
+      const foundIndex = appendTenPull(pickupUid, studentUid);
+      if (foundIndex === null) return;
+      clearRepeatTimer();
+      setTargetStatus({ kind: "found", index: foundIndex });
+    }, UNTIL_TARGET_INTERVAL_MS);
+  };
+
+  const handleStop = () => {
+    if (!intervalRef.current) return;
+    clearRepeatTimer();
+    setTargetStatus({ kind: "stopped" });
+  };
+
+  const handleResetRequest = () => {
+    handleStop();
+    setResetDialogOpen(true);
+  };
+
+  const handleResetConfirm = () => {
+    resetSimulation();
+    setResetDialogOpen(false);
   };
 
   const handleSelectPickupStudent = (studentUid: string) => {
-    stopUntilTarget();
+    resetSimulation();
     setSelectedPickupStudentUid(studentUid);
-    setTargetStudentUid(null);
-    setTargetChooserOpen(false);
-    setTargetSearchText("");
-    setRows([]);
   };
 
   const selectExchangeStudent = (rowId: string, studentUid: string) => {
@@ -241,179 +295,342 @@ export default function EventRecruitmentSimulator() {
     );
   };
 
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, []);
+  useEffect(
+    () => () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    },
+    [],
+  );
 
-  useEffect(() => {
-    if (totalCount === 0) {
-      return;
-    }
-
-    window.requestAnimationFrame(() => {
-      actionsRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
+  // As in 1.0, every pull brings the recruit buttons back into view under the newest results.
+  useLayoutEffect(() => {
+    if (totalCount === 0) return;
+    const actions = actionsRef.current;
+    if (!actions) return;
+    // The floating summary bar covers the bottom of the viewport, so the buttons stop just above it.
+    const bar = actionBarRef.current;
+    const barCover = bar ? bar.offsetHeight + (Number.parseFloat(getComputedStyle(bar).bottom) || 0) : 0;
+    actions.style.scrollMarginBottom = `${barCover + 12}px`;
+    actions.scrollIntoView({ block: "end", behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }, [totalCount]);
 
-  if (!hasPickupStudents) {
+  if (snapshot.pickupStudents.length === 0) {
     return (
-      <EmptyView
-        Icon={SparklesIcon}
-        text="시뮬레이션할 픽업 학생이 없어요"
-        description="이 모집 기간에는 모집 시뮬레이션에 사용할 픽업 학생 정보가 없어요."
-      />
+      <PageMain>
+        <div className="w-full max-w-3xl">
+          <div className="rounded-lg bg-v2-surface p-v2-block-p text-center">
+            <SparklesIcon className="mx-auto size-8 text-v2-fg-tertiary" aria-hidden="true" />
+            <h2 className="mt-3 text-base font-semibold text-v2-fg">시뮬레이션할 픽업 학생이 없어요</h2>
+          </div>
+        </div>
+      </PageMain>
+    );
+  }
+
+  const running = targetStatus?.kind === "running";
+  const pullDisabled = selectedPickupStudentUid === null || running;
+  const targetStudent =
+    targetStudentUid && targetStatus
+      ? (snapshot.pickupStudents.find((student) => student.uid === targetStudentUid) ??
+        nonPickupPoolStudents.find((student) => student.uid === targetStudentUid) ??
+        null)
+      : null;
+  const highlightedIndex = targetStatus?.kind === "found" ? targetStatus.index : null;
+
+  return (
+    <PageMain>
+      <div className="w-full max-w-3xl space-y-v2-section-gap">
+        <section className="space-y-v2-block-gap">
+          <h2 className="text-base font-semibold text-v2-fg">픽업 대상 학생</h2>
+          <div className="-mx-v2-block-p flex gap-2 overflow-x-auto px-v2-block-p pb-1">
+            {snapshot.pickupStudents.map((student) => {
+              const selected = selectedPickupStudentUid === student.uid;
+              return (
+                <div key={student.uid} className="w-20 shrink-0">
+                  <RecruitmentStudentThumb
+                    student={student}
+                    selected={selected}
+                    dimUnselected={selectedPickupStudentUid !== null}
+                    onSelect={() => handleSelectPickupStudent(student.uid)}
+                    accessibleDetail={mixedScopes ? RECRUITMENT_STACK_LABELS[chargeScopeOf(student)] : undefined}
+                  />
+                  {mixedScopes ? (
+                    <p
+                      className={cn(
+                        "mt-1 text-center text-[0.6875rem] leading-4",
+                        selected ? "font-semibold text-v2-accent" : "text-v2-fg-tertiary",
+                      )}
+                    >
+                      {RECRUITMENT_STACK_LABELS[chargeScopeOf(student)]}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+          <RecruitmentRuleLine ruleSet={ruleSet} stackScope={stackScope} />
+        </section>
+
+        <section className="space-y-v2-block-gap">
+          <h2 className="text-base font-semibold text-v2-fg">모집 결과</h2>
+          {!selectedPickupStudentUid ? (
+            <div className="rounded-lg bg-v2-surface px-v2-block-p py-7 text-center text-sm text-v2-fg-secondary">
+              픽업 학생을 선택해주세요
+            </div>
+          ) : (
+            <>
+              {rows.length > 0 ? (
+                <div className="space-y-v2-block-gap">
+                  {rows.map((row) =>
+                    row.type === "exchange" ? (
+                      <RecruitmentPointExchangeRow
+                        key={row.id}
+                        row={row}
+                        pickupStudents={snapshot.pickupStudents}
+                        onSelect={selectExchangeStudent}
+                      />
+                    ) : (
+                      <RecruitmentPullRow
+                        key={row.id}
+                        row={row}
+                        activePickupStudentUid={selectedPickupStudentUid}
+                        stackLabel={stackLabel}
+                        targetStudentUid={targetStudentUid}
+                        highlightedIndex={highlightedIndex}
+                      />
+                    ),
+                  )}
+                </div>
+              ) : null}
+              <div ref={actionsRef} className="flex flex-wrap gap-2">
+                <Button variant="primary" onClick={handleTenPull} disabled={pullDisabled}>
+                  10회 모집
+                </Button>
+                <Button onClick={() => setTargetChooserOpen((open) => !open)} disabled={pullDisabled}>
+                  특정 학생을 뽑을 때까지 모집
+                </Button>
+              </div>
+              {targetChooserOpen ? (
+                <TargetStudentChooser
+                  pickupStudents={snapshot.pickupStudents}
+                  poolStudents={nonPickupPoolStudents}
+                  selectedStudentUid={targetStudentUid}
+                  searchText={targetSearchText}
+                  onSearchTextChange={setTargetSearchText}
+                  onSelect={handleRunUntilTarget}
+                  onClose={() => setTargetChooserOpen(false)}
+                />
+              ) : null}
+            </>
+          )}
+        </section>
+
+        {selectedPickupStudentUid && totalCount > 0 ? (
+          <PageActionBar
+            ref={actionBarRef}
+            className="bottom-[calc(var(--mobile-nav-height)+0.5rem)] gap-y-3 lg:bottom-4"
+            summary={
+              <div className="flex flex-col">
+                <span>총 {totalCount.toLocaleString()}회 모집</span>
+                <span className="mt-px flex flex-wrap items-center gap-x-1 text-xs font-medium text-v2-fg-secondary">
+                  <span className="inline-flex items-center gap-1">
+                    소비한 청휘석
+                    <ResourceIcon resource="pyroxene" className="size-4" />
+                    {calculatePyroxeneCost(totalCount).toLocaleString()}개
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span>3성 학생 비율 {formatTier3Rate(tier3Count, totalCount)}</span>
+                </span>
+              </div>
+            }
+            details={
+              stackLabel || targetStudent ? (
+                <div className="flex min-w-0 items-center gap-3 border-t border-v2-divider pt-3 sm:gap-4 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4">
+                  {stackLabel ? (
+                    <ChargeStatus
+                      stackLabel={stackLabel}
+                      charge={charge}
+                      compact={targetStudent !== null}
+                      className={cn(targetStudent && "border-r border-v2-divider pr-3 sm:pr-4")}
+                    />
+                  ) : null}
+                  {targetStudent && targetStatus ? (
+                    <TargetStatusCell student={targetStudent} status={targetStatus} />
+                  ) : null}
+                </div>
+              ) : null
+            }
+          >
+            <Button onClick={handleStop} disabled={!running}>
+              중지
+            </Button>
+            <Button variant="danger" onClick={handleResetRequest}>
+              초기화
+            </Button>
+          </PageActionBar>
+        ) : null}
+      </div>
+
+      <Dialog open={resetDialogOpen} onClose={() => setResetDialogOpen(false)} title="결과를 모두 지울까요?" size="sm">
+        <p className="text-sm text-v2-fg-secondary">지금까지의 모집 결과 {totalCount.toLocaleString()}회가 사라져요.</p>
+        <div className="flex justify-end gap-2">
+          <Button onClick={() => setResetDialogOpen(false)}>취소</Button>
+          <Button variant="danger" onClick={handleResetConfirm}>
+            초기화
+          </Button>
+        </div>
+      </Dialog>
+    </PageMain>
+  );
+}
+
+const chipClassName = "mr-2 inline-flex h-5.5 items-center rounded-full px-2 align-top text-xs font-semibold";
+const callChargeRuleSentence =
+  "스택이 100이 되는 모집에서 50% 확률로, 200이 되는 모집에서 반드시 선택한 픽업 학생을 얻어요.";
+
+function RecruitmentRuleLine({
+  ruleSet,
+  stackScope,
+}: {
+  ruleSet: RecruitmentRuleSet;
+  stackScope: RecruitmentChargeScope | null;
+}) {
+  if (ruleSet === "legacy_points") {
+    return (
+      <p className="text-xs leading-5.5 text-v2-fg-secondary">
+        <span className={cn(chipClassName, "bg-v2-inset text-v2-fg-secondary")}>개편 전 규칙</span>
+        200회마다 모집 포인트로 픽업 학생 한 명을 고를 수 있어요.
+      </p>
+    );
+  }
+
+  if (!stackScope) {
+    return (
+      <p className="text-xs text-v2-fg-secondary">
+        픽업 학생에 따라 모집 스택이나 특별 스택이 쌓여요. {callChargeRuleSentence}
+      </p>
     );
   }
 
   return (
-    <div className="space-y-8 pb-16">
-      <section className="space-y-4">
-        <SubTitle text="픽업 학생" />
-        <StudentCardScroller
-          students={snapshot.pickupStudents}
-          selectedStudentUid={selectedPickupStudentUid}
-          onSelect={handleSelectPickupStudent}
+    <p className="text-xs leading-5.5 text-v2-fg-secondary">
+      <span className={cn(chipClassName, "bg-v2-accent-subtle text-v2-accent")}>
+        {RECRUITMENT_STACK_LABELS[stackScope]}
+      </span>
+      {callChargeRuleSentence}
+    </p>
+  );
+}
+
+function ChargeStatus({
+  stackLabel,
+  charge,
+  compact,
+  className,
+}: {
+  stackLabel: string;
+  charge: number;
+  compact: boolean;
+  className?: string;
+}) {
+  const beforeMidpoint = charge < CALL_CHARGE_MIDPOINT;
+  const nextAdjustment = beforeMidpoint ? CALL_CHARGE_MIDPOINT : CALL_CHARGE_CEILING;
+  const remaining = nextAdjustment - charge;
+  const outcome = beforeMidpoint ? "50% 확률로 픽업" : "픽업 확정";
+  return (
+    <div className={cn("shrink-0", className)}>
+      <p className="text-sm font-semibold text-v2-fg tabular-nums">
+        {stackLabel} {charge.toLocaleString()}
+      </p>
+      <p className={cn("text-xs tabular-nums", remaining <= 10 ? "text-v2-accent" : "text-v2-fg-tertiary")}>
+        {nextAdjustment}까지 {remaining}회
+        {/* With a target beside it, the mobile row keeps only the count before the midpoint. */}
+        <span className={cn(compact && beforeMidpoint && "hidden sm:inline")}> · {outcome}</span>
+      </p>
+    </div>
+  );
+}
+
+function TargetStatusCell({ student, status }: { student: SimulationStudent; status: TargetStatus }) {
+  const { name, variant } = splitVisibleStudentName(student.name);
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <div className="w-8 shrink-0">
+        <StudentThumb
+          studentUid={student.uid}
+          name={name}
+          variant={variant}
+          showCaption={false}
+          showRecruitmentLabel={false}
+          fluid
         />
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <SubTitle text="모집 결과" />
-          {selectedPickupStudentUid && (
-            <p className="mt-1 text-sm text-muted-foreground">총 {totalCount.toLocaleString()}회 모집</p>
-          )}
-        </div>
-
-        {!selectedPickupStudentUid ? (
-          <div className="rounded-md bg-muted/40 px-4 py-8 text-center text-sm text-muted-foreground">
-            픽업 대상 학생을 선택해주세요
-          </div>
+      </div>
+      <div className="min-w-0">
+        <p className="sr-only text-[0.6875rem] leading-4 text-v2-fg-tertiary sm:not-sr-only">목표 학생</p>
+        <p className="truncate text-sm font-semibold text-v2-fg">{student.name}</p>
+        {status.kind === "running" ? (
+          <p className="flex items-center gap-1 text-xs text-v2-fg-secondary">
+            <ArrowPathIcon className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            뽑을 때까지 모집 중
+          </p>
+        ) : status.kind === "stopped" ? (
+          <p className="text-xs text-v2-fg-secondary">뽑기 전에 중지했어요</p>
         ) : (
-          <>
-            {rows.length > 0 && (
-              <div className="space-y-4">
-                {rows.map((row) =>
-                  row.type === "exchange" ? (
-                    <RecruitmentPointExchangeRow
-                      key={row.id}
-                      row={row}
-                      pickupStudents={snapshot.pickupStudents}
-                      onSelect={selectExchangeStudent}
-                    />
-                  ) : (
-                    <RecruitmentPullRow key={row.id} row={row} />
-                  ),
-                )}
-              </div>
-            )}
-
-            <div ref={actionsRef} className="flex flex-wrap gap-2">
-              <Button text="10회 모집" variant="primary" onClick={handleTenPull} disabled={runningUntilTarget} />
-              <Button
-                text="특정 학생을 뽑을 때까지 모집"
-                variant="secondary"
-                onClick={handleOpenTargetChooser}
-                disabled={runningUntilTarget}
-              />
-            </div>
-
-            {targetChooserOpen && (
-              <TargetStudentChooser
-                pickupStudents={snapshot.pickupStudents}
-                poolStudents={nonPickupPoolStudents}
-                selectedStudentUid={targetStudentUid}
-                searchText={targetSearchText}
-                onSearchTextChange={setTargetSearchText}
-                onSelect={handleRunUntilTarget}
-              />
-            )}
-
-            {totalCount > 0 && (
-              <RecruitmentStatusBar
-                totalCount={totalCount}
-                tier3Count={tier3Count}
-                running={runningUntilTarget}
-                onStop={stopUntilTarget}
-                onReset={handleResetRecruitment}
-              />
-            )}
-          </>
+          <p className="flex items-center gap-1 text-xs font-semibold text-v2-success tabular-nums">
+            <CheckCircleIcon className="size-3.5" aria-hidden="true" />
+            {status.index.toLocaleString()}회째에 뽑았어요
+          </p>
         )}
-      </section>
+      </div>
     </div>
   );
 }
 
-function RecruitmentStatusBar({
-  totalCount,
-  tier3Count,
-  running,
-  onStop,
-  onReset,
-}: {
-  totalCount: number;
-  tier3Count: number;
-  running: boolean;
-  onStop: () => void;
-  onReset: () => void;
-}) {
-  return (
-    <div className="fixed inset-x-0 bottom-[var(--mobile-nav-height)] z-layer-navigation px-4 py-3 lg:bottom-0 lg:left-72 xl:left-84">
-      <FloatingActionBar className="mx-auto flex max-w-4xl flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-foreground">총 {totalCount.toLocaleString()}회 모집</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            소비한 청휘석 {calculatePyroxeneCost(totalCount).toLocaleString()}개
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            3성 학생 모집 확률 {formatTier3Rate(tier3Count, totalCount)}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button type="button" size="sm" variant="secondary" onClick={onStop} disabled={!running}>
-            중지
-          </Button>
-          <Button type="button" size="sm" variant="danger" onClick={onReset}>
-            초기화
-          </Button>
-        </div>
-      </FloatingActionBar>
-    </div>
-  );
+const emptyFavorite: FavoriteLabelState = {
+  visible: false,
+  icon: "unfavorited",
+  countText: null,
+  accessibleName: "관심 학생",
+};
+
+function getTierAccentClassName(rarity: number) {
+  if (rarity <= 1) return "bg-v2-recruitment-tier-1";
+  if (rarity === 2) return "bg-v2-recruitment-tier-2";
+  return "bg-v2-recruitment-tier-3";
 }
 
-function StudentCardScroller({
-  students,
-  selectedStudentUid,
+function RecruitmentStudentThumb({
+  student,
+  selected = false,
+  dimUnselected = false,
   onSelect,
+  accessibleDetail,
 }: {
-  students: SimulationStudent[];
-  selectedStudentUid?: string | null;
-  onSelect?: (studentUid: string) => void;
+  student: SimulationStudent;
+  selected?: boolean;
+  dimUnselected?: boolean;
+  onSelect?: () => void;
+  // Joins the button's accessible name, for information shown outside the thumbnail.
+  accessibleDetail?: string;
 }) {
-  const studentCards = students.map((student) => (
-    <StudentCard
-      key={student.uid}
-      uid={student.uid}
-      name={student.name}
-      attackType={student.attackType}
-      defenseType={student.defenseType}
-      role={student.role}
-      grayscale={Boolean(selectedStudentUid && selectedStudentUid !== student.uid)}
-      checked={selectedStudentUid === student.uid}
-      namePlacement="overlay"
-      onSelect={onSelect}
-    />
-  ));
-
+  const { name, variant } = splitVisibleStudentName(student.name);
   return (
-    <HorizontalScroll itemWidth={{ mobile: "w-20", desktop: "md:w-20" }} gap="gap-2" className="-mx-4 px-4" fadeEdges>
-      {studentCards}
-    </HorizontalScroll>
+    <StudentThumb
+      studentUid={student.uid}
+      name={name}
+      variant={variant}
+      recruitmentLabel=""
+      isNew={false}
+      favorite={emptyFavorite}
+      showRecruitmentLabel={false}
+      onSelect={onSelect}
+      selected={selected}
+      selectionActionLabel="선택"
+      grayscaleWhenUnselected={dimUnselected}
+      scrimAriaLabel={accessibleDetail}
+      captionPlacement="overlay"
+      fluid
+    />
   );
 }
 
@@ -424,6 +641,7 @@ function TargetStudentChooser({
   searchText,
   onSearchTextChange,
   onSelect,
+  onClose,
 }: {
   pickupStudents: SimulationStudent[];
   poolStudents: SimulationStudent[];
@@ -431,6 +649,7 @@ function TargetStudentChooser({
   searchText: string;
   onSearchTextChange: (value: string) => void;
   onSelect: (studentUid: string) => void;
+  onClose: () => void;
 }) {
   const normalizedSearchText = normalizeSearchText(searchText);
   const searchedStudents = normalizedSearchText
@@ -442,30 +661,55 @@ function TargetStudentChooser({
     : [];
 
   return (
-    <div className="space-y-4 rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
-      <div>
-        <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">목표 학생을 선택해주세요</p>
-        <p className="mt-1 text-xs text-blue-700 dark:text-blue-200">
-          픽업 학생을 바로 고르거나, 모집 pool의 다른 학생을 검색할 수 있어요.
-        </p>
+    <section
+      className="space-y-v2-block-gap rounded-lg bg-v2-accent-subtle p-v2-block-p"
+      aria-labelledby="target-student-title"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <h3 id="target-student-title" className="text-sm font-semibold text-v2-fg">
+          목표 학생을 선택해주세요
+        </h3>
+        <Button size="sm" onClick={onClose}>
+          닫기
+        </Button>
       </div>
-      <StudentCardScroller students={pickupStudents} selectedStudentUid={selectedStudentUid} onSelect={onSelect} />
-      <Input
-        type="search"
-        size="sm"
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {pickupStudents.map((student) => (
+          <div key={student.uid} className="w-20 shrink-0">
+            <RecruitmentStudentThumb
+              student={student}
+              selected={selectedStudentUid === student.uid}
+              dimUnselected={selectedStudentUid !== null}
+              onSelect={() => onSelect(student.uid)}
+            />
+          </div>
+        ))}
+      </div>
+      <SearchInput
+        aria-label="픽업 외 목표 학생 검색"
+        placeholder="픽업 외 학생 검색"
         value={searchText}
         onChange={onSearchTextChange}
-        placeholder="픽업 외 학생 검색"
-        className="max-w-full bg-white dark:bg-neutral-950"
-        aria-label="픽업 외 목표 학생 검색"
       />
-      {normalizedSearchText && (
-        <StudentCardScroller students={searchedStudents} selectedStudentUid={selectedStudentUid} onSelect={onSelect} />
-      )}
-      {normalizedSearchText && searchedStudents.length === 0 && (
-        <p className="text-xs text-blue-700 dark:text-blue-200">검색 결과가 없어요.</p>
-      )}
-    </div>
+      {normalizedSearchText ? (
+        searchedStudents.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {searchedStudents.map((student) => (
+              <div key={student.uid} className="w-20 shrink-0">
+                <RecruitmentStudentThumb
+                  student={student}
+                  selected={selectedStudentUid === student.uid}
+                  dimUnselected={selectedStudentUid !== null}
+                  onSelect={() => onSelect(student.uid)}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-v2-fg-secondary">검색 결과가 없어요.</p>
+        )
+      ) : null}
+    </section>
   );
 }
 
@@ -479,98 +723,172 @@ function RecruitmentPointExchangeRow({
   onSelect: (rowId: string, studentUid: string) => void;
 }) {
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="font-semibold text-sm text-blue-900 dark:text-blue-100">
-            {row.count.toLocaleString()}회 모집 포인트 교환
-          </p>
-          <p className="mt-1 text-xs text-blue-700 dark:text-blue-200">픽업 학생 중 한 명을 선택할 수 있어요.</p>
-        </div>
+    <div className="space-y-v2-block-gap rounded-lg bg-v2-accent-subtle p-v2-block-p">
+      <div>
+        <h3 className="text-sm font-semibold text-v2-fg">{row.count.toLocaleString()}회 모집 포인트 교환</h3>
+        <p className="mt-1 text-xs text-v2-fg-secondary">픽업 학생 중 한 명을 선택할 수 있어요.</p>
       </div>
-      <HorizontalScroll itemWidth={{ mobile: "w-20", desktop: "md:w-20" }} gap="gap-2" className="-mx-4 px-4" fadeEdges>
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {pickupStudents.map((student) => (
-          <StudentCard
-            key={student.uid}
-            uid={student.uid}
-            name={student.name}
-            attackType={student.attackType}
-            defenseType={student.defenseType}
-            role={student.role}
-            grayscale={Boolean(row.selectedStudentUid && row.selectedStudentUid !== student.uid)}
-            checked={row.selectedStudentUid === student.uid}
-            namePlacement="overlay"
-            onSelect={() => onSelect(row.id, student.uid)}
+          <div key={student.uid} className="w-20 shrink-0">
+            <RecruitmentStudentThumb
+              student={student}
+              selected={row.selectedStudentUid === student.uid}
+              dimUnselected={row.selectedStudentUid !== null}
+              onSelect={() => onSelect(row.id, student.uid)}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function describeChargeEvent(result: SimulatedResult, stackLabel: string): string | null {
+  const position = `${result.index.toLocaleString()}회째`;
+  if (result.adjustment === CALL_CHARGE_MIDPOINT) {
+    return result.resetCharge
+      ? `${position}: ${stackLabel} 100에서 선택한 픽업 학생이 나와 스택이 0이 됐어요`
+      : `${position}: ${stackLabel} 100에서 선택한 픽업 학생 대신 다른 ★3 학생이 나왔어요`;
+  }
+  if (result.adjustment === CALL_CHARGE_CEILING) {
+    return `${position}: ${stackLabel} 200에서 선택한 픽업 학생이 확정으로 나와 스택이 0이 됐어요`;
+  }
+  if (result.resetCharge) return `${position}: 선택한 픽업 학생이 나와 ${stackLabel}이 0이 됐어요`;
+  return null;
+}
+
+function RecruitmentPullRow({
+  row,
+  activePickupStudentUid,
+  stackLabel,
+  targetStudentUid,
+  highlightedIndex,
+}: {
+  row: PullRow;
+  activePickupStudentUid: string;
+  stackLabel: string | null;
+  targetStudentUid: string | null;
+  highlightedIndex: number | null;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setRevealed(true), REVEAL_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const notes = stackLabel
+    ? row.results.map((result) => describeChargeEvent(result, stackLabel)).filter((note) => note !== null)
+    : [];
+  const endCount = row.startCount + row.results.length - 1;
+
+  return (
+    <div className="rounded-lg bg-v2-surface p-v2-block-p">
+      <div className="mb-v2-list-gap flex flex-col gap-x-3 gap-y-0.5 sm:flex-row sm:flex-wrap sm:items-baseline">
+        <h3 className="text-xs font-semibold text-v2-fg-secondary tabular-nums">
+          {row.startCount.toLocaleString()}회 ~ {endCount.toLocaleString()}회
+        </h3>
+        {revealed
+          ? notes.map((note) => (
+              <p key={note} className="text-xs text-v2-accent">
+                {note}
+              </p>
+            ))
+          : null}
+      </div>
+      <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+        {row.results.map((result) => (
+          <RecruitmentResultCard
+            key={result.index}
+            result={result}
+            revealed={revealed}
+            selectedPickup={result.pickup && result.student.uid === activePickupStudentUid}
+            target={result.index === highlightedIndex && result.student.uid === targetStudentUid}
           />
         ))}
-      </HorizontalScroll>
-    </div>
-  );
-}
-
-function RecruitmentPullRow({ row }: { row: PullRow }) {
-  return (
-    <div className="rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900/60">
-      <p className="mb-2 text-xs font-semibold text-neutral-700 dark:text-neutral-200">
-        {row.startCount.toLocaleString()}회 ~ {(row.startCount + row.results.length - 1).toLocaleString()}회
-      </p>
-      <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-10">
-        {(() => {
-          const resultKeyCounts = new Map<string, number>();
-          return row.results.map((result) => {
-            const baseKey = `${result.student.uid}-${result.rarity}-${result.pickup}`;
-            const occurrence = resultKeyCounts.get(baseKey) ?? 0;
-            resultKeyCounts.set(baseKey, occurrence + 1);
-            return <RecruitmentResultCard key={`${row.id}-${baseKey}-${occurrence}`} result={result} />;
-          });
-        })()}
       </div>
     </div>
   );
 }
 
-function RecruitmentResultCard({ result }: { result: RecruitmentDrawResult }) {
-  const [revealed, setRevealed] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setRevealed(true), 450);
-    return () => clearTimeout(timer);
-  }, []);
+function RecruitmentResultCard({
+  result,
+  revealed,
+  selectedPickup,
+  target,
+}: {
+  result: SimulatedResult;
+  revealed: boolean;
+  selectedPickup: boolean;
+  target: boolean;
+}) {
+  const { name, variant } = splitVisibleStudentName(result.student.name);
+  const label = [
+    `★${result.rarity} ${result.student.name}`,
+    selectedPickup ? "픽업" : null,
+    result.adjustment ? `스택 ${result.adjustment} 보정` : null,
+    target ? "목표 학생" : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
-    <div className="min-w-0 space-y-1">
-      <div className="relative">
-        <div className={cn(`transition-opacity duration-300 ${revealed ? "opacity-100" : "opacity-0"}`)}>
-          <StudentCard
-            uid={result.student.uid}
-            name={result.student.name}
-            attackType={result.student.attackType}
-            defenseType={result.student.defenseType}
-            role={result.student.role}
-            namePlacement="overlay"
+    <div role="img" aria-label={label} className="min-w-0 space-y-1">
+      <div
+        className={cn(
+          "relative rounded-md",
+          revealed && target && "ring-2 ring-v2-accent ring-offset-1 ring-offset-v2-surface",
+        )}
+      >
+        <div
+          className={cn(
+            "transition-opacity duration-v2-base motion-reduce:transition-none",
+            revealed ? "opacity-100" : "opacity-0",
+          )}
+        >
+          <StudentThumb
+            studentUid={result.student.uid}
+            name={name}
+            variant={variant}
+            recruitmentLabel={selectedPickup ? "픽업" : ""}
+            isNew={false}
+            favorite={emptyFavorite}
+            showRecruitmentLabel={selectedPickup}
+            captionPlacement="overlay"
+            fluid
           />
         </div>
-        {!revealed && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <RecruitmentEnvelope rarity={result.rarity} />
+        {revealed && (target || result.adjustment) ? (
+          <div aria-hidden="true" className="absolute top-0.5 left-0.5 flex flex-col items-start gap-0.5">
+            {target ? (
+              <span className="rounded-sm bg-v2-accent px-1 text-[0.5625rem] leading-4 font-semibold text-v2-canvas">
+                목표
+              </span>
+            ) : null}
+            {result.adjustment ? (
+              <span className="rounded-sm bg-v2-accent-subtle px-1 text-[0.5625rem] leading-4 font-semibold text-v2-accent">
+                스택 {result.adjustment}
+              </span>
+            ) : null}
           </div>
-        )}
+        ) : null}
+        {!revealed ? (
+          <div
+            className={cn(
+              "absolute inset-0 flex items-center justify-center rounded-md border border-v2-control-border bg-v2-inset",
+              getEnvelopeColorClassName(result.rarity),
+            )}
+          >
+            <EnvelopeIcon className="size-8" aria-hidden="true" />
+          </div>
+        ) : null}
       </div>
-      <div className={`h-1.5 rounded-full ${getTierAccentClassName(result.rarity)}`} />
+      <div className={cn("h-1.5 rounded-full", getTierAccentClassName(result.rarity))} />
     </div>
   );
 }
 
-function RecruitmentEnvelope({ rarity }: { rarity: 1 | 2 | 3 }) {
-  const className = {
-    1: "border-sky-300 bg-sky-100 text-sky-700 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-200",
-    2: "border-yellow-300 bg-yellow-100 text-yellow-700 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200",
-    3: "border-purple-300 bg-purple-100 text-purple-700 dark:border-purple-700 dark:bg-purple-950 dark:text-purple-200",
-  }[rarity];
-
-  return (
-    <div className={cn(`flex aspect-5/6 w-full items-center justify-center rounded-lg border ${className}`)}>
-      <EnvelopeIcon className="size-8" />
-    </div>
-  );
+function getEnvelopeColorClassName(rarity: 1 | 2 | 3) {
+  if (rarity === 1) return "text-v2-recruitment-tier-1";
+  if (rarity === 2) return "text-v2-recruitment-tier-2";
+  return "text-v2-recruitment-tier-3";
 }

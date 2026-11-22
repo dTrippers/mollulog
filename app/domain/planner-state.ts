@@ -1,19 +1,75 @@
 import type { ApPlannerState } from "~/domain/ap-planner";
 import { DEFAULT_CARD_FLIP_STRATEGY } from "~/domain/event-shop";
 import { type EventShopState, normalizeEventShopState } from "~/domain/event-shop-state";
+import type { GrowthPlannerState } from "~/domain/growth-planner";
 import type { GuestPyroxeneResources } from "~/domain/guest-pyroxene-planner";
 import {
   normalizePyroxenePlannerOptions,
+  PYROXENE_PICKUP_CHANCES,
+  type PyroxenePickupChance,
   type PyroxenePlannerOptions,
   type StoredPyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
+import {
+  normalizeRecruitmentStacks,
+  normalizeRecruitmentTargetTiers,
+  type RecruitmentTargetTiers,
+} from "~/domain/pyroxene-recruitment-goal";
 import { PYROXENE_SOURCE_DEFINITIONS, type PyroxeneSourceType } from "~/domain/pyroxene-sources";
 import { normalizeInstant } from "~/lib/date-time";
-import type { PyroxeneEventData, PyroxeneTimelineItem } from "~/models/pyroxene-planner";
+import type { PyroxeneTimelineItem } from "~/models/pyroxene-planner";
 
 export type PlannerStateResource = GuestPyroxeneResources;
 export type PlannerStateTimelineRecord = Omit<PyroxeneTimelineItem, "userId">;
-export type PlannerStateEventData = Pick<PyroxeneEventData, "completed" | "expectedTrials">;
+/**
+ * Per-event pyroxene planner data. pickupChance is the event's own basis (absent: the global basis);
+ * targetTiers maps student uid to a target tier above ★3 (absent students target ★3).
+ */
+export type PlannerStateEventData = {
+  completed: boolean;
+  expectedTrials: number | null;
+  pickupChance?: PyroxenePickupChance;
+  targetTiers?: RecruitmentTargetTiers;
+};
+
+/** True when the entry holds nothing beyond the defaults and can be removed. */
+export function isEmptyPlannerStateEventData(data: PlannerStateEventData): boolean {
+  return (
+    !data.completed &&
+    data.expectedTrials === null &&
+    data.pickupChance === undefined &&
+    Object.keys(data.targetTiers ?? {}).length === 0
+  );
+}
+
+/** Drops optional fields that hold their default so stored entries stay canonical. */
+export function canonicalPlannerStateEventData(data: PlannerStateEventData): PlannerStateEventData {
+  const result: PlannerStateEventData = { completed: data.completed, expectedTrials: data.expectedTrials };
+  if (data.pickupChance !== undefined) result.pickupChance = data.pickupChance;
+  if (data.targetTiers && Object.keys(data.targetTiers).length > 0) result.targetTiers = data.targetTiers;
+  return result;
+}
+
+export type JankenPlannerEntry = {
+  progress: {
+    currentTier: number;
+    heldEleph: number;
+    cumulativeScore: number;
+    equipmentTier: number;
+    heldEquipmentCurrency: number;
+    clearedStageUids: string[];
+  };
+  goals: {
+    targetTier: number | null;
+    shopCurrencyMode: "linked" | "manual";
+    manualShopCurrency: number;
+    targetScore: number | null;
+    averageScore: number | null;
+    targetEquipmentTier: number | null;
+  };
+};
+
+export type JankenPlannerProgress = Record<string, JankenPlannerEntry>;
 
 export type PlannerStateDocumentV1 = {
   schemaVersion: 1;
@@ -25,7 +81,10 @@ export type PlannerStateDocumentV1 = {
     eventData: Record<string, PlannerStateEventData>;
   };
   eventShops: Record<string, EventShopState>;
+  jankenProgress: JankenPlannerProgress;
   ap: ApPlannerState | null;
+  // The student growth planner's sort choice. Absent until the Sensei picks one; the default order applies meanwhile.
+  growth?: GrowthPlannerState;
 };
 
 /** Sort planner records by event time while keeping same-time insertion order stable. */
@@ -40,6 +99,7 @@ export type PlannerStateProjectionRows = {
   collectedSources: readonly unknown[];
   eventData: readonly unknown[];
   eventShops: readonly unknown[];
+  jankenProgress?: unknown;
 };
 
 export class PlannerStateProjectionError extends Error {
@@ -70,6 +130,58 @@ function nonEmptyString(value: unknown, field: string): string {
 
 function integer(value: unknown, field: string): number {
   return typeof value === "number" && Number.isSafeInteger(value) ? value : invalid(field);
+}
+
+function nonNegativeInteger(value: unknown, field: string): number {
+  const parsed = integer(value, field);
+  return parsed >= 0 ? parsed : invalid(field);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+export function normalizeJankenPlannerProgress(value: unknown): JankenPlannerProgress | null {
+  if (value === undefined) return {};
+  if (!isRecord(value)) return null;
+  const result: JankenPlannerProgress = {};
+  for (const [uid, raw] of Object.entries(value)) {
+    if (!uid || !isRecord(raw) || !isRecord(raw.progress) || !isRecord(raw.goals)) return null;
+    const { progress, goals } = raw;
+    const currentTier = progress.currentTier;
+    const equipmentTier = progress.equipmentTier;
+    const targetTier = goals.targetTier;
+    const targetEquipmentTier = goals.targetEquipmentTier;
+    if (!Number.isInteger(currentTier) || (currentTier as number) < 1 || (currentTier as number) > 9 ||
+        !Number.isSafeInteger(equipmentTier) || (equipmentTier as number) < 1 || (equipmentTier as number) > 99 ||
+        !(targetTier === null || (Number.isSafeInteger(targetTier) && (targetTier as number) >= 1 && (targetTier as number) <= 9)) ||
+        !(targetEquipmentTier === null || (Number.isSafeInteger(targetEquipmentTier) && (targetEquipmentTier as number) >= 1 && (targetEquipmentTier as number) <= 99)) ||
+        (goals.shopCurrencyMode !== "linked" && goals.shopCurrencyMode !== "manual") ||
+        !isNonNegativeInteger(progress.heldEleph) || !isNonNegativeInteger(progress.cumulativeScore) ||
+        !isNonNegativeInteger(progress.heldEquipmentCurrency) || !isNonNegativeInteger(goals.manualShopCurrency) ||
+        !(goals.targetScore === null || (Number.isSafeInteger(goals.targetScore) && (goals.targetScore as number) >= 0)) ||
+        !(goals.averageScore === null || (Number.isSafeInteger(goals.averageScore) && (goals.averageScore as number) >= 0)) ||
+        !Array.isArray(progress.clearedStageUids) || progress.clearedStageUids.some((stageUid) => typeof stageUid !== "string" || !stageUid.trim())) return null;
+    result[uid] = {
+      progress: {
+        currentTier: currentTier as number,
+        heldEleph: nonNegativeInteger(progress.heldEleph, "jankenProgress.progress.heldEleph"),
+        cumulativeScore: nonNegativeInteger(progress.cumulativeScore, "jankenProgress.progress.cumulativeScore"),
+        equipmentTier: equipmentTier as number,
+        heldEquipmentCurrency: nonNegativeInteger(progress.heldEquipmentCurrency, "jankenProgress.progress.heldEquipmentCurrency"),
+        clearedStageUids: [...new Set(progress.clearedStageUids as string[])].sort(),
+      },
+      goals: {
+        targetTier: targetTier as number | null,
+        shopCurrencyMode: goals.shopCurrencyMode,
+        manualShopCurrency: nonNegativeInteger(goals.manualShopCurrency, "jankenProgress.goals.manualShopCurrency"),
+        targetScore: goals.targetScore as number | null,
+        averageScore: goals.averageScore as number | null,
+        targetEquipmentTier: targetEquipmentTier as number | null,
+      },
+    };
+  }
+  return result;
 }
 
 function optionalInteger(value: unknown, field: string): number | null {
@@ -130,14 +242,61 @@ function parseTimelineItem(value: unknown): PlannerStateTimelineRecord {
   };
 }
 
+/** Fields to change; undefined keeps the current value and null clears the event's own basis. */
+export type PyroxeneEventDataPatch = {
+  completed?: boolean;
+  expectedTrials?: number | null;
+  pickupChance?: PyroxenePickupChance | null;
+  targetTiers?: RecruitmentTargetTiers;
+};
+
+export const EMPTY_PLANNER_STATE_EVENT_DATA: PlannerStateEventData = { completed: false, expectedTrials: null };
+
+export function applyPyroxeneEventDataPatch(
+  current: PlannerStateEventData,
+  patch: PyroxeneEventDataPatch,
+): PlannerStateEventData {
+  return canonicalPlannerStateEventData({
+    completed: patch.completed ?? current.completed,
+    expectedTrials: patch.expectedTrials !== undefined ? patch.expectedTrials : current.expectedTrials,
+    pickupChance: patch.pickupChance !== undefined ? (patch.pickupChance ?? undefined) : current.pickupChance,
+    targetTiers: patch.targetTiers ?? current.targetTiers,
+  });
+}
+
+/** Applies the patch to one event's entry, removing the entry when it ends up holding only defaults. */
+export function withPyroxeneEventDataPatch(
+  eventData: Record<string, PlannerStateEventData>,
+  eventUid: string,
+  patch: PyroxeneEventDataPatch,
+): Record<string, PlannerStateEventData> {
+  const next = { ...eventData };
+  const updated = applyPyroxeneEventDataPatch(eventData[eventUid] ?? EMPTY_PLANNER_STATE_EVENT_DATA, patch);
+  if (isEmptyPlannerStateEventData(updated)) delete next[eventUid];
+  else next[eventUid] = updated;
+  return next;
+}
+
 function parseResource(value: unknown): PlannerStateResource {
   const row = record(value, "pyroxene_owned_resources.row");
-  return {
+  const resource: PlannerStateResource = {
     inputAt: instant(row.inputAt, "pyroxene_owned_resources.input_at"),
     pyroxene: integer(row.pyroxene, "pyroxene_owned_resources.pyroxene"),
     oneTimeTicket: integer(row.oneTimeTicket, "pyroxene_owned_resources.one_time_ticket"),
     tenTimeTicket: integer(row.tenTimeTicket, "pyroxene_owned_resources.ten_time_ticket"),
   };
+  if (row.recruitmentStacks !== undefined) {
+    resource.recruitmentStacks =
+      normalizeRecruitmentStacks(row.recruitmentStacks) ?? invalid("pyroxene_owned_resources.recruitment_stacks");
+  }
+  return resource;
+}
+
+function optionalPickupChance(value: unknown, field: string): PyroxenePickupChance | undefined {
+  if (value === undefined || value === null) return undefined;
+  return PYROXENE_PICKUP_CHANCES.includes(value as PyroxenePickupChance)
+    ? (value as PyroxenePickupChance)
+    : invalid(field);
 }
 
 function parseOptions(rows: readonly unknown[]): PyroxenePlannerOptions {
@@ -186,14 +345,7 @@ export function projectPlannerStateDocument(rows: PlannerStateProjectionRows): P
   const resources = rows.resources.map(parseResource);
   resources.sort((left, right) => right.inputAt.localeCompare(left.inputAt));
   const latestResource = resources[0];
-  const resource: PlannerStateResource | null = latestResource
-    ? {
-        inputAt: latestResource.inputAt,
-        pyroxene: latestResource.pyroxene,
-        oneTimeTicket: latestResource.oneTimeTicket,
-        tenTimeTicket: latestResource.tenTimeTicket,
-      }
-    : null;
+  const resource: PlannerStateResource | null = latestResource ?? null;
 
   // Records sort by eventAt; equal dates keep legacy row id order.
   const records = rows.timelineItems
@@ -217,10 +369,15 @@ export function projectPlannerStateDocument(rows: PlannerStateProjectionRows): P
     const row = record(value, "pyroxene_event_data.row");
     const eventUid = nonEmptyString(row.eventUid, "pyroxene_event_data.event_uid");
     if (Object.hasOwn(eventData, eventUid)) return invalid("pyroxene_event_data.event_uid");
-    eventData[eventUid] = {
+    eventData[eventUid] = canonicalPlannerStateEventData({
       completed: boolean(row.completed, "pyroxene_event_data.completed"),
       expectedTrials: optionalInteger(row.expectedTrials, "pyroxene_event_data.expected_trials"),
-    };
+      pickupChance: optionalPickupChance(row.pickupChance, "pyroxene_event_data.pickup_chance"),
+      targetTiers:
+        row.targetTiers === undefined
+          ? undefined
+          : (normalizeRecruitmentTargetTiers(row.targetTiers) ?? invalid("pyroxene_event_data.target_tiers")),
+    });
   }
 
   const eventShops: Record<string, EventShopState> = {};
@@ -229,6 +386,9 @@ export function projectPlannerStateDocument(rows: PlannerStateProjectionRows): P
     if (Object.hasOwn(eventShops, eventUid)) return invalid("event_shop_states.event_uid");
     eventShops[eventUid] = state;
   }
+
+  const jankenProgress = normalizeJankenPlannerProgress(rows.jankenProgress);
+  if (!jankenProgress) return invalid("janken_progress.payload");
 
   return {
     schemaVersion: 1,
@@ -240,6 +400,7 @@ export function projectPlannerStateDocument(rows: PlannerStateProjectionRows): P
       eventData: Object.fromEntries(Object.entries(eventData).sort(([left], [right]) => left.localeCompare(right))),
     },
     eventShops: Object.fromEntries(Object.entries(eventShops).sort(([left], [right]) => left.localeCompare(right))),
+    jankenProgress,
     ap: null,
   };
 }

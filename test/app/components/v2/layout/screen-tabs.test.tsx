@@ -82,10 +82,12 @@ describe("ScreenTabs", () => {
       />,
     );
 
-    const past = screen.getByRole("button", { name: /지난 일정/ });
-    expect(past.hasAttribute("disabled")).toBe(true);
-    expect(past.getAttribute("title")).toBe("지난 일정은 아직 준비 중입니다");
-    fireEvent.click(past);
+    const past = screen.getByText("지난 일정").closest("[aria-disabled='true']");
+    expect(past).not.toBeNull();
+    expect(past?.tagName).not.toBe("A");
+    const reason = screen.getByRole("button", { name: "지난 일정을 쓸 수 없어요: 지난 일정은 아직 준비 중입니다" });
+    expect(past?.contains(reason)).toBe(true);
+    fireEvent.click(past!);
 
     expect(screen.getByTestId("location").textContent?.startsWith("/futures|")).toBe(true);
   });

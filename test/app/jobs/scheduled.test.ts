@@ -6,11 +6,13 @@ import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
 import { publishPendingOcrOutbox, reconcileOcrJobs } from "~/models/ocr-job";
 import { warmRaidCache } from "~/models/raid";
+import { getRecruitTicketSource } from "~/models/recruit-ticket";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncStudentDirectory } from "~/models/student-directory";
+import { syncTimelineContentsFromSources } from "~/models/timeline-auto-sync.server";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { warmActiveUpcomingEventContent } from "~/views/events";
@@ -42,6 +44,10 @@ jest.mock("~/models/timeline-content.server", () => ({
   syncAllTimelineContentsMeta: jest.fn(),
 }));
 
+jest.mock("~/models/timeline-auto-sync.server", () => ({
+  syncTimelineContentsFromSources: jest.fn(),
+}));
+
 jest.mock("~/models/youtube", () => ({
   syncYoutubeCommunityPosts: jest.fn(),
 }));
@@ -64,6 +70,10 @@ jest.mock("~/models/furniture-catalog", () => ({
 
 jest.mock("~/models/stage", () => ({
   getCampaignFarmingStages: jest.fn(),
+}));
+
+jest.mock("~/models/recruit-ticket", () => ({
+  getRecruitTicketSource: jest.fn(),
 }));
 
 jest.mock("~/models/growth-resource", () => ({
@@ -91,6 +101,11 @@ import { runScheduledJobs } from "~/jobs/scheduled";
 const SOURCE_WARM_MARKER_KEY = "source::cron-source-warm::v1::name=students-events";
 const SOURCE_FORCED_REFRESH_MARKER_KEY = "source::cron-source-refresh::v1::name=baql-sources";
 
+const TIMELINE_AUTO_SYNC_MARKER_KEY = "source::cron-timeline-auto-sync::v1::name=timeline-contents";
+
+const mockedSyncTimelineContentsFromSources = syncTimelineContentsFromSources as jest.MockedFunction<
+  typeof syncTimelineContentsFromSources
+>;
 const mockedSyncYoutubeCommunityPosts = syncYoutubeCommunityPosts as jest.MockedFunction<
   typeof syncYoutubeCommunityPosts
 >;
@@ -118,6 +133,7 @@ const mockedGetFurnitureCatalogSource = getFurnitureCatalogSource as jest.Mocked
   typeof getFurnitureCatalogSource
 >;
 const mockedGetCampaignFarmingStages = getCampaignFarmingStages as jest.MockedFunction<typeof getCampaignFarmingStages>;
+const mockedGetRecruitTicketSource = getRecruitTicketSource as jest.MockedFunction<typeof getRecruitTicketSource>;
 const mockedGetStudentGearData = getStudentGearData as jest.MockedFunction<typeof getStudentGearData>;
 const mockedGetStudentSkillCosts = getStudentSkillCosts as jest.MockedFunction<typeof getStudentSkillCosts>;
 const mockedWarmRecruitmentCache = warmRecruitmentCache as jest.MockedFunction<typeof warmRecruitmentCache>;
@@ -139,6 +155,7 @@ function createEnv(markers: Record<string, string | null> = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedSyncTimelineContentsFromSources.mockResolvedValue();
   mockedSyncYoutubeCommunityPosts.mockResolvedValue({ synced: 0 });
   mockedSyncRawStudents.mockResolvedValue([]);
   mockedSyncStudentDirectory.mockResolvedValue([]);
@@ -158,6 +175,7 @@ beforeEach(() => {
   mockedGetItemCatalogResources.mockResolvedValue([]);
   mockedGetFurnitureCatalogSource.mockResolvedValue({ furnitures: [], themes: [] });
   mockedGetCampaignFarmingStages.mockResolvedValue([]);
+  mockedGetRecruitTicketSource.mockResolvedValue({ products: [], pools: [], items: {}, productItemUids: [] });
   mockedReconcileOcrJobs.mockResolvedValue();
   mockedPublishPendingOcrOutbox.mockResolvedValue(0);
 });
@@ -206,6 +224,7 @@ describe("runScheduledJobs", () => {
     expect(mockedGetItemCatalogResources).toHaveBeenCalledWith(env, true);
     expect(mockedGetFurnitureCatalogSource).toHaveBeenCalledWith(env, true);
     expect(mockedGetCampaignFarmingStages).toHaveBeenCalledWith(env, true);
+    expect(mockedGetRecruitTicketSource).toHaveBeenCalledWith(env, true);
     expect(kv.put).toHaveBeenCalledWith(
       SOURCE_WARM_MARKER_KEY,
       JSON.stringify({ _ver: 2, data: true, cachedAt: now }),
@@ -258,6 +277,7 @@ describe("runScheduledJobs", () => {
     expect(mockedGetItemCatalogResources).not.toHaveBeenCalled();
     expect(mockedGetFurnitureCatalogSource).not.toHaveBeenCalled();
     expect(mockedGetCampaignFarmingStages).not.toHaveBeenCalled();
+    expect(mockedGetRecruitTicketSource).not.toHaveBeenCalled();
     expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedGetStudentSkillCosts).toHaveBeenCalledWith(env, ["10000", "10001"], false);
@@ -296,6 +316,50 @@ describe("runScheduledJobs", () => {
     // the next cron retries instead of skipping for the full window.
     expect(mockedGetStudentGearData).toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalledWith(SOURCE_WARM_MARKER_KEY, expect.anything(), expect.anything());
+  });
+
+  it("syncs timeline contents once an hour and records the marker", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const { env, kv } = createEnv();
+
+    await runScheduledJobs(env);
+
+    expect(mockedSyncTimelineContentsFromSources).toHaveBeenCalledTimes(1);
+    expect(kv.put).toHaveBeenCalledWith(
+      TIMELINE_AUTO_SYNC_MARKER_KEY,
+      JSON.stringify({ _ver: 2, data: true, cachedAt: now }),
+      { expirationTtl: 30 * 24 * 60 * 60 },
+    );
+  });
+
+  it("skips the timeline sync while its marker is fresh", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const { env } = createEnv({
+      [TIMELINE_AUTO_SYNC_MARKER_KEY]: JSON.stringify({ _ver: 2, data: true, cachedAt: now }),
+    });
+
+    await runScheduledJobs(env);
+
+    expect(mockedSyncTimelineContentsFromSources).not.toHaveBeenCalled();
+  });
+
+  it("does not record the marker when the timeline sync fails, so the next cron retries", async () => {
+    const { env, kv } = createEnv();
+    mockedSyncTimelineContentsFromSources.mockRejectedValue(new Error("sync failed"));
+
+    await expect(runScheduledJobs(env)).rejects.toThrow("One or more scheduled jobs failed");
+
+    expect(kv.put).not.toHaveBeenCalledWith(TIMELINE_AUTO_SYNC_MARKER_KEY, expect.anything(), expect.anything());
+  });
+
+  it("does not run the timeline sync on the per-minute cron", async () => {
+    const { env } = createEnv();
+
+    await runScheduledJobs(env, undefined, { cron: "* * * * *" });
+
+    expect(mockedSyncTimelineContentsFromSources).not.toHaveBeenCalled();
   });
 
   it("raises scheduled job failures", async () => {

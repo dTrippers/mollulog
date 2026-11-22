@@ -23,7 +23,6 @@ import {
   selectFutureMediaSource,
 } from "~/domain/futures/futures-view-model";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
-import { recruitmentLabelLocale } from "~/locales/ko";
 
 const timeZone = "Asia/Seoul";
 // 2026-10-15 12:00 KST
@@ -165,7 +164,7 @@ describe("links and filters", () => {
 });
 
 describe("getFutureSpecialCases", () => {
-  it("reports the free-100 benefit only while every recruitment is still open", () => {
+  it("reports the free recruit benefit only while every recruitment is still open", () => {
     const base = {
       contentType: "event" as const,
       tags: ["recruit_free_100"],
@@ -178,8 +177,15 @@ describe("getFutureSpecialCases", () => {
       timeZone,
     };
     expect(getFutureSpecialCases({ ...base, recruitments: [{ until: "2026-12-01T00:00:00.000Z" }] })).toEqual([
-      { kind: "perk-free-100" },
+      { kind: "perk-free", freePulls: 100 },
     ]);
+    expect(
+      getFutureSpecialCases({
+        ...base,
+        tags: ["recruit_free_200"],
+        recruitments: [{ until: "2026-12-01T00:00:00.000Z" }],
+      }),
+    ).toEqual([{ kind: "perk-free", freePulls: 200 }]);
     expect(getFutureSpecialCases({ ...base, recruitments: [{ until: null }] })).toEqual([]);
   });
 
@@ -234,7 +240,7 @@ describe("getFutureSpecialCases", () => {
 
   it("words the period caution with its range, and has no caution text for a perk", () => {
     expect(getCautionText({ kind: "caution-period", range: "11/17 ~ 11/24" })).toBe("모집 기간 · 11/17 ~ 11/24");
-    expect(getCautionText({ kind: "perk-free-100" })).toBeNull();
+    expect(getCautionText({ kind: "perk-free", freePulls: 100 })).toBeNull();
   });
 });
 
@@ -287,17 +293,23 @@ describe("dates and remaining time", () => {
 describe("isNewRecruitment", () => {
   const types = Object.values(RecruitmentTypeEnum);
 
-  it("agrees with the recruitment label for every type and rerun flag", () => {
+  it("accents every first-time recruitment except the returning types", () => {
+    const returning: string[] = [
+      RecruitmentTypeEnum.Archive,
+      RecruitmentTypeEnum.Recollect,
+      RecruitmentTypeEnum.Encore,
+    ];
     for (const recruitmentType of types) {
-      for (const rerun of [false, true]) {
-        const label = recruitmentLabelLocale({ recruitmentType, rerun });
-        expect([recruitmentType, rerun, isNewRecruitment({ recruitmentType, rerun })]).toEqual([
-          recruitmentType,
-          rerun,
-          label.includes("신규"),
-        ]);
-      }
+      expect([recruitmentType, isNewRecruitment({ recruitmentType, rerun: false })]).toEqual([
+        recruitmentType,
+        !returning.includes(recruitmentType),
+      ]);
+      expect([recruitmentType, isNewRecruitment({ recruitmentType, rerun: true })]).toEqual([recruitmentType, false]);
     }
+  });
+
+  it("accents a given recruitment such as an event reward student", () => {
+    expect(isNewRecruitment({ recruitmentType: RecruitmentTypeEnum.Given, rerun: false })).toBe(true);
   });
 });
 
@@ -309,6 +321,11 @@ describe("open-ended start labels", () => {
     expect(formatOpenEndedStart("05/13", "main_story")).toBe("05/13 공개");
     expect(formatOpenEndedStart("05/13", "mini_story")).toBe("05/13 공개");
     expect(formatOpenEndedStart("05/13", "event")).toBe("05/13부터");
+  });
+
+  it("labels Korean dubbing by the date it is added", () => {
+    expect(isStoryContentType("ko_voice")).toBe(false);
+    expect(formatOpenEndedStart("05/13", "ko_voice")).toBe("05/13 추가");
   });
 });
 

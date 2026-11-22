@@ -1,7 +1,11 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
 import { type StudentCalculatorCatalog, validateStudentEquipmentLevels } from "~/domain/student-calculator";
-import { mergeStudentBasicInfoEquipmentState, saveStudentBasicInfo } from "~/models/student-basic-info";
+import {
+  mergeStudentBasicInfoEquipmentState,
+  saveStudentBasicInfo,
+  saveStudentBasicInfoBatch,
+} from "~/models/student-basic-info";
 
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive } as Env;
 const currentState = {
@@ -149,5 +153,30 @@ describe("student basic info operation", () => {
     expect(sqlTexts.filter((sql) => sql === "rollback")).toHaveLength(1);
     expect(sqlTexts.filter((sql) => sql === "commit")).toHaveLength(1);
     expect(sqlTexts.filter((sql) => sql.includes('insert into "user_relationship_levels"'))).toHaveLength(4);
+  });
+});
+
+describe("student basic info batch save", () => {
+  const options = { students: new Map(), equipmentLimits: [] };
+
+  it("does nothing for an empty batch without opening the database", async () => {
+    const { client } = createClient();
+    await expect(
+      saveStudentBasicInfoBatch(env, 7, [], { ...options, createClient: () => client }),
+    ).resolves.toBeUndefined();
+    expect(client.connect).not.toHaveBeenCalled();
+  });
+
+  it("rejects more than 500 students before opening the database", async () => {
+    const { client } = createClient();
+    const entries = Array.from({ length: 501 }, (_, index) => ({
+      studentUid: `student-${index}`,
+      changes: { level: 80 },
+      expected: { level: 70 },
+    }));
+    await expect(
+      saveStudentBasicInfoBatch(env, 7, entries, { ...options, createClient: () => client }),
+    ).rejects.toThrow("500");
+    expect(client.connect).not.toHaveBeenCalled();
   });
 });

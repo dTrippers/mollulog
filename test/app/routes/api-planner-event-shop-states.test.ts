@@ -135,6 +135,59 @@ describe("planner event shop state batch lookup", () => {
     expect(mockGetEventShopStates).not.toHaveBeenCalled();
   });
 
+  it("includes road-puzzle completion reward names in the planner display catalog", async () => {
+    mockGetEventShopContent.mockResolvedValue({
+      stages: [],
+      shopResources: [],
+      eventRewardBonus: [],
+      minigameConfig: {
+        minigameType: "road_puzzle",
+        payment: {
+          resourceType: "Item",
+          resourceUid: "sticker",
+          resourceName: "하이랜더 기념 스티커",
+          quantity: 150,
+        },
+        payments: [],
+        rewardGroups: [],
+        roadPuzzle: {
+          rounds: [
+            {
+              rewards: [
+                { resourceUid: "wrench", resourceName: "파이프 렌치" },
+                { resourceUid: "eleph", resourceName: "아오바의 엘레프" },
+                { resourceUid: "pyroxene", resourceName: "청휘석" },
+              ],
+              additionalRewards: [{ resourceUid: "path-reward", resourceName: "경로 크레딧" }],
+            },
+          ],
+          railSetReward: [{ resourceUid: "rail-set-reward", resourceName: "레일 세트 크레딧" }],
+        },
+      },
+    });
+
+    const result = await action(
+      actionArgs({ events: [{ timelineUid: "timeline-1", shopStateUid: "canonical-shop-1" }] }),
+    );
+    expect(result).toMatchObject({
+      states: [
+        {
+          displayCatalog: {
+            resourceNamesByUid: {
+              sticker: "하이랜더 기념 스티커",
+              wrench: "파이프 렌치",
+              eleph: "아오바의 엘레프",
+              pyroxene: "청휘석",
+            },
+          },
+        },
+      ],
+    });
+    const response = result as { states: Array<{ displayCatalog: { resourceNamesByUid: Record<string, string> } }> };
+    expect(response.states[0]?.displayCatalog.resourceNamesByUid).not.toHaveProperty("path-reward");
+    expect(response.states[0]?.displayCatalog.resourceNamesByUid).not.toHaveProperty("rail-set-reward");
+  });
+
   it("marks the batch unavailable when account reads fail", async () => {
     mockGetEventShopStates.mockRejectedValue(new Error("database failure"));
 

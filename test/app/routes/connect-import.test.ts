@@ -170,11 +170,11 @@ describe("connect import action", () => {
     );
 
     expect(result.init?.status).toBe(400);
-    expect(result.data.error).toContain("5,000");
+    expect(result.data.error).toBe("한 번에 최대 5,000명의 학생 데이터만 가져올 수 있어요.");
     expect(mockedCreateSyncDraft).not.toHaveBeenCalled();
   });
 
-  it("rejects unknown student UIDs with the full list and no draft", async () => {
+  it("rejects the whole input when it contains students unknown to MolluLog, without listing ids or creating a draft", async () => {
     const result = expectDataResult<{ error: string }>(
       await action({
         request: importRequest(JSON.stringify({ "1001": { s: 5 }, "999999": { s: 3 }, "888888": { s: 4 } })),
@@ -184,9 +184,25 @@ describe("connect import action", () => {
     );
 
     expect(result.init?.status).toBe(400);
-    expect(result.data.error).toContain("999999");
-    expect(result.data.error).toContain("888888");
-    expect(result.data.error).not.toContain("1001");
+    expect(result.data.error).toBe("데이터를 가져오지 못했어요. 몰루로그에서 찾을 수 없는 학생 2명이 들어 있어요.");
+    expect(result.data.error).not.toMatch(/999999|888888|1001/);
+    expect(mockedCreateSyncDraft).not.toHaveBeenCalled();
+  });
+
+  it("maps an unrecognized payload to the format guidance and keeps the input", async () => {
+    const result = expectDataResult<{ error: string; input: string }>(
+      await action({
+        request: importRequest('{"items":[]}'),
+        context: { cloudflare: { env } },
+        params: {},
+      } as never),
+    );
+
+    expect(result.init?.status).toBe(400);
+    expect(result.data.error).toBe(
+      "데이터를 가져오지 못했어요. SchaleDB 또는 Justin163 플래너에서 내보낸 데이터를 그대로 붙여넣었는지 확인해주세요.",
+    );
+    expect(result.data.input).toBe('{"items":[]}');
     expect(mockedCreateSyncDraft).not.toHaveBeenCalled();
   });
 
@@ -216,7 +232,7 @@ describe("connect import action", () => {
     );
 
     expect(result.init?.status).toBe(400);
-    expect(result.data.error).toBe("데이터를 가져오지 못했어요.");
+    expect(result.data.error).toBe("데이터를 가져오지 못했어요. 잠시 후 다시 시도해주세요.");
     expect(result.data.error).not.toContain("ECONNREFUSED");
     expect(mockLogger.error).toHaveBeenCalled();
   });
@@ -360,7 +376,7 @@ describe("connect import action with the real sync draft model", () => {
     );
 
     expect(result.init?.status).toBe(400);
-    expect(result.data.error).toBe("데이터를 가져오지 못했어요.");
+    expect(result.data.error).toBe("데이터를 가져오지 못했어요. 잠시 후 다시 시도해주세요.");
     expect(result.data.error).not.toContain("ECONNREFUSED");
     expect(mockLogger.error).toHaveBeenCalled();
     expect(db.drafts).toHaveLength(0);

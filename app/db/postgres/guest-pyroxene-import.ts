@@ -310,7 +310,11 @@ export async function runPostgresGuestPlannerImport(
                       current &&
                       current.pyroxene === resource.pyroxene &&
                       current.oneTimeTicket === resource.oneTimeTicket &&
-                      current.tenTimeTicket === resource.tenTimeTicket
+                      current.tenTimeTicket === resource.tenTimeTicket &&
+                      // Stacks the guest never entered do not override the account's.
+                      (resource.recruitmentStacks === undefined ||
+                        (current.recruitmentStacks?.regular === resource.recruitmentStacks.regular &&
+                          current.recruitmentStacks?.limited === resource.recruitmentStacks.limited))
                     ) {
                       document = withImportedResource(document, current);
                       break;

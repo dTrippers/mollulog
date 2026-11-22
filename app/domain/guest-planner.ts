@@ -36,6 +36,7 @@ import {
   type PlannerStateTimelineRecord,
   projectPlannerStateDocument,
   sortPlannerStateTimelineRecords,
+  withPyroxeneEventDataPatch,
 } from "~/domain/planner-state";
 import {
   defaultPyroxenePlannerOptions,
@@ -45,6 +46,7 @@ import {
 } from "~/domain/pyroxene-planner";
 import {
   extractPyroxeneTimelineBaseUid,
+  getPyroxeneGameDayStartAt,
   PYROXENE_ATTENDANCE_CONFIG,
   PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS,
   PYROXENE_MONTHLY_PACKAGE_CONFIG,
@@ -331,6 +333,7 @@ function emptyPlannerDocument(): GuestPlannerDocument {
       eventData: {},
     },
     eventShops: {},
+    jankenProgress: {},
     ap: null,
   };
 }
@@ -402,6 +405,7 @@ function projectDocument(value: unknown): GuestPlannerDocument | null {
       collectedSources: pyroxene.collectedSourceKeys.map((sourceKey) => ({ sourceKey })),
       eventData: Object.entries(pyroxene.eventData).map(([eventUid, state]) => ({ eventUid, ...(state as object) })),
       eventShops: Object.entries(value.eventShops).map(([eventUid, state]) => ({ eventUid, ...(state as object) })),
+      jankenProgress: value.jankenProgress,
     });
     return { ...projected, ap };
   } catch {
@@ -507,12 +511,15 @@ function timelineGroupToLegacyRecord(
   const first = records[0];
   if (!first) throw new Error("이전 버전 플래너 형식으로 계획을 저장할 수 없어요.");
   const base = { recordId, createdAt };
+  // A purchase or direct gain keeps its game day as the date and its instant as createdAt, so converting it back
+  // (guestPyroxeneRecordToTimelineItems) gives the same instant.
+  const oneOffBase = { recordId, createdAt: first.eventAt };
   if (records.length === 1 && first.source === "buy" && first.description === "청휘석 구매") {
     return {
-      ...base,
+      ...oneOffBase,
       kind: "buy",
       quantity: first.pyroxeneDelta,
-      date: first.eventAt,
+      date: getPyroxeneGameDayStartAt(first.eventAt),
       repeatType: first.repeatType,
       monthlyCount: 1,
     };
@@ -522,7 +529,7 @@ function timelineGroupToLegacyRecord(
       throw new Error("이전 버전 플래너에서 지원하지 않는 재화 계획이에요.");
     }
     return {
-      ...base,
+      ...oneOffBase,
       kind: "other",
       resources: {
         pyroxene: first.pyroxeneDelta,
@@ -530,7 +537,7 @@ function timelineGroupToLegacyRecord(
         tenTimeTicket: first.tenTimeTicketDelta,
       },
       description: first.description,
-      date: first.eventAt,
+      date: getPyroxeneGameDayStartAt(first.eventAt),
     };
   }
   if (records.length === 1 && first.source === "package_ap") {
@@ -900,10 +907,9 @@ export function mergeGuestPlannerLegacyChanges(
       continue;
     }
     const expectedTrials = pyroxeneMerge.data.eventTrials[eventUid] ?? null;
-    const existing = nextEventData[eventUid];
-    if (existing?.completed) nextEventData[eventUid] = { ...existing, expectedTrials };
-    else if (expectedTrials === null) delete nextEventData[eventUid];
-    else nextEventData[eventUid] = { completed: false, expectedTrials };
+    const merged = withPyroxeneEventDataPatch(nextEventData, eventUid, { expectedTrials })[eventUid];
+    if (merged) nextEventData[eventUid] = merged;
+    else delete nextEventData[eventUid];
   }
   const document: GuestPlannerDocument = {
     ...current.document,
@@ -1066,8 +1072,30 @@ export function guestPlannerHasPrimaryData(envelope: GuestPlannerEnvelope): bool
       pyroxene.collectedSourceKeys.length ||
       Object.keys(pyroxene.eventData).length ||
       Object.keys(envelope.document.eventShops).length ||
+      Object.keys(envelope.document.jankenProgress).length ||
       apPlannerStateHasData(envelope.document.ap) ||
       envelope.favorites.length,
+  );
+}
+
+// What the import screen offers as items. Minigame progress is not importable, and received-reward keys the account
+// already has are hidden there, so neither alone is a reason to send a signed-in user to the import screen.
+export function guestPlannerHasImportableData(
+  envelope: GuestPlannerEnvelope,
+  accountCollectedSourceKeys: ReadonlySet<string>,
+): boolean {
+  const { pyroxene } = envelope.document;
+  return (
+    Boolean(
+      pyroxene.resources ||
+        pyroxene.records.length ||
+        envelope.pyroxeneOptionsChanged ||
+        pyroxene.collectedSourceKeys.some((key) => !accountCollectedSourceKeys.has(key)) ||
+        Object.keys(pyroxene.eventData).length ||
+        Object.keys(envelope.document.eventShops).length ||
+        apPlannerStateHasData(envelope.document.ap) ||
+        envelope.favorites.length,
+    ) || envelope.legacyConflicts.some(guestPlannerLegacyConflictHasData)
   );
 }
 
@@ -1394,7 +1422,11 @@ export function clearGuestPlannerItemsIfUnchanged(
   submitted: GuestPlannerEnvelope,
   items: readonly GuestPlannerItemReference[],
 ): GuestPlannerEnvelope {
-  const nextDocument = { ...current.document, pyroxene: { ...current.document.pyroxene } };
+  const nextDocument = {
+    ...current.document,
+    pyroxene: { ...current.document.pyroxene },
+    jankenProgress: { ...current.document.jankenProgress },
+  };
   const records = [...current.document.pyroxene.records];
   const collectedSourceKeys = [...current.document.pyroxene.collectedSourceKeys];
   const eventData = { ...current.document.pyroxene.eventData };

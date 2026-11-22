@@ -28,7 +28,22 @@ function panelTransitionValue(source: string, name: string): string {
 
 describe("corr-2 layout CSS", () => {
   it("T1: side-by-side grid has the v2 column gap between Aside and Main", () => {
-    expect(ruleBody(css, "  [data-v2-layout]:has(> .v2-aside)")).toContain("column-gap: var(--spacing-v2-column-gap);");
+    expect(ruleBody(css, '  [data-v2-layout]:has(> .v2-aside:not([data-reveal="extra-wide"]))')).toContain(
+      "column-gap: var(--spacing-v2-column-gap);",
+    );
+  });
+
+  it("T1: an extra-wide Aside joins the page only from 96rem", () => {
+    const selector = '  [data-v2-layout]:has(> .v2-aside[data-reveal="extra-wide"])';
+    const rule = css.indexOf(`${selector} {`);
+    const extraWide = css.lastIndexOf("@container page-available (width >= 96rem) {", rule);
+    const sideBySide = css.lastIndexOf("@container page-available (width >= 48rem) {", rule);
+
+    expect(rule).toBeGreaterThan(-1);
+    expect(extraWide).toBeGreaterThan(sideBySide);
+    expect(ruleBody(css, selector)).toContain("column-gap: var(--spacing-v2-column-gap);");
+    expect(ruleBody(css, '  .v2-aside[data-reveal="extra-wide"]')).toContain("display: flex;");
+    expect(ruleBody(css, '  .v2-aside:not([data-reveal="extra-wide"])')).toContain("display: flex;");
   });
 
   it("T2: toolbar margin is on the toolbar only, and stacked uses the block gap", () => {
@@ -36,6 +51,18 @@ describe("corr-2 layout CSS", () => {
     expect(ruleBody(css, ".v2-toolbar-sentinel")).not.toContain("margin-bottom");
     expect(ruleBody(css, "  .v2-toolbar")).toContain("margin-bottom: var(--spacing-v2-block-gap);");
     expect(ruleBody(css, "  .v2-toolbar")).toContain("position: sticky;");
+  });
+
+  it("T2: pads the stuck student directory toolbar only in the stacked layout", () => {
+    const selector = '.v2-toolbar[data-sticky="true"]:has([data-student-directory-toolbar])';
+    const rule = css.indexOf(`${selector} {`);
+    const stackedLayout = css.lastIndexOf("@container page-available (width < 48rem) {", rule);
+    const sideBySideLayout = css.lastIndexOf("@container page-available (width >= 48rem) {", rule);
+
+    expect(rule).toBeGreaterThan(-1);
+    expect(stackedLayout).toBeGreaterThan(sideBySideLayout);
+    expect(css.slice(rule, css.indexOf("}", rule))).toContain("padding-block: var(--spacing-v2-block-gap);");
+    expect(css.indexOf(`${selector} {`, rule + 1)).toBe(-1);
   });
 
   it("T3: forward and reverse move the content area; crossfade names Main and Toolbar only", () => {
@@ -132,19 +159,32 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     expect(sheetSource).not.toContain("transition-[transform,opacity]");
   });
 
-  it("V2: only the sheet, the popover, and the chevron use translate, scale, or rotate utilities, each with a matching transition", () => {
+  it("V2: only sheets, popovers, dropdown chevrons, and select icon alignment use translate, scale, or rotate utilities", () => {
     const componentRoot = join(process.cwd(), "app/components/v2");
     const tsxFiles = readdirSync(componentRoot, { recursive: true, encoding: "utf8" }).filter((file) =>
       file.endsWith(".tsx"),
     );
     const motionUtility = /\b(?:translate|scale|rotate)-/;
     const usingFiles = tsxFiles.filter((file) => motionUtility.test(readFileSync(join(componentRoot, file), "utf8")));
-    expect(usingFiles.sort()).toEqual(["layout/PanelSheet.tsx", "primitives/Popover.tsx", "primitives/Sheet.tsx"]);
-    // Tailwind v4 transition-transform lists translate, scale, and rotate, so the chevron's rotate animates.
+    expect(usingFiles.sort()).toEqual([
+      "features/students/FilterGroupDisclosure.tsx",
+      "layout/PanelSheet.tsx",
+      "primitives/Popover.tsx",
+      "primitives/Select.tsx",
+      "primitives/Sheet.tsx",
+    ]);
+    // Tailwind v4 transition-transform lists translate, scale, and rotate, so both chevrons rotate safely.
     expect(panelSource).toContain(
       '"size-4 shrink-0 text-v2-fg-tertiary motion-safe:transition-transform duration-v2-base ease-v2-standard"',
     );
     expect(panelSource).toContain('phase === "open" && "rotate-180"');
+    const directoryDisclosureSource = readFileSync(
+      join(componentRoot, "features/students/FilterGroupDisclosure.tsx"),
+      "utf8",
+    );
+    expect(directoryDisclosureSource).toContain("motion-safe:transition-transform");
+    expect(directoryDisclosureSource).toContain('expanded && "rotate-180"');
+    expect(readFileSync(join(componentRoot, "primitives/Select.tsx"), "utf8")).toContain("-translate-y-1/2");
     // The popover's scale and slide run only under motion-safe, so reduced motion gets the opacity fade alone.
     const popoverSource = readFileSync(join(componentRoot, "primitives/Popover.tsx"), "utf8");
     const popoverMotionClasses = popoverSource.match(/\S*(?:translate|scale|rotate)-\S+/g) ?? [];
@@ -153,8 +193,25 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     expect(popoverSource).toContain("duration-v2-base ease-v2-enter");
   });
 
+  it("V2b: hover never moves an element, and a thumbnail fades only under a fine pointer", () => {
+    // Hand-written rules escape the class-string guard, so a :hover rule here must not animate or transform.
+    const hoverRules = [...css.matchAll(/([^{}]*:hover[^{}]*)\{([^{}]*)\}/g)];
+    const moving = hoverRules.filter(([, , body]) => /\b(?:animation|transform|translate|scale|rotate)\s*:/.test(body));
+    expect(moving.map(([, selector]) => selector.trim())).toEqual([]);
+    // A touch leaves :hover on the tapped thumbnail, which would stay dimmed in a selection grid.
+    const thumbSource = readFileSync(
+      join(process.cwd(), "app/components/v2/features/students/StudentThumb.tsx"),
+      "utf8",
+    );
+    expect(thumbSource).toContain(
+      '"[@media(hover:hover)_and_(pointer:fine)]:hover:opacity-80 v2-interaction-transition"',
+    );
+  });
+
   it("V3: the panel section uses block padding, and only the collapsible header keeps the row minimum", () => {
-    expect(panelSource).toContain('className="relative rounded-lg bg-v2-surface p-v2-block-p"');
+    expect(panelSource).toMatch(
+      /togglesBody && phase === "collapsed"\s*\?\s*"px-v2-block-p py-2"\s*:\s*"p-v2-block-p"/,
+    );
     expect(panelSource).toContain('className={cn("flex gap-2", togglesBody ? "items-center" : "items-start")}');
     expect(panelSource.split("min-h-v2-row-min").length - 1).toBe(1);
   });
@@ -211,8 +268,9 @@ describe("corr-5 control border token, docs, and gutter comment", () => {
 
   it("W3: the timeline hint and the sheet tutorial share one one-line hint with no box and no Button primitive", () => {
     const hint = readFileSync(join(process.cwd(), "app/components/v2/features/feature-hint.tsx"), "utf8");
-    expect(hint).toContain("pointer-coarse:min-h-11");
-    expect(hint).toContain("pointer-coarse:before:-inset-y-2");
+    expect(hint).not.toContain("pointer-coarse:");
+    expect(hint).toContain("inline-flex h-6");
+    expect(hint).toContain("inline-flex size-6");
     for (const file of ["features/futures/FeatureBanner.tsx", "features/comments/OpinionTutorial.tsx"]) {
       const source = readFileSync(join(process.cwd(), "app/components/v2", file), "utf8");
       expect(source).toContain("feature-hint");
@@ -227,7 +285,7 @@ describe("corr-5 control border token, docs, and gutter comment", () => {
       "| `border-v2-control-border` | `oklch(0.968 0 0)` | `oklch(0.388 0 0)` | Idle boundary for text inputs, selects, textareas, and grouped inputs. The value is the former 40% border over `bg-v2-surface`, made opaque; do not add an opacity modifier. Not for cards, buttons, or region separation. |",
     );
     expect(docs).toContain(
-      "| `border-v2-control-border-strong`, `ring-v2-control-border-strong` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Focused input boundary (paired with the focus ring), hover boundary, popover ring, and the upload drop zone. |",
+      "| `border-v2-control-border-strong`, `ring-v2-control-border-strong` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Focused input boundary (paired with the focus ring), hover boundary, and the upload drop zone. |",
     );
     expect(docs).toContain("- Radius tokens. Keep the 1.x base radius");
     expect(docs).not.toContain("Border and radius tokens");
@@ -258,8 +316,15 @@ describe("corr-6 status tokens, PanelAction, and docs", () => {
     expect(css).toContain("--v2-live: oklch(0.505 0.213 27.518);");
   });
 
-  it("C15: the pointer-coarse variant used for the touch hit area is defined", () => {
-    expect(css).toContain("@custom-variant pointer-coarse (@media (pointer: coarse));");
+  it("C16: mobile and coarse layouts keep the shared compact density-token values", () => {
+    expect(css).toContain("--spacing-v2-row-min: 2.25rem;");
+    expect(css).toContain("--spacing-v2-control-min: 2rem;");
+    expect(css).toContain("--spacing-v2-input-min: 1.75rem;");
+    const mobileStart = css.indexOf("@media (max-width: 767px)");
+    const mobileBlock = css.slice(mobileStart, css.indexOf("\n}", mobileStart));
+    expect(mobileBlock).not.toMatch(/--spacing-v2-(?:row|control|input)-min/);
+    expect(css).not.toContain("@media (pointer: coarse)");
+    expect(css).not.toContain("@custom-variant pointer-coarse");
   });
 
   it("C15: PanelAction uses tokens only, with no literal colors", () => {
@@ -278,6 +343,34 @@ describe("corr-6 status tokens, PanelAction, and docs", () => {
     expect(docs).toContain("Show the action only when there is something to clear.");
     expect(docs).toContain("- Status: info and neutral.");
     expect(docs).toContain('<PanelAction variant="danger" onClick={clearFilters}>초기화</PanelAction>');
+  });
+});
+
+describe("treasure heatmap tokens", () => {
+  it("uses six blue steps with documented contrast in both themes", () => {
+    const lightStart = css.indexOf("--v2-treasure-heat-0:");
+    const lightBlock = css.slice(lightStart, css.indexOf("}", lightStart));
+    const darkStart = css.indexOf("--v2-treasure-heat-0:", css.lastIndexOf(".dark {"));
+    const darkBlock = css.slice(darkStart, css.indexOf("}", darkStart));
+    const v2ThemeStart = css.lastIndexOf("@theme inline");
+    const themeBlock = css.slice(v2ThemeStart, css.indexOf("}", v2ThemeStart));
+
+    expect(lightBlock).toContain("--v2-treasure-heat-0: oklch(0.96 0.02 255);");
+    expect(lightBlock).toContain("--v2-treasure-heat-1: oklch(0.91 0.04 255);");
+    expect(lightBlock).toContain("--v2-treasure-heat-2: oklch(0.86 0.07 255);");
+    expect(lightBlock).toContain("--v2-treasure-heat-3: oklch(0.80 0.10 255);");
+    expect(lightBlock).toContain("--v2-treasure-heat-4: oklch(0.74 0.13 255);");
+    expect(lightBlock).toContain("--v2-treasure-heat-5: oklch(0.68 0.16 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-0: oklch(0.30 0.055 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-1: oklch(0.35 0.075 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-2: oklch(0.40 0.095 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-3: oklch(0.45 0.115 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-4: oklch(0.50 0.135 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-5: oklch(0.55 0.155 255);");
+    expect(themeBlock).toContain("--color-v2-treasure-heat-5: var(--v2-treasure-heat-5);");
+    expect(readFileSync(join(process.cwd(), "docs/frontend/design-system-v2.md"), "utf8")).toContain(
+      "Percent text contrast is at least 6.19:1 light and 4.90:1 dark",
+    );
   });
 });
 
@@ -319,8 +412,8 @@ describe("corr-2 component values", () => {
     expect(sheetSource).toContain(
       "min-h-0 flex-1 overflow-y-auto overscroll-contain px-v2-block-p pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]",
     );
-    expect(sheetSource).toContain('<XMarkIcon className="size-5" aria-hidden="true" />');
-    expect(sheetSource).toContain("flex size-11 cursor-pointer items-center justify-center rounded-md");
+    expect(sheetSource).toContain('<XMarkIcon className="size-4" aria-hidden="true" />');
+    expect(sheetSource).toContain("flex size-8 cursor-pointer items-center justify-center rounded-md");
     expect(sheetSource).toContain("max-h-[85dvh]");
     expect(sheetSource).toContain("rounded-t-lg bg-v2-surface");
   });

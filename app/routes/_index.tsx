@@ -7,17 +7,11 @@ import { V2Page } from "~/components/v2/layout/V2Page";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { DEFAULT_TIME_ZONE, normalizeTimeZone, nowUtcIso } from "~/lib/date-time";
 import { getLogger } from "~/lib/observability.server";
-import {
-  canonicalLink,
-  canonicalUrl,
-  DEFAULT_OPEN_GRAPH_IMAGE_URL,
-  HOME_DESCRIPTION,
-  HOME_TITLE,
-  SITE_NAME,
-} from "~/lib/seo";
+import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL, HOME_DESCRIPTION, HOME_TITLE, socialMeta } from "~/lib/seo";
 import { getCommunityFeedPage } from "~/models/community.server";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { getHomeYoutubeChannelLinks, getHomeYoutubeSections } from "~/models/youtube";
 import { settleViewerPair, settleViewerState } from "~/routes/futures._components/viewer-state";
 import { enrichCommunityFeedPosts } from "~/views/community.server";
@@ -38,14 +32,7 @@ export const meta: MetaFunction = ({ location }) => {
   return [
     { title: HOME_TITLE },
     { name: "description", content: HOME_DESCRIPTION },
-    { property: "og:type", content: "website" },
-    { property: "og:site_name", content: SITE_NAME },
-    { property: "og:locale", content: "ko_KR" },
-    { property: "og:title", content: HOME_TITLE },
-    { property: "og:description", content: HOME_DESCRIPTION },
-    { property: "og:url", content: canonicalUrl(location.pathname) },
-    { name: "twitter:title", content: HOME_TITLE },
-    { name: "twitter:description", content: HOME_DESCRIPTION },
+    ...socialMeta({ title: HOME_TITLE, description: HOME_DESCRIPTION, pathname: location.pathname }),
     { name: "twitter:image", content: DEFAULT_OPEN_GRAPH_IMAGE_URL },
     canonicalLink(location.pathname),
   ];
@@ -118,12 +105,13 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     });
 
     const feed = ctx.tracing
-      .enterSpan("community", () =>
+      .enterSpan("community", async () =>
         getCommunityFeedPage(env, {
           currentUserId,
           postTypes: ["student_review", "event_opinion", "walkthrough_timeline"],
           pageSize: 4,
           includeEngagement: false,
+          hideRecruitmentOpinions: await getHideRecruitmentOpinions(env, currentUser, { ctx }),
           ctx,
         }),
       )

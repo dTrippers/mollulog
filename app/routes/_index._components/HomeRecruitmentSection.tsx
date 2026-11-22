@@ -1,17 +1,16 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
-import { useState } from "react";
 import { Link } from "react-router";
 import BlurhashPlaceholder from "~/components/media/BlurhashPlaceholder";
 import HaloModeNotice from "~/components/media/HaloModeNotice";
 import { useHaloMode } from "~/contexts/HaloModeContext";
-import { StudentSlot } from "~/components/v2/features/students/StudentSlot";
+import { RecruitmentStudentCard } from "~/components/v2/features/students/RecruitmentStudentCard";
+import { RecruitmentStudentCardRail } from "~/components/v2/features/students/RecruitmentStudentCardRail";
 import StudentPortrait from "~/components/v2/features/students/StudentPortrait";
-import type { FutureStudentEntry } from "~/components/v2/features/students/types";
+import { TrailingIconText } from "~/components/v2/primitives/TrailingIconText";
 import { getHomeOngoingChip, getHomeUpcomingChip } from "~/domain/home-portal";
-import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import { formatInstant, formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
 import { recruitmentLabelLocale } from "~/locales/ko";
-import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
+import { uploadedImageProps } from "~/models/assets";
 import type { HomeRecruitmentGroup, HomeSourceResult, IndexRecruitment } from "~/views/home";
 import { HomeEmpty, HomeRetryButton, HomeSection, HomeTile, HomeTimeChip } from "./HomePrimitives";
 import type { HomeViewerState } from "./home-viewer-state";
@@ -22,79 +21,27 @@ function groupChip(group: HomeRecruitmentGroup, now: UtcIsoString, timeZone: str
     : getHomeOngoingChip(group.until, now, timeZone);
 }
 
-function completionMetaOf(recruitment: IndexRecruitment): RecruitmentCompletionMeta {
-  // The loader carries no initial tier, so completion records the default tier, as the 1.x timeline did.
-  return {
-    tier: 3,
-    pickup: recruitment.pickup && recruitment.recruitmentType !== "given",
-    recruitmentType: recruitment.recruitmentType,
-  };
-}
-
-function toStudentEntry({
-  group,
-  recruitment,
-  viewer,
-  now,
-}: {
-  group: HomeRecruitmentGroup;
-  recruitment: IndexRecruitment & { student: NonNullable<IndexRecruitment["student"]> };
-  viewer: HomeViewerState;
-  now: UtcIsoString;
-}): FutureStudentEntry {
-  const { student, contentUid, favoriteKey } = recruitment;
-  const favorited = viewer.isFavorited(contentUid, favoriteKey);
-  const completed = viewer.isCompleted(group.groupUid, student.uid);
-  // Null while the counts load or when they failed. The count then stays hidden.
-  const favoritedCount = viewer.favoriteCount(contentUid, favoriteKey);
-  return {
-    favoriteKey,
-    studentUid: student.uid,
-    studentName: recruitment.studentName,
-    attackType: student.attackType,
-    defenseType: student.defenseType,
-    role: student.role,
-    recruitmentLabel: recruitmentLabelLocale({
-      recruitmentType: recruitment.recruitmentType,
-      rerun: recruitment.rerun,
-    }),
-    recruitmentType: recruitment.recruitmentType,
-    pickup: recruitment.pickup,
-    rerun: recruitment.rerun,
-    since: recruitment.since,
-    until: recruitment.until,
-    favoritedCount,
-    favorited,
-    completed,
-    canComplete: canCompleteRecruitmentStudent({ recruitmentSince: recruitment.since, favorited, now }),
-    viewerPending: viewer.status === "pending",
-    viewerUnavailable: viewer.status === "failed",
-    completionMeta: completionMetaOf(recruitment),
-    resultEditLink: null,
-    onToggleFavorite: (next) => viewer.toggleFavorite(contentUid, favoriteKey, next),
-    onToggleComplete: (next) =>
-      viewer.toggleComplete(group.groupUid, contentUid, student.uid, next, completionMetaOf(recruitment)),
-  };
-}
-
+// A group without students shows its event banner in their place. The group header already names the event.
 function GroupBanner({ group }: { group: HomeRecruitmentGroup }) {
   const { haloMode } = useHaloMode();
-  const name = group.eventName ?? group.kindLabel;
+  if (!group.eventImageUrl) {
+    return null;
+  }
   return (
-    <div className="flex items-center gap-3">
-      {group.eventImageUrl ? (
-        <div className="relative aspect-[16/9] w-32 shrink-0 overflow-hidden rounded-md bg-v2-inset">
-          {haloMode ? (
-            <>
-              <BlurhashPlaceholder blurhash={group.eventImageBlurhash} />
-              <HaloModeNotice />
-            </>
-          ) : (
-            <img src={group.eventImageUrl} alt="" loading="lazy" className="size-full object-cover" />
-          )}
-        </div>
-      ) : null}
-      <p className="min-w-0 text-lg font-semibold break-keep text-v2-fg">{name}</p>
+    <div className="relative aspect-[16/9] w-32 shrink-0 overflow-hidden rounded-md bg-v2-inset">
+      {haloMode ? (
+        <>
+          <BlurhashPlaceholder blurhash={group.eventImageBlurhash} />
+          <HaloModeNotice />
+        </>
+      ) : (
+        <img
+          {...uploadedImageProps(group.eventImageUrl, "128px")}
+          alt=""
+          loading="lazy"
+          className="size-full object-cover"
+        />
+      )}
     </div>
   );
 }
@@ -114,7 +61,7 @@ function NextRecruitmentPreview({ groups, timeZone }: { groups: HomeRecruitmentG
   return (
     <Link
       to="/futures"
-      className="flex min-w-0 items-center gap-3 rounded-lg bg-v2-surface px-v2-block-p py-2.5 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+      className="flex min-w-0 items-center gap-3 rounded-lg bg-v2-surface px-v2-block-p py-2.5 hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
     >
       <div className="min-w-0 flex-1">
         <p className="text-xs text-v2-fg-tertiary">
@@ -139,7 +86,7 @@ function NextRecruitmentPreview({ groups, timeZone }: { groups: HomeRecruitmentG
                 ) : (
                   <span aria-hidden="true" />
                 )}
-                <span className="min-w-0 flex-1 text-xs whitespace-pre-line text-v2-fg-secondary line-clamp-2">
+                <span className="min-w-0 flex-1 text-xs break-keep whitespace-pre-line text-v2-fg-secondary line-clamp-2">
                   {group.eventName ?? group.kindLabel}
                 </span>
               </li>
@@ -167,8 +114,6 @@ export function HomeRecruitmentSection({
   timeZone: string;
   onRetry: () => void;
 }) {
-  const [openKey, setOpenKey] = useState<string | null>(null);
-
   // The counts are not part of this block's failure: the students show without their counts.
   if (groups.status === "error") {
     return (
@@ -196,35 +141,69 @@ export function HomeRecruitmentSection({
               (recruitment): recruitment is IndexRecruitment & { student: NonNullable<IndexRecruitment["student"]> } =>
                 recruitment.student !== null,
             );
-            const kind = group.eventName ? `${group.kindLabel} · ${group.eventName}` : group.kindLabel;
             return (
               <div key={group.groupUid} className="flex flex-col gap-2 px-v2-block-p py-3 md:gap-3 md:py-v2-block-p">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 text-sm text-v2-fg-tertiary">{kind}</p>
-                  <HomeTimeChip chip={groupChip(group, now, timeZone)} />
+                {/* The kind label shares the first row with the chip, and the event name takes the full width below. */}
+                <div className="flex min-w-0 flex-col gap-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 text-xs text-v2-fg-tertiary md:text-sm">{group.kindLabel}</p>
+                    <HomeTimeChip chip={groupChip(group, now, timeZone)} dense />
+                  </div>
+                  {group.eventName ? (
+                    <p className="text-base leading-6 font-semibold break-keep whitespace-pre-line text-v2-fg md:text-lg md:leading-7">
+                      {group.eventUid ? (
+                        <Link
+                          to={`/events/${group.eventUid}`}
+                          className="-mx-1 rounded-md px-1 hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
+                        >
+                          <TrailingIconText text={group.eventName}>
+                            <ChevronRightIcon
+                              aria-hidden="true"
+                              className="ml-1 inline-block size-4 align-middle text-v2-fg-tertiary"
+                            />
+                          </TrailingIconText>
+                        </Link>
+                      ) : (
+                        group.eventName
+                      )}
+                    </p>
+                  ) : null}
                 </div>
                 {students.length === 0 ? (
                   <GroupBanner group={group} />
                 ) : (
-                  <ul className="flex flex-wrap gap-x-3 gap-y-4">
+                  <RecruitmentStudentCardRail fadeFrom="surface" listClassName="gap-x-3 gap-y-4">
                     {students.map((recruitment) => {
                       const key = `${group.groupUid}:${recruitment.favoriteKey}`;
                       return (
-                        <li
-                          key={key}
-                          className="[&_button]:transition-opacity [&_button]:duration-v2-fast [&_button]:ease-v2-standard [&_button:hover]:opacity-90 motion-reduce:[&_button]:transition-none"
-                        >
-                          <StudentSlot
-                            entry={toStudentEntry({ group, recruitment, viewer, now })}
+                        <li key={key} className="list-none">
+                          <RecruitmentStudentCard
+                            studentUid={recruitment.student.uid}
+                            favoriteKey={recruitment.favoriteKey}
+                            studentName={recruitment.studentName}
+                            label={recruitmentLabelLocale({
+                              recruitmentType: recruitment.recruitmentType,
+                              rerun: recruitment.rerun,
+                            })}
+                            attackType={recruitment.student.attackType}
+                            defenseType={recruitment.student.defenseType}
+                            role={recruitment.student.role}
+                            tone="raised"
+                            favorited={
+                              viewer.status === "ready" &&
+                              viewer.isFavorited(recruitment.contentUid, recruitment.favoriteKey)
+                            }
+                            favoritedCount={viewer.favoriteCount(recruitment.contentUid, recruitment.favoriteKey)}
                             signedIn={viewer.signedIn}
-                            large
-                            open={openKey === key}
-                            onOpenChange={(open) => setOpenKey(open ? key : null)}
+                            favoriteDisabled={viewer.signedIn && viewer.status !== "ready"}
+                            onToggleFavorite={(favoriteKey, favorited) =>
+                              viewer.toggleFavorite(recruitment.contentUid, favoriteKey, favorited)
+                            }
                           />
                         </li>
                       );
                     })}
-                  </ul>
+                  </RecruitmentStudentCardRail>
                 )}
               </div>
             );

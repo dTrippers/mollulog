@@ -15,6 +15,7 @@ export const postgresKeys = [
 
 export const workerEnvKeys = [
   "HOST",
+  "ANTHROPIC_API_KEY",
   "OCR_R2_ACCOUNT_ID",
   "OCR_R2_ACCESS_KEY_ID",
   "OCR_R2_SECRET_ACCESS_KEY",

@@ -5,6 +5,7 @@ import {
   getRecruitmentResultCountStats,
   getRecruitmentResultTier3CountFromPickupHistory,
   getRecruitmentResultTrialFromPickupHistory,
+  isValidOffPickupSelection,
   mergeEditableRecruitmentResultStudents,
   normalizeRecruitmentResultStudents,
   removeRecruitmentResultStudent,
@@ -203,5 +204,98 @@ describe("recruitment-result", () => {
       { studentUid: "hina", tier: 3, pickup: true },
       { studentUid: "aru", tier: 4, pickup: false },
     ]);
+  });
+
+  describe("픽업 외 choice", () => {
+    const group = {
+      recruitmentType: RecruitmentTypeEnum.Usual,
+      recruitments: [
+        { pickup: true, recruitmentType: "usual", student: { uid: "neru", name: "네루(교복)", initialTier: 3 } },
+        { pickup: true, recruitmentType: "usual", student: { uid: "iroha", name: "이로하(수영복)", initialTier: 3 } },
+      ],
+    };
+
+    it("stores the choice on that draw only, so one of two draws of a student can be 픽업 외", () => {
+      const students = createRecruitmentResultStudentsFromPickupHistory(
+        {
+          result: [
+            {
+              trial: 400,
+              tier3Count: 3,
+              tier3StudentIds: ["neru", "hina", "neru"],
+              tier3StudentOffPickup: [false, false, true],
+            },
+          ],
+        },
+        new Set(["neru", "iroha"]),
+      );
+
+      expect(students).toEqual([
+        { studentUid: "neru", tier: 3, pickup: true },
+        { studentUid: "hina", tier: 3, pickup: false },
+        { studentUid: "neru", tier: 3, pickup: false, offPickup: true },
+      ]);
+    });
+
+    it("ignores the choice on a student that is not a pickup student of the group", () => {
+      expect(
+        createRecruitmentResultStudentsFromPickupHistory(
+          { result: [{ trial: 10, tier3Count: 1, tier3StudentIds: ["hina"], tier3StudentOffPickup: [true] }] },
+          new Set(["neru"]),
+        ),
+      ).toEqual([{ studentUid: "hina", tier: 3, pickup: false }]);
+    });
+
+    it("keeps the flag through sanitizing and drops anything but true", () => {
+      expect(
+        sanitizeRecruitmentResultStudents([
+          { studentUid: "neru", tier: 3, pickup: true, offPickup: true },
+          { studentUid: "iroha", tier: 3, pickup: true, offPickup: false as unknown as true },
+        ]),
+      ).toEqual([
+        { studentUid: "neru", tier: 3, pickup: false, offPickup: true },
+        { studentUid: "iroha", tier: 3, pickup: true },
+      ]);
+    });
+
+    it("leaves a 픽업 외 student out of the pickup count only", () => {
+      expect(
+        getRecruitmentResultCountStats(
+          {
+            recruitedStudents: [
+              { studentUid: "neru", tier: 3, pickup: true },
+              { studentUid: "neru", tier: 3, pickup: false, offPickup: true },
+              { studentUid: "iroha", tier: 3, pickup: true },
+            ],
+            tier3Count: null,
+            trial: 400,
+          },
+          { group },
+        ),
+      ).toMatchObject({ tier3Count: 3, tier3RateCount: 3, pickupCount: 2, pickupRateCount: 2 });
+    });
+
+    it("counts a record saved before the choice existed as 픽업, as the group data says", () => {
+      expect(
+        getRecruitmentResultCountStats(
+          { recruitedStudents: [{ studentUid: "neru", tier: 3, pickup: false }], tier3Count: null, trial: 10 },
+          { group },
+        ),
+      ).toMatchObject({ pickupCount: 1 });
+    });
+
+    it("accepts choices only on pickup students, one per draw", () => {
+      const pickups = new Set(["neru"]);
+      expect(isValidOffPickupSelection({ tier3StudentIds: ["neru", "hina"] }, pickups)).toBe(true);
+      expect(
+        isValidOffPickupSelection({ tier3StudentIds: ["neru", "hina"], tier3StudentOffPickup: [true, false] }, pickups),
+      ).toBe(true);
+      expect(
+        isValidOffPickupSelection({ tier3StudentIds: ["neru", "hina"], tier3StudentOffPickup: [false, true] }, pickups),
+      ).toBe(false);
+      expect(
+        isValidOffPickupSelection({ tier3StudentIds: ["neru", "hina"], tier3StudentOffPickup: [true] }, pickups),
+      ).toBe(false);
+    });
   });
 });

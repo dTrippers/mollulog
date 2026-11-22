@@ -14,6 +14,8 @@ export const RUNTIME_TIMEOUTS = {
   },
   cache: {
     generate: 5000,
+    // Admin cache refresh job: no user waits on it, so regenerations may run longer.
+    jobGenerate: 60000,
     inflightMax: 10000,
     inflightWait: 6000,
   },

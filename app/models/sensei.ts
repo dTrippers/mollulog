@@ -79,6 +79,31 @@ export async function getQuestionMemberDataConsentAt(
   );
 }
 
+/**
+ * Resolves whether recruitment results are hidden for a viewer. The setting is read from PostgreSQL, not the session:
+ * a session keeps the value from sign-in. Guests and accounts without a row always hide them.
+ */
+export async function getHideRecruitmentOpinions(
+  env: Env,
+  viewer: Pick<Sensei, "id"> | null,
+  options: IdentityRepositoryOptions = {},
+): Promise<boolean> {
+  if (!viewer) return true;
+  return withIdentityDatabase(
+    env,
+    "hide_recruitment_opinions_by_sensei",
+    async (db) => {
+      const [row] = await db
+        .select({ hideRecruitmentOpinions: pgSenseisTable.hideRecruitmentOpinions })
+        .from(pgSenseisTable)
+        .where(eq(pgSenseisTable.id, viewer.id))
+        .limit(1);
+      return row?.hideRecruitmentOpinions ?? true;
+    },
+    options,
+  );
+}
+
 export async function consentToQuestionMemberData(
   env: Env,
   id: number,
@@ -299,7 +324,7 @@ export function toSenseiModel(row: SenseiRow): Sensei {
     role: row.role as SenseiRole,
     profileVisibility: row.profileVisibility ?? "public",
     growthVisibility: row.growthVisibility ?? false,
-    hideRecruitmentOpinions: row.hideRecruitmentOpinions ?? false,
+    hideRecruitmentOpinions: row.hideRecruitmentOpinions ?? true,
     labels: row.labels ?? [],
   };
 }

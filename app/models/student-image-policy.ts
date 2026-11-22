@@ -13,7 +13,9 @@ export function getStudentPortraitPresentation(
   haloMode: boolean,
   imageUid: string | null = null,
 ): StudentPortraitPresentation {
-  if (!uid || uid === "unlisted") return { kind: "neutral" };
+  if (!uid) return { kind: "neutral" };
+  // The in-game placeholder icon is not character artwork, so halo mode shows it as is.
+  if (uid === "unlisted") return { kind: "collection", src: studentImageUrl(uid) };
   const src = studentImageUrl(imageUid ?? uid);
   if (!haloMode) return { kind: "collection", src };
   const portraitKey = imageUid ?? uid;

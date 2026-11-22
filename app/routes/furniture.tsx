@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction, ShouldRevali
 import { useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
+import { socialMeta } from "~/lib/seo";
 import { getFurnitureCatalogSource } from "~/models/furniture-catalog";
 import {
   parseUserFurnitureInventoryQuantity,
@@ -12,12 +13,15 @@ import { getFurnitureCatalogView } from "~/views/furniture-catalog";
 import type { FurnitureInventoryActionResult } from "./furniture._components/action-data";
 import FurnitureCatalogScreen from "./furniture._components/FurnitureCatalogScreen";
 
-export const meta: MetaFunction = () => [
-  { title: "가구 도감 | 몰루로그" },
-  { name: "description", content: "테마별 가구 구성과 보유 현황을 확인해보세요." },
-  { name: "og:title", content: "가구 도감 | 몰루로그" },
-  { name: "og:description", content: "테마별 가구 구성과 보유 현황을 확인해보세요." },
-];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "가구 도감 | 몰루로그";
+  const description = "테마별 가구 구성과 보유 현황을 확인해보세요.";
+  return [
+    { title },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+  ];
+};
 
 export const shouldRevalidate: ShouldRevalidateFunction = ({
   currentUrl,
@@ -28,6 +32,17 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
   json,
   defaultShouldRevalidate,
 }) => {
+  if (
+    !formMethod &&
+    !formAction &&
+    currentUrl.pathname === nextUrl.pathname &&
+    currentUrl.hash === nextUrl.hash &&
+    currentUrl.search !== nextUrl.search &&
+    onlyThemeParamChanged(currentUrl.searchParams, nextUrl.searchParams)
+  ) {
+    return false;
+  }
+
   if (
     currentUrl.pathname !== nextUrl.pathname ||
     currentUrl.search !== nextUrl.search ||
@@ -48,6 +63,16 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
   return isFurnitureInventorySave ? false : defaultShouldRevalidate;
 };
 
+function onlyThemeParamChanged(current: URLSearchParams, next: URLSearchParams): boolean {
+  const withoutTheme = (params: URLSearchParams) => {
+    const copy = new URLSearchParams(params);
+    copy.delete("theme");
+    copy.sort();
+    return copy.toString();
+  };
+  return current.get("theme") !== next.get("theme") && withoutTheme(current) === withoutTheme(next);
+}
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { env, ctx } = context.cloudflare;
   const logger = getLogger(env, ctx, { route: "furniture.loader" });
@@ -61,7 +86,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     return {
       view: null,
       signedIn: currentUser !== null,
-      loadError: "가구 도감을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
+      loadError: "가구 도감을 불러오지 못했어요.",
     };
   }
 }

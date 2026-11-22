@@ -1,6 +1,12 @@
-import { CalendarIcon, ChartBarIcon, PlusIcon } from "@heroicons/react/24/outline";
-import { ArrowPathIcon } from "@heroicons/react/24/solid";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AdjustmentsHorizontalIcon,
+  ArrowTrendingUpIcon,
+  CalendarIcon,
+  ChartBarIcon,
+  Squares2X2Icon,
+  WalletIcon,
+} from "@heroicons/react/16/solid";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ActionFunctionArgs,
   data,
@@ -10,19 +16,38 @@ import {
   useLoaderData,
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { useGuestPlanner } from "~/components/features/futures/useGuestPlanner";
+import { usePyroxeneScheduleItems } from "~/components/features/futures/usePyroxeneScheduleItems";
+import { usePyroxeneTimeline } from "~/components/features/futures/usePyroxeneTimeline";
+import type { PlannerEventData, PlannerEventDataPatch } from "~/components/v2/features/pyroxene/EventCard";
+import { AddIncomeDialog, type AddTab, IncomePlanPanel } from "~/components/v2/features/pyroxene/IncomePlan";
 import {
-  GuestPlannerLegacyConflictCallout,
-  PyroxenePlannerOptionsPanel,
-  PyroxenePlannerSourcePanel,
-  PyroxeneSchedule,
-  useGuestPlanner,
-  usePyroxeneScheduleItems,
-} from "~/components/features/futures";
-import Page from "~/components/features/layout/Page";
-import { Button, Callout } from "~/components/primitives";
+  formatInputAt,
+  OwnedResourceList,
+  OwnedResourcesDialog,
+  OwnedResourcesHeaderAction,
+  type OwnedResourceValues,
+  type ReceivableReward,
+} from "~/components/v2/features/pyroxene/OwnedResources";
+import {
+  CalculationMethodButton,
+  CalculationMethodDialog,
+  PickupBasisPanel,
+} from "~/components/v2/features/pyroxene/PickupBasis";
+import { PlannerSchedule } from "~/components/v2/features/pyroxene/PlannerSchedule";
+import { PLAN_SHEET_PANEL_ID, PlanSheet } from "~/components/v2/features/pyroxene/PlanSheet";
+import { AsideLinks } from "~/components/v2/layout/AsideLinks";
+import { MobileActionBar } from "~/components/v2/layout/MobileActionBar";
+import { PageAside } from "~/components/v2/layout/PageAside";
+import { PageHeader } from "~/components/v2/layout/PageHeader";
+import { PageMain } from "~/components/v2/layout/PageMain";
+import { PanelSheet } from "~/components/v2/layout/PanelSheet";
+import { V2Page } from "~/components/v2/layout/V2Page";
+import { Button } from "~/components/v2/primitives/Button";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { useSignIn } from "~/contexts/SignInProvider";
 import {
-  guestPlannerHasData,
+  guestPlannerHasImportableData,
   removeGuestPlannerApChargeException,
   updateGuestPlannerOptions,
 } from "~/domain/guest-planner";
@@ -31,24 +56,39 @@ import {
   type GuestPyroxeneRecord,
   guestPyroxeneRecordToTimelineItems,
 } from "~/domain/guest-pyroxene-planner";
-import { sortPlannerStateTimelineRecords } from "~/domain/planner-state";
-import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
-import { defaultPyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import { sortPlannerStateTimelineRecords, withPyroxeneEventDataPatch } from "~/domain/planner-state";
+import { buildPyroxeneCalculationAssumptions } from "~/domain/pyroxene-assumptions";
 import {
+  defaultPyroxenePlannerOptions,
+  type PyroxeneCalculationOptions,
+  type PyroxenePlannerOptions,
+} from "~/domain/pyroxene-planner";
+import {
+  buildPlannerTimelineRows,
+  getActivePyroxenePackages,
+  numberTargetEvents,
+} from "~/domain/pyroxene-planner-view";
+import { EMPTY_RECRUITMENT_STACKS, type RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
+import { buildPlannerEventDataMap } from "~/domain/pyroxene-recruitment-plan-check";
+import { buildPyroxeneDisplayTimeline } from "~/domain/pyroxene-schedule";
+import {
+  collectedSourceKeyForEventReward,
   createOptimisticApPackageTimelineItems,
   createOptimisticAttendanceTimelineItems,
   createOptimisticBuyTimelineItems,
   createOptimisticMonthlyPackageTimelineItems,
   createOptimisticOtherTimelineItems,
   extractPyroxeneTimelineBaseUid,
+  getAttendanceStartDate,
   type PyroxeneMonthlyPackageType,
 } from "~/domain/pyroxene-sources";
-import type { PickupResources } from "~/domain/pyroxene-timeline";
+import { getPyroxenePlanEndDate, type PickupResources } from "~/domain/pyroxene-timeline";
+import dayjs from "~/lib/dayjs";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getLogger } from "~/lib/observability.server";
-import { canonicalLink } from "~/lib/seo";
-import { getUserFavoritedStudents } from "~/models/favorite-students";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { isPlannerStateRevisionConflictError, PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
-import type { PyroxeneEventData, PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
+import type { PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
 import {
   createAttendance,
   createBuyPyroxene,
@@ -58,19 +98,22 @@ import {
   createPyroxeneOwnedResource,
   deleteCollectedSource,
   deletePyroxeneTimelineItem,
-  getPyroxeneUserState,
+  updateCollectedSources,
   updatePyroxenePlannerOptions,
   upsertCollectedSources,
   upsertPyroxeneEventData,
 } from "~/models/pyroxene-planner";
-import { getRecruitedStudents } from "~/models/recruited-student";
 import {
   deleteRecruitmentResult,
   getRecruitmentResultsByRecruitmentGroupUids,
   setRecruitmentResultCompletion,
 } from "~/models/recruitment-result.server";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
+import { loadPyroxenePlannerAccount } from "~/views/pyroxene-planner-account";
 import { type ActionData, decodePyroxeneActionPayload } from "./utils.pyroxene._components/action-data";
+
+// recharts is large, so the chart loads apart from the planner's first bundle.
+const BalanceChart = lazy(() => import("~/components/v2/features/pyroxene/BalanceChart"));
 
 export const PYROXENE_GUEST_IMPORT_HREF = "/planner/import?from=pyroxene";
 
@@ -86,6 +129,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
   if (!currentUser) {
     return {
+      signedIn: false,
       contents,
       selectedEventUid,
       favoritedStudents: [],
@@ -94,58 +138,20 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
         oneTimeTicket: 0,
         tenTimeTicket: 0,
         inputAt: null,
+        recruitmentStacks: EMPTY_RECRUITMENT_STACKS,
       },
       timelineItems: [],
       calcOptions: defaultPyroxenePlannerOptions,
       eventData: [],
       recruitmentResultCompletions: [],
       recruitedStudentUids: [],
+      recruitmentOwnedSnapshot: undefined,
       collectedSourceKeys: [],
     };
   }
 
-  // User state reads share one PostgreSQL client; unrelated repositories remain parallel.
-  const recruitmentGroupUids = contents.flatMap((content) =>
-    content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
-  );
-
-  const [favoritedStudents, pyroxeneState, recruitmentResults, recruitedStudents] = await Promise.all([
-    getUserFavoritedStudents(env, currentUser.id, undefined, { ctx }),
-    getPyroxeneUserState(env, currentUser.id, { ctx }),
-    getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
-    getRecruitedStudents(env, currentUser.id),
-  ]);
-
-  return {
-    signedIn: true,
-    contents,
-    selectedEventUid,
-    favoritedStudents: favoritedStudents.map(({ contentId, studentId }) => ({
-      contentUid: contentId,
-      studentUid: studentId,
-    })),
-    latestResources: {
-      pyroxene: pyroxeneState.latestResources?.pyroxene ?? 0,
-      oneTimeTicket: pyroxeneState.latestResources?.oneTimeTicket ?? 0,
-      tenTimeTicket: pyroxeneState.latestResources?.tenTimeTicket ?? 0,
-      inputAt: pyroxeneState.latestResources?.inputAt ?? null,
-    },
-    timelineItems: pyroxeneState.timelineItems,
-    calcOptions: pyroxeneState.options,
-    eventData: pyroxeneState.eventData,
-    recruitmentResultCompletions: recruitmentResults.flatMap((result) => {
-      if (!result.completedAt) {
-        return [];
-      }
-
-      const content = contents.find(
-        (content) => content.kind === "event" && content.recruitmentGroupUid === result.recruitmentGroupUid,
-      );
-      return content ? [{ eventUid: content.uid, recruitmentGroupUid: result.recruitmentGroupUid }] : [];
-    }),
-    recruitedStudentUids: recruitedStudents.map(({ studentUid }) => studentUid),
-    collectedSourceKeys: [...pyroxeneState.collectedSourceKeys],
-  };
+  const account = await loadPyroxenePlannerAccount(env, currentUser.id, contents, ctx);
+  return { signedIn: true, contents, selectedEventUid, ...account };
 };
 
 function preserveApChargeExceptions(
@@ -189,10 +195,20 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   try {
     switch (actionData.intent) {
       case "save-owned-resources": {
-        const { resources, eventUid, collectedSourceKeys } = actionData.payload;
+        const { resources, recruitmentStacks, eventUid, collectedSourceKeys, uncollectedSourceKeys } =
+          actionData.payload;
         const savedAt = new Date().toISOString();
         try {
-          await createPyroxeneOwnedResource(env, currentUser.id, resources, { inputAt: savedAt });
+          const collectedSources =
+            collectedSourceKeys?.length || uncollectedSourceKeys?.length
+              ? { add: collectedSourceKeys ?? [], remove: uncollectedSourceKeys ?? [] }
+              : undefined;
+          await createPyroxeneOwnedResource(
+            env,
+            currentUser.id,
+            recruitmentStacks ? { ...resources, recruitmentStacks } : resources,
+            collectedSources ? { inputAt: savedAt, collectedSources } : { inputAt: savedAt },
+          );
           if (eventUid) {
             const content = (await getPyroxenePlannerContents(env, false, ctx)).find(
               (content) => content.kind === "event" && content.uid === eventUid,
@@ -219,9 +235,6 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
               contentUid: eventUid,
               recruitedStudents,
             });
-          }
-          if (collectedSourceKeys) {
-            await upsertCollectedSources(env, currentUser.id, collectedSourceKeys);
           }
         } catch (error) {
           logger.error("Failed to save pyroxene owned resources", error, {
@@ -302,6 +315,8 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       case "update-event-data":
         await upsertPyroxeneEventData(env, currentUser.id, actionData.payload.eventUid, {
           expectedTrials: actionData.payload.expectedTrials,
+          pickupChance: actionData.payload.pickupChance,
+          targetTiers: actionData.payload.targetTiers,
         });
         break;
       case "save-options":
@@ -340,6 +355,30 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       case "uncollect-source":
         await deleteCollectedSource(env, currentUser.id, actionData.payload.sourceKey);
         break;
+      case "save-collected-sources": {
+        // Saved from the owned-resources dialog, so a failure shows there instead of replacing the page.
+        try {
+          await updateCollectedSources(env, currentUser.id, {
+            add: actionData.payload.collectedSourceKeys,
+            remove: actionData.payload.uncollectedSourceKeys,
+          });
+        } catch (error) {
+          logger.error("Failed to save pyroxene received rewards", error, {
+            operation: "save-collected-sources",
+            userId: currentUser.id,
+          });
+          const revisionConflict = isPlannerStateRevisionConflictError(error);
+          return data(
+            {
+              success: false,
+              error: revisionConflict ? PLANNER_STATE_REVISION_CONFLICT_MESSAGE : "받은 보상을 저장하지 못했어요",
+              ...(revisionConflict ? { revisionConflict: true } : {}),
+            },
+            { status: revisionConflict ? 409 : 500 },
+          );
+        }
+        return { success: true };
+      }
       case "delete-pickup-completion": {
         let recruitmentGroupUid = actionData.payload.recruitmentGroupUid ?? null;
         if (!recruitmentGroupUid) {
@@ -402,10 +441,7 @@ export const meta: MetaFunction = ({ location }) => {
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };
@@ -418,11 +454,26 @@ type OwnedResourcesActionResult = {
   savedAt?: string | null;
 };
 
+function sameOwnedValues(left: OwnedResourceValues, right: OwnedResourceValues): boolean {
+  return (
+    left.resources.pyroxene === right.resources.pyroxene &&
+    left.resources.tenTimeTicket === right.resources.tenTimeTicket &&
+    left.resources.oneTimeTicket === right.resources.oneTimeTicket &&
+    left.stacks.regular === right.stacks.regular &&
+    left.stacks.limited === right.stacks.limited
+  );
+}
+
 type PendingOwnedResourceSave = {
   eventUid: string | null;
-  resources: PickupResources;
+  values: OwnedResourceValues;
   collectedSourceKeys: string[];
+  uncollectedSourceKeys: string[];
+  // Only the received rewards changed: the resources and their input time stay as they are.
+  rewardsOnly?: boolean;
 };
+
+type LocalEventData = PlannerEventData & { eventUid: string };
 
 function toPickupResources(resources: PickupResources): PickupResources {
   return {
@@ -432,8 +483,34 @@ function toPickupResources(resources: PickupResources): PickupResources {
   };
 }
 
-function zeroPickupResources(): PickupResources {
-  return { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
+function toLocalEventData(rows: (PlannerEventData & { eventUid: string })[]): LocalEventData[] {
+  return rows.map(({ eventUid, completed, expectedTrials, pickupChance, targetTiers }) => ({
+    eventUid,
+    completed,
+    expectedTrials,
+    pickupChance: pickupChance ?? null,
+    targetTiers,
+  }));
+}
+
+const ZERO_RESOURCES: PickupResources = { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
+const HIDE_UNTARGETED_STORAGE_KEY = "pyroxene-planner::hide-unfavorited-events";
+const RESOURCES_DIALOG_PANEL = "resources";
+
+type PyroxenePlanSavedSection =
+  | "owned_resources"
+  | "event_data"
+  | "source"
+  | "options"
+  | "delete"
+  | "buy"
+  | "monthly_package"
+  | "ap_package"
+  | "attendance"
+  | "other";
+
+function isGuestSnapshotUsable(status: string | undefined): boolean {
+  return status === "ready" || status === "memory";
 }
 
 export default function PyroxenePlanner() {
@@ -441,102 +518,119 @@ export default function PyroxenePlanner() {
   const { signedIn, contents } = loaderData;
   const { showSignIn } = useSignIn();
   const guestPlanner = useGuestPlanner();
-  const loaderResources = toPickupResources(loaderData.latestResources);
 
   const [initialDate, setInitialDate] = useState<Date | null>(
     loaderData.latestResources.inputAt ? new Date(loaderData.latestResources.inputAt) : null,
   );
-  const [initialResources, setInitialResources] = useState<PickupResources>(loaderResources);
-
-  // Local optimistic state for timeline items and event data
+  const [initialResources, setInitialResources] = useState<PickupResources>(
+    toPickupResources(loaderData.latestResources),
+  );
+  const [stacks, setStacks] = useState<RecruitmentStacks>(loaderData.latestResources.recruitmentStacks);
   const [localTimelineItems, setLocalTimelineItems] = useState<PyroxeneTimelineItem[]>(loaderData.timelineItems ?? []);
-  const [localEventData, setLocalEventData] = useState<PyroxeneEventData[]>(loaderData.eventData ?? []);
-  const [localRecruitmentResultCompletions, setLocalRecruitmentResultCompletions] = useState<
-    { eventUid: string; recruitmentGroupUid: string }[]
-  >(loaderData.recruitmentResultCompletions ?? []);
+  const [localEventData, setLocalEventData] = useState<LocalEventData[]>(toLocalEventData(loaderData.eventData ?? []));
+  const [localCompletions, setLocalCompletions] = useState(loaderData.recruitmentResultCompletions ?? []);
   const [localCollectedSourceKeys, setLocalCollectedSourceKeys] = useState<string[]>(
     loaderData.collectedSourceKeys ?? [],
   );
   const [localFavoritedStudents, setLocalFavoritedStudents] = useState(loaderData.favoritedStudents ?? []);
-  const [plannerSettingsRequest, setPlannerSettingsRequest] = useState(0);
+  const [options, setOptions] = useState<PyroxenePlannerOptions>(loaderData.calcOptions);
+  const [hideUntargeted, setHideUntargeted] = useState(false);
+  const [resourcesDialogOpen, setResourcesDialogOpen] = useState(false);
+  const [methodDialogOpen, setMethodDialogOpen] = useState(false);
+  const [incomeAddTab, setIncomeAddTab] = useState<AddTab | null>(null);
+  const [selectedEventMissing, setSelectedEventMissing] = useState(false);
+  const selectedEventRef = useRef<HTMLDivElement>(null);
   const fetcher = useFetcher<Awaited<ReturnType<typeof action>>>();
   const ownedResourcesFetcher = useFetcher<OwnedResourcesActionResult>();
   const favoriteFetcher = useFetcher();
   const timelineSaveInFlight = useRef(false);
   const pendingOwnedResourceSave = useRef<PendingOwnedResourceSave | null>(null);
   const processedAnalyticsResponse = useRef<Awaited<ReturnType<typeof action>> | null>(null);
+  const optionsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [ownedResourceSaveError, setOwnedResourceSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      setHideUntargeted(localStorage.getItem(HIDE_UNTARGETED_STORAGE_KEY) === "true");
+    } catch {
+      // Unavailable storage keeps the default.
+    }
+  }, []);
+
+  const handleHideUntargetedChange = (value: boolean) => {
+    setHideUntargeted(value);
+    try {
+      localStorage.setItem(HIDE_UNTARGETED_STORAGE_KEY, String(value));
+    } catch {
+      // Unavailable storage keeps the choice for this tab only.
+    }
+  };
 
   const confirmOwnedResourceSave = useCallback(
     (pendingSave: PendingOwnedResourceSave, savedAt?: string | null) => {
-      setInitialResources(pendingSave.resources);
-      setInitialDate(savedAt ? new Date(savedAt) : new Date());
-      if (pendingSave.collectedSourceKeys.length > 0) {
-        setLocalCollectedSourceKeys((prev) => [...new Set([...prev, ...pendingSave.collectedSourceKeys])]);
+      if (!pendingSave.rewardsOnly) {
+        setInitialResources(pendingSave.values.resources);
+        setStacks(pendingSave.values.stacks);
+        setInitialDate(savedAt ? new Date(savedAt) : new Date());
       }
-      if (pendingSave.eventUid && signedIn) {
-        const content = contents.find((content) => content.kind === "event" && content.uid === pendingSave.eventUid);
+      if (pendingSave.collectedSourceKeys.length > 0 || pendingSave.uncollectedSourceKeys.length > 0) {
+        const removed = new Set(pendingSave.uncollectedSourceKeys);
+        setLocalCollectedSourceKeys((prev) =>
+          [...new Set([...prev, ...pendingSave.collectedSourceKeys])].filter((key) => !removed.has(key)),
+        );
+      }
+      const eventUid = pendingSave.eventUid;
+      if (eventUid && signedIn) {
+        const content = contents.find((content) => content.kind === "event" && content.uid === eventUid);
         if (content?.kind === "event" && content.recruitmentGroupUid) {
           const recruitmentGroupUid = content.recruitmentGroupUid;
-          setLocalRecruitmentResultCompletions((prev) => {
-            if (prev.some((completion) => completion.eventUid === pendingSave.eventUid)) {
-              return prev;
-            }
-            return [...prev, { eventUid: pendingSave.eventUid as string, recruitmentGroupUid }];
-          });
+          setLocalCompletions((prev) =>
+            prev.some((completion) => completion.eventUid === eventUid)
+              ? prev
+              : [...prev, { eventUid, recruitmentGroupUid, recruitmentResultUid: null }],
+          );
         }
       }
     },
     [contents, signedIn],
   );
 
-  // Sync from loader data after server revalidation
+  // Server revalidation replaces the local copies.
   useEffect(() => {
     setInitialDate(loaderData.latestResources.inputAt ? new Date(loaderData.latestResources.inputAt) : null);
     setInitialResources(toPickupResources(loaderData.latestResources));
+    setStacks(loaderData.latestResources.recruitmentStacks);
   }, [loaderData.latestResources]);
-
+  useEffect(() => setLocalTimelineItems(loaderData.timelineItems ?? []), [loaderData.timelineItems]);
+  useEffect(() => setLocalEventData(toLocalEventData(loaderData.eventData ?? [])), [loaderData.eventData]);
+  useEffect(
+    () => setLocalCompletions(loaderData.recruitmentResultCompletions ?? []),
+    [loaderData.recruitmentResultCompletions],
+  );
+  useEffect(() => setLocalCollectedSourceKeys(loaderData.collectedSourceKeys ?? []), [loaderData.collectedSourceKeys]);
+  useEffect(() => setLocalFavoritedStudents(loaderData.favoritedStudents ?? []), [loaderData.favoritedStudents]);
   useEffect(() => {
-    setLocalTimelineItems(loaderData.timelineItems ?? []);
-  }, [loaderData.timelineItems]);
+    if (signedIn) setOptions(loaderData.calcOptions);
+  }, [loaderData.calcOptions, signedIn]);
 
+  // Guests read everything from the browser planner.
   useEffect(() => {
-    setLocalEventData(loaderData.eventData ?? []);
-  }, [loaderData.eventData]);
-
-  useEffect(() => {
-    setLocalRecruitmentResultCompletions(loaderData.recruitmentResultCompletions ?? []);
-  }, [loaderData.recruitmentResultCompletions]);
-
-  useEffect(() => {
-    setLocalCollectedSourceKeys(loaderData.collectedSourceKeys ?? []);
-  }, [loaderData.collectedSourceKeys]);
-
-  useEffect(() => {
-    setLocalFavoritedStudents(loaderData.favoritedStudents ?? []);
-  }, [loaderData.favoritedStudents]);
-
-  useEffect(() => {
-    if (
-      signedIn ||
-      !guestPlanner.snapshot ||
-      (guestPlanner.snapshot.status !== "ready" &&
-        guestPlanner.snapshot.status !== "memory" &&
-        guestPlanner.snapshot.status !== "conflict")
-    )
-      return;
-    const { document, favorites } = guestPlanner.snapshot.envelope;
+    const snapshot = guestPlanner.snapshot;
+    if (signedIn || !snapshot || !(isGuestSnapshotUsable(snapshot.status) || snapshot.status === "conflict")) return;
+    if (!("envelope" in snapshot)) return;
+    const { document, favorites } = snapshot.envelope;
     const pyroxene = document.pyroxene;
     setInitialDate(pyroxene.resources ? new Date(pyroxene.resources.inputAt) : null);
-    setInitialResources(pyroxene.resources ? toPickupResources(pyroxene.resources) : zeroPickupResources());
+    setInitialResources(pyroxene.resources ? toPickupResources(pyroxene.resources) : ZERO_RESOURCES);
+    setStacks(pyroxene.resources?.recruitmentStacks ?? EMPTY_RECRUITMENT_STACKS);
     setLocalTimelineItems(pyroxene.records.map((item) => ({ ...item, userId: 0 })));
     setLocalEventData(
       Object.entries(pyroxene.eventData).map(([eventUid, state]) => ({
-        uid: `guest-${eventUid}`,
-        userId: 0,
         eventUid,
         completed: state.completed,
         expectedTrials: state.expectedTrials,
+        pickupChance: state.pickupChance ?? null,
+        targetTiers: state.targetTiers,
       })),
     );
     setLocalCollectedSourceKeys(pyroxene.collectedSourceKeys);
@@ -545,13 +639,7 @@ export default function PyroxenePlanner() {
   }, [guestPlanner.snapshot, signedIn]);
 
   useEffect(() => {
-    if (signedIn) setOptions(loaderData.calcOptions);
-  }, [loaderData.calcOptions, signedIn]);
-
-  useEffect(() => {
-    if (fetcher.state === "idle") {
-      timelineSaveInFlight.current = false;
-    }
+    if (fetcher.state === "idle") timelineSaveInFlight.current = false;
   }, [fetcher.state]);
 
   useEffect(() => {
@@ -573,152 +661,159 @@ export default function PyroxenePlanner() {
 
   useEffect(() => {
     if (ownedResourcesFetcher.state !== "idle") return;
-
     const pendingSave = pendingOwnedResourceSave.current;
     if (!pendingSave) return;
-
     pendingOwnedResourceSave.current = null;
     if (!ownedResourcesFetcher.data?.success) {
-      setOwnedResourceSaveError(ownedResourcesFetcher.data?.error ?? "보유 재화를 저장하지 못했어요");
+      setOwnedResourceSaveError(
+        ownedResourcesFetcher.data?.error ??
+          (pendingSave.rewardsOnly ? "받은 보상을 저장하지 못했어요" : "보유 재화를 저장하지 못했어요"),
+      );
       return;
     }
-
     setOwnedResourceSaveError(null);
-    trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "owned_resources" });
+    trackGoogleAnalyticsEvent("pyroxene_plan_saved", {
+      section: pendingSave.rewardsOnly ? "source" : "owned_resources",
+    });
     confirmOwnedResourceSave(pendingSave, ownedResourcesFetcher.data.savedAt);
   }, [confirmOwnedResourceSave, ownedResourcesFetcher.data, ownedResourcesFetcher.state]);
 
+  const trackGuestSave = (section: PyroxenePlanSavedSection) => (snapshot: { status: string }) => {
+    if (isGuestSnapshotUsable(snapshot.status)) trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section });
+  };
+
   const handleSaveOwnedResources = (
     eventUid: string | null,
-    resources: PickupResources,
+    values: OwnedResourceValues,
     collectedSourceKeys: string[] = [],
+    uncollectedSourceKeys: string[] = [],
   ) => {
-    const ownedResources = toPickupResources(resources);
-    const inputAt = new Date();
+    const ownedResources = toPickupResources(values.resources);
+    const inputAt = new Date().toISOString();
+    const removed = new Set(uncollectedSourceKeys);
     if (!signedIn) {
-      confirmOwnedResourceSave({ eventUid, resources: ownedResources, collectedSourceKeys }, inputAt.toISOString());
-      void guestPlanner.update((envelope) => ({
-        ...envelope,
-        document: {
-          ...envelope.document,
-          pyroxene: {
-            ...envelope.document.pyroxene,
-            resources: { ...ownedResources, inputAt: inputAt.toISOString() },
-            collectedSourceKeys: [
-              ...new Set([...envelope.document.pyroxene.collectedSourceKeys, ...collectedSourceKeys]),
-            ].sort(),
+      confirmOwnedResourceSave({ eventUid, values, collectedSourceKeys, uncollectedSourceKeys }, inputAt);
+      void guestPlanner
+        .update((envelope) => ({
+          ...envelope,
+          document: {
+            ...envelope.document,
+            pyroxene: {
+              ...envelope.document.pyroxene,
+              resources: { ...ownedResources, inputAt, recruitmentStacks: values.stacks },
+              collectedSourceKeys: [
+                ...new Set([...envelope.document.pyroxene.collectedSourceKeys, ...collectedSourceKeys]),
+              ]
+                .filter((key) => !removed.has(key))
+                .sort(),
+            },
           },
-        },
-      })).then((snapshot) => {
-        if (snapshot.status === "ready" || snapshot.status === "memory") {
-          trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "owned_resources" });
-        }
-      });
+        }))
+        .then(trackGuestSave("owned_resources"));
       return;
     }
-
     setOwnedResourceSaveError(null);
-    pendingOwnedResourceSave.current = { eventUid, resources: ownedResources, collectedSourceKeys };
+    pendingOwnedResourceSave.current = { eventUid, values, collectedSourceKeys, uncollectedSourceKeys };
     ownedResourcesFetcher.submit(
       {
         intent: "save-owned-resources",
-        payload: { resources: ownedResources, eventUid, collectedSourceKeys },
+        payload: {
+          resources: ownedResources,
+          recruitmentStacks: values.stacks,
+          eventUid,
+          collectedSourceKeys,
+          uncollectedSourceKeys,
+        },
       },
       { method: "POST", encType: "application/json" },
     );
   };
 
-  const handleCollectedSourceChange = (sourceKey: string, collected: boolean) => {
-    if (localCollectedSourceKeys.includes(sourceKey) === collected) return;
-    setLocalCollectedSourceKeys((prev) => {
-      if (collected) {
-        return prev.includes(sourceKey) ? prev : [...prev, sourceKey];
-      }
-      return prev.filter((key) => key !== sourceKey);
-    });
+  // Received-reward changes alone keep the owned resources and their input time as they are. They share the
+  // owned-resources save, so a failure shows beside the resources and other plan saves cannot cancel them.
+  const handleSaveCollectedSources = (collectedSourceKeys: string[], uncollectedSourceKeys: string[]) => {
+    const pendingSave: PendingOwnedResourceSave = {
+      eventUid: null,
+      values: ownedValues,
+      collectedSourceKeys,
+      uncollectedSourceKeys,
+      rewardsOnly: true,
+    };
     if (!signedIn) {
-      void guestPlanner.update((envelope) => ({
-        ...envelope,
-        document: {
-          ...envelope.document,
-          pyroxene: {
-            ...envelope.document.pyroxene,
-            collectedSourceKeys: collected
-              ? [...new Set([...envelope.document.pyroxene.collectedSourceKeys, sourceKey])].sort()
-              : envelope.document.pyroxene.collectedSourceKeys.filter((key) => key !== sourceKey),
-          },
-        },
-      })).then((snapshot) => {
-        if (snapshot.status === "ready" || snapshot.status === "memory") {
-          trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "source" });
-        }
-      });
-      return;
-    }
-    fetcher.submit(
-      { intent: collected ? "collect-source" : "uncollect-source", payload: { sourceKey } },
-      { method: collected ? "POST" : "DELETE", encType: "application/json" },
-    );
-  };
-
-  const handleUpdateEventData = (eventUid: string, data: { expectedTrials?: number | null }) => {
-    const currentEventData = localEventData.find((entry) => entry.eventUid === eventUid);
-    if ((currentEventData?.expectedTrials ?? null) === (data.expectedTrials ?? null)) return;
-    setLocalEventData((prev) => {
-      const exists = prev.some((d) => d.eventUid === eventUid);
-      if (exists) {
-        return prev.map((d) => (d.eventUid === eventUid ? { ...d, expectedTrials: data.expectedTrials ?? null } : d));
-      }
-      return [
-        ...prev,
-        {
-          uid: "optimistic",
-          userId: 0,
-          eventUid,
-          completed: false,
-          expectedTrials: data.expectedTrials ?? null,
-        },
-      ];
-    });
-    if (!signedIn) {
-      void guestPlanner.update((envelope) => {
-        const eventData = { ...envelope.document.pyroxene.eventData };
-        if (data.expectedTrials === null || data.expectedTrials === undefined) {
-          const current = eventData[eventUid];
-          if (current?.completed) eventData[eventUid] = { ...current, expectedTrials: null };
-          else delete eventData[eventUid];
-        } else {
-          const current = eventData[eventUid] ?? { completed: false, expectedTrials: null };
-          eventData[eventUid] = { ...current, expectedTrials: data.expectedTrials };
-        }
-        return {
+      confirmOwnedResourceSave(pendingSave);
+      const removed = new Set(uncollectedSourceKeys);
+      void guestPlanner
+        .update((envelope) => ({
           ...envelope,
-          document: { ...envelope.document, pyroxene: { ...envelope.document.pyroxene, eventData } },
-        };
-      }).then((snapshot) => {
-        if (snapshot.status === "ready" || snapshot.status === "memory") {
-          trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "event_data" });
-        }
-      });
+          document: {
+            ...envelope.document,
+            pyroxene: {
+              ...envelope.document.pyroxene,
+              collectedSourceKeys: [
+                ...new Set([...envelope.document.pyroxene.collectedSourceKeys, ...collectedSourceKeys]),
+              ]
+                .filter((key) => !removed.has(key))
+                .sort(),
+            },
+          },
+        }))
+        .then(trackGuestSave("source"));
       return;
     }
-    fetcher.submit(
-      { intent: "update-event-data", payload: { eventUid, ...data } },
+    setOwnedResourceSaveError(null);
+    pendingOwnedResourceSave.current = pendingSave;
+    ownedResourcesFetcher.submit(
+      { intent: "save-collected-sources", payload: { collectedSourceKeys, uncollectedSourceKeys } },
       { method: "POST", encType: "application/json" },
     );
   };
 
-  const handleDeletePickupComplete = (eventUid: string) => {
-    if (!signedIn) return;
-    const recruitmentResultCompletion = localRecruitmentResultCompletions.find(
-      (completion) => completion.eventUid === eventUid,
+  const handleUpdateEventData = (eventUid: string, patch: PlannerEventDataPatch) => {
+    setLocalEventData((prev) => {
+      const current = prev.find((entry) => entry.eventUid === eventUid) ?? {
+        eventUid,
+        completed: false,
+        expectedTrials: null,
+        pickupChance: null,
+      };
+      const next: LocalEventData = {
+        ...current,
+        ...(patch.expectedTrials !== undefined ? { expectedTrials: patch.expectedTrials } : {}),
+        ...(patch.pickupChance !== undefined ? { pickupChance: patch.pickupChance } : {}),
+        ...(patch.targetTiers !== undefined ? { targetTiers: patch.targetTiers } : {}),
+      };
+      return [...prev.filter((entry) => entry.eventUid !== eventUid), next];
+    });
+    if (!signedIn) {
+      void guestPlanner
+        .update((envelope) => ({
+          ...envelope,
+          document: {
+            ...envelope.document,
+            pyroxene: {
+              ...envelope.document.pyroxene,
+              eventData: withPyroxeneEventDataPatch(envelope.document.pyroxene.eventData, eventUid, patch),
+            },
+          },
+        }))
+        .then(trackGuestSave("event_data"));
+      return;
+    }
+    fetcher.submit(
+      { intent: "update-event-data", payload: { eventUid, ...patch } },
+      { method: "POST", encType: "application/json" },
     );
-    if (!recruitmentResultCompletion) return;
-    setLocalRecruitmentResultCompletions((prev) => prev.filter((completion) => completion.eventUid !== eventUid));
+  };
+
+  const handleDeleteCompletion = (eventUid: string) => {
+    if (!signedIn) return;
+    const completion = localCompletions.find((entry) => entry.eventUid === eventUid);
+    if (!completion) return;
+    setLocalCompletions((prev) => prev.filter((entry) => entry.eventUid !== eventUid));
     fetcher.submit(
       {
         intent: "delete-pickup-completion",
-        payload: { eventUid, recruitmentGroupUid: recruitmentResultCompletion?.recruitmentGroupUid ?? null },
+        payload: { eventUid, recruitmentGroupUid: completion.recruitmentGroupUid },
       },
       { method: "DELETE", encType: "application/json" },
     );
@@ -729,22 +824,20 @@ export default function PyroxenePlanner() {
     if (!localTimelineItems.some((item) => item.uid.startsWith(baseUid))) return;
     setLocalTimelineItems((prev) => prev.filter((item) => !item.uid.startsWith(baseUid)));
     if (!signedIn) {
-      void guestPlanner.update((envelope) => ({
-        ...envelope,
-        document: {
-          ...envelope.document,
-          pyroxene: {
-            ...envelope.document.pyroxene,
-            records: envelope.document.pyroxene.records.filter(
-              (record) => extractPyroxeneTimelineBaseUid(record.uid) !== baseUid,
-            ),
+      void guestPlanner
+        .update((envelope) => ({
+          ...envelope,
+          document: {
+            ...envelope.document,
+            pyroxene: {
+              ...envelope.document.pyroxene,
+              records: envelope.document.pyroxene.records.filter(
+                (record) => extractPyroxeneTimelineBaseUid(record.uid) !== baseUid,
+              ),
+            },
           },
-        },
-      })).then((snapshot) => {
-        if (snapshot.status === "ready" || snapshot.status === "memory") {
-          trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "delete" });
-        }
-      });
+        }))
+        .then(trackGuestSave("delete"));
       return;
     }
     fetcher.submit(
@@ -754,22 +847,18 @@ export default function PyroxenePlanner() {
   };
 
   const handleFavoriteChange = (contentUid: string, studentUid: string, favorited: boolean) => {
-    setLocalFavoritedStudents((current) => {
-      const withoutTarget = current.filter(
-        (favorite) => !(favorite.contentUid === contentUid && favorite.studentUid === studentUid),
-      );
-      return favorited ? [...withoutTarget, { contentUid, studentUid }] : withoutTarget;
-    });
+    const without = <T extends { contentUid: string; studentUid: string }>(list: T[]) =>
+      list.filter((favorite) => !(favorite.contentUid === contentUid && favorite.studentUid === studentUid));
+    setLocalFavoritedStudents((current) =>
+      favorited ? [...without(current), { contentUid, studentUid }] : without(current),
+    );
     if (!signedIn) {
-      void guestPlanner.update((envelope) => {
-        const withoutTarget = envelope.favorites.filter(
-          (favorite) => !(favorite.contentUid === contentUid && favorite.studentUid === studentUid),
-        );
-        return {
-          ...envelope,
-          favorites: favorited ? [...withoutTarget, { contentUid, studentUid }] : withoutTarget,
-        };
-      });
+      void guestPlanner.update((envelope) => ({
+        ...envelope,
+        favorites: favorited
+          ? [...without(envelope.favorites), { contentUid, studentUid }]
+          : without(envelope.favorites),
+      }));
       return;
     }
     favoriteFetcher.submit(
@@ -779,61 +868,73 @@ export default function PyroxenePlanner() {
   };
 
   const saveGuestRecord = (record: GuestPyroxeneRecord, replaceAttendance = false) => {
-    setLocalTimelineItems((prev) => {
-      const current = replaceAttendance ? prev.filter((item) => item.source !== "attendance") : prev;
-      return [...current, ...guestPyroxeneRecordToTimelineItems(record)];
-    });
-    void guestPlanner.update((envelope) => {
-      const added = guestPyroxeneRecordToTimelineItems(record);
-      const retained = replaceAttendance
-        ? envelope.document.pyroxene.records.filter((item) => item.source !== "attendance")
-        : envelope.document.pyroxene.records;
-      return {
-        ...envelope,
-        document: {
-          ...envelope.document,
-          pyroxene: {
-            ...envelope.document.pyroxene,
-            records: sortPlannerStateTimelineRecords([...retained, ...added]),
+    setLocalTimelineItems((prev) => [
+      ...(replaceAttendance ? prev.filter((item) => item.source !== "attendance") : prev),
+      ...guestPyroxeneRecordToTimelineItems(record),
+    ]);
+    const section =
+      record.kind === "buy"
+        ? "buy"
+        : record.kind === "monthlyPackage"
+          ? "monthly_package"
+          : record.kind === "apPackage"
+            ? "ap_package"
+            : record.kind === "attendance"
+              ? "attendance"
+              : "other";
+    void guestPlanner
+      .update((envelope) => {
+        const retained = replaceAttendance
+          ? envelope.document.pyroxene.records.filter((item) => item.source !== "attendance")
+          : envelope.document.pyroxene.records;
+        return {
+          ...envelope,
+          document: {
+            ...envelope.document,
+            pyroxene: {
+              ...envelope.document.pyroxene,
+              records: sortPlannerStateTimelineRecords([...retained, ...guestPyroxeneRecordToTimelineItems(record)]),
+            },
           },
-        },
-      };
-    }).then((snapshot) => {
-      if (snapshot.status === "ready" || snapshot.status === "memory") {
-        const section =
-          record.kind === "buy"
-            ? "buy"
-            : record.kind === "monthlyPackage"
-              ? "monthly_package"
-              : record.kind === "apPackage"
-                ? "ap_package"
-                : record.kind === "attendance"
-                  ? "attendance"
-                  : "other";
-        trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section });
-      }
-    });
+        };
+      })
+      .then(trackGuestSave(section));
+  };
+
+  const ensureTimelineSourcesVisible = (sourceTypes: PyroxenePlannerOptions["timeline"]["display"]) => {
+    const display = new Set(options.timeline.display);
+    const missing = sourceTypes.filter((type) => !display.has(type));
+    if (missing.length === 0) return options;
+    if (optionsSaveTimer.current) clearTimeout(optionsSaveTimer.current);
+    const nextOptions = { ...options, timeline: { ...options.timeline, display: [...display, ...missing] } };
+    setOptions(nextOptions);
+    if (!signedIn) void guestPlanner.update((envelope) => updateGuestPlannerOptions(envelope, nextOptions));
+    return nextOptions;
+  };
+
+  // Returns false when another timeline save is still running.
+  const beginTimelineSave = () => {
+    if (fetcher.state !== "idle" || timelineSaveInFlight.current) return false;
+    timelineSaveInFlight.current = true;
+    return true;
   };
 
   const handleSaveBuy = (
     quantity: number,
     date: Date,
-    options?: { repeatType?: PyroxeneTimelineRepeatType; monthlyCount?: number },
+    buyOptions?: { repeatType?: PyroxeneTimelineRepeatType; monthlyCount?: number },
   ) => {
-    if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
-      return;
-    }
-    timelineSaveInFlight.current = true;
+    if (!beginTimelineSave()) return;
     if (!signedIn) {
       saveGuestRecord(
-        createGuestRecord({ kind: "buy", quantity, date: date.toISOString(), ...options }) as GuestPyroxeneRecord,
+        createGuestRecord({ kind: "buy", quantity, date: date.toISOString(), ...buyOptions }) as GuestPyroxeneRecord,
       );
       timelineSaveInFlight.current = false;
       return;
     }
-    setLocalTimelineItems((prev) => [...prev, ...createOptimisticBuyTimelineItems(quantity, date, options)]);
+    setLocalTimelineItems((prev) => [...prev, ...createOptimisticBuyTimelineItems(quantity, date, buyOptions)]);
     fetcher.submit(
-      { intent: "save-buy", payload: { quantity, date: date.toISOString(), ...options } },
+      { intent: "save-buy", payload: { quantity, date: date.toISOString(), ...buyOptions } },
       { method: "POST", encType: "application/json" },
     );
   };
@@ -843,10 +944,7 @@ export default function PyroxenePlanner() {
     packageType: PyroxeneMonthlyPackageType,
     autoRepurchase: boolean,
   ) => {
-    if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
-      return;
-    }
-    timelineSaveInFlight.current = true;
+    if (!beginTimelineSave()) return;
     if (!signedIn) {
       saveGuestRecord(
         createGuestRecord({
@@ -875,10 +973,7 @@ export default function PyroxenePlanner() {
   };
 
   const handleSaveApPackage = (startDate: Date, autoRepurchase: boolean) => {
-    if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
-      return;
-    }
-    timelineSaveInFlight.current = true;
+    if (!beginTimelineSave()) return;
     if (!signedIn) {
       saveGuestRecord(
         createGuestRecord({
@@ -903,10 +998,7 @@ export default function PyroxenePlanner() {
   };
 
   const handleSaveAttendance = (startDate: Date) => {
-    if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
-      return;
-    }
-    timelineSaveInFlight.current = true;
+    if (!beginTimelineSave()) return;
     if (!signedIn) {
       saveGuestRecord(
         createGuestRecord({ kind: "attendance", startDate: startDate.toISOString() }) as GuestPyroxeneRecord,
@@ -915,10 +1007,10 @@ export default function PyroxenePlanner() {
       timelineSaveInFlight.current = false;
       return;
     }
-    setLocalTimelineItems((prev) => {
-      const withoutAttendance = prev.filter((item) => item.source !== "attendance");
-      return [...withoutAttendance, ...createOptimisticAttendanceTimelineItems(startDate)];
-    });
+    setLocalTimelineItems((prev) => [
+      ...prev.filter((item) => item.source !== "attendance"),
+      ...createOptimisticAttendanceTimelineItems(startDate),
+    ]);
     fetcher.submit(
       { intent: "save-attendance", payload: { startDate: startDate.toISOString() } },
       { method: "POST", encType: "application/json" },
@@ -926,10 +1018,7 @@ export default function PyroxenePlanner() {
   };
 
   const handleSaveOther = (resources: PickupResources, description: string, date: Date) => {
-    if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
-      return;
-    }
-    timelineSaveInFlight.current = true;
+    if (!beginTimelineSave()) return;
     if (!signedIn) {
       saveGuestRecord(
         createGuestRecord({ kind: "other", resources, description, date: date.toISOString() }) as GuestPyroxeneRecord,
@@ -944,52 +1033,15 @@ export default function PyroxenePlanner() {
     );
   };
 
-  const [options, setOptions] = useState<PyroxenePlannerOptions>(loaderData.calcOptions);
-  const optionsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const ensureTimelineSourcesVisible = (sourceTypes: PyroxenePlannerOptions["timeline"]["display"]) => {
-    const display = new Set(options.timeline.display);
-    let changed = false;
-    for (const sourceType of sourceTypes) {
-      if (!display.has(sourceType)) {
-        display.add(sourceType);
-        changed = true;
-      }
-    }
-    if (!changed) {
-      return options;
-    }
-    if (optionsSaveTimer.current) {
-      clearTimeout(optionsSaveTimer.current);
-    }
-
-    const nextOptions = {
-      ...options,
-      timeline: {
-        ...options.timeline,
-        display: Array.from(display),
-      },
-    };
-    setOptions(nextOptions);
-    if (!signedIn) {
-      void guestPlanner.update((envelope) => updateGuestPlannerOptions(envelope, nextOptions));
-    }
-    return nextOptions;
-  };
-
   const handleOptionsChange = (newOptions: PyroxenePlannerOptions) => {
     if (JSON.stringify(newOptions) === JSON.stringify(options)) return;
     setOptions(newOptions);
-    if (optionsSaveTimer.current) {
-      clearTimeout(optionsSaveTimer.current);
-    }
+    if (optionsSaveTimer.current) clearTimeout(optionsSaveTimer.current);
     optionsSaveTimer.current = setTimeout(() => {
       if (!signedIn) {
-        void guestPlanner.update((envelope) => updateGuestPlannerOptions(envelope, newOptions)).then((snapshot) => {
-          if (snapshot.status === "ready" || snapshot.status === "memory") {
-            trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "options" });
-          }
-        });
+        void guestPlanner
+          .update((envelope) => updateGuestPlannerOptions(envelope, newOptions))
+          .then(trackGuestSave("options"));
         return;
       }
       fetcher.submit(
@@ -1009,11 +1061,9 @@ export default function PyroxenePlanner() {
       },
     }));
     if (!signedIn) {
-      void guestPlanner.update((envelope) => removeGuestPlannerApChargeException(envelope, uid)).then((snapshot) => {
-        if (snapshot.status === "ready" || snapshot.status === "memory") {
-          trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "delete" });
-        }
-      });
+      void guestPlanner
+        .update((envelope) => removeGuestPlannerApChargeException(envelope, uid))
+        .then(trackGuestSave("delete"));
       return;
     }
     fetcher.submit(
@@ -1022,172 +1072,399 @@ export default function PyroxenePlanner() {
     );
   };
 
-  const eventDataMap = useMemo(() => {
-    const map = new Map<string, { completed: boolean; expectedTrials: number | null }>();
-    for (const data of localEventData) {
-      map.set(data.eventUid, {
-        completed: false,
-        expectedTrials: data.expectedTrials,
-      });
-    }
-    for (const completion of localRecruitmentResultCompletions) {
-      const existing = map.get(completion.eventUid);
-      map.set(completion.eventUid, {
-        completed: true,
-        expectedTrials: existing?.expectedTrials ?? null,
-      });
-    }
-    return map;
-  }, [localEventData, localRecruitmentResultCompletions]);
+  const eventDataMap = useMemo(
+    () => buildPlannerEventDataMap(localEventData, localCompletions),
+    [localEventData, localCompletions],
+  );
+  // A completion saved in this visit has no record uid until the loader runs again, so it opens the editor on its event,
+  // which finds the saved record.
+  const recordEditLinks = useMemo(
+    () =>
+      new Map(
+        localCompletions.map((completion) => {
+          const path = completion.recruitmentResultUid
+            ? `pickups/edit/${completion.recruitmentResultUid}`
+            : `pickups/edit/new?eventId=${completion.recruitmentGroupUid}`;
+          const separator = path.includes("?") ? "&" : "?";
+          return [
+            completion.eventUid,
+            `/my?path=${encodeURIComponent(`${path}${separator}returnTo=/utils/pyroxene`)}`,
+          ] as const;
+        }),
+      ),
+    [localCompletions],
+  );
 
   const scheduleItems = usePyroxeneScheduleItems(contents, localFavoritedStudents, localTimelineItems);
 
-  const isTimelineSaving = Boolean(signedIn) && (fetcher.state === "submitting" || fetcher.state === "loading");
-  const isSaving =
-    Boolean(signedIn) &&
-    (fetcher.state === "submitting" ||
-      fetcher.state === "loading" ||
-      ownedResourcesFetcher.state === "submitting" ||
-      ownedResourcesFetcher.state === "loading");
-  const guestDataStatus = guestPlanner.snapshot?.status;
+  // The display filter does not change the calculation, so it stays out of the calculation input.
+  const calcOptions = useMemo<PyroxeneCalculationOptions>(
+    () => ({ event: options.event, raid: options.raid, tactical: options.tactical, consumption: options.consumption }),
+    [options.event, options.raid, options.tactical, options.consumption],
+  );
+  const planEndDate = useMemo(
+    () => getPyroxenePlanEndDate(scheduleItems, initialDate ?? new Date()),
+    [scheduleItems, initialDate],
+  );
+  const {
+    timeline,
+    pending: timelinePending,
+    error: timelineError,
+  } = usePyroxeneTimeline({
+    initialDate,
+    initialResources,
+    eventDataMap,
+    scheduleItems,
+    options: calcOptions,
+    collectedSourceKeys: localCollectedSourceKeys,
+    endDate: planEndDate,
+    recruitmentStacks: stacks,
+    ownedSnapshot: loaderData.recruitmentOwnedSnapshot,
+  });
+  const displayTimeline = useMemo(
+    () => buildPyroxeneDisplayTimeline(timeline, scheduleItems, initialDate ?? new Date(), initialResources),
+    [initialDate, initialResources, scheduleItems, timeline],
+  );
+  const markers = useMemo(() => numberTargetEvents(timeline), [timeline]);
+
+  const sourceSets = useMemo(() => {
+    const now = dayjs();
+    const collectable = new Set<string>();
+    const rewards = new Map<string, PickupResources>();
+    for (const item of scheduleItems) {
+      if (!item.event?.earnablePyroxene) continue;
+      const key = collectedSourceKeyForEventReward(item.event.uid);
+      rewards.set(key, { pyroxene: item.event.earnablePyroxene, oneTimeTicket: 0, tenTimeTicket: 0 });
+      if (!dayjs(item.event.since).isAfter(now)) collectable.add(key);
+    }
+    return { collectable, rewards };
+  }, [scheduleItems]);
+  const completedEventUids = useMemo(
+    () => new Set([...eventDataMap].flatMap(([uid, value]) => (value.completed ? [uid] : []))),
+    [eventDataMap],
+  );
+  const rows = useMemo(
+    () =>
+      buildPlannerTimelineRows(displayTimeline, {
+        display: options.timeline.display,
+        hideUntargeted,
+        selectedEventUid: loaderData.selectedEventUid,
+        completedEventUids,
+        collectedSourceKeys: new Set(localCollectedSourceKeys),
+        collectableSourceKeys: sourceSets.collectable,
+        collectedSourceResources: sourceSets.rewards,
+        markers,
+      }),
+    [
+      displayTimeline,
+      options.timeline.display,
+      hideUntargeted,
+      loaderData.selectedEventUid,
+      completedEventUids,
+      localCollectedSourceKeys,
+      sourceSets,
+      markers,
+    ],
+  );
+  const recruitedStudentUids = useMemo(
+    () => new Set(loaderData.recruitedStudentUids),
+    [loaderData.recruitedStudentUids],
+  );
+  const activePackages = useMemo(
+    () => getActivePyroxenePackages(scheduleItems, initialDate ?? new Date()),
+    [scheduleItems, initialDate],
+  );
+  const attendanceStart = useMemo(() => {
+    const rewardDates = localTimelineItems
+      .filter((item) => item.source === "attendance")
+      .map((item) => new Date(item.eventAt));
+    return getAttendanceStartDate(rewardDates);
+  }, [localTimelineItems]);
+  const assumptions = useMemo(
+    () => buildPyroxeneCalculationAssumptions(scheduleItems, options.event.pickupChance, initialDate ?? new Date()),
+    [scheduleItems, options.event.pickupChance, initialDate],
+  );
+
+  const selectedEventUid = loaderData.selectedEventUid;
+  const selectedEventVisible =
+    selectedEventUid !== null &&
+    rows.some((row) => row.kind === "event" && row.entry.source.event?.uid === selectedEventUid);
+  useEffect(() => {
+    setSelectedEventMissing(false);
+    if (!selectedEventUid || timelinePending) return;
+    const target = selectedEventRef.current;
+    if (!selectedEventVisible || !target) {
+      setSelectedEventMissing(true);
+      return;
+    }
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+    requestAnimationFrame(() => target.focus({ preventScroll: true }));
+  }, [timelinePending, selectedEventVisible, selectedEventUid]);
+
+  const receivableRewards = useMemo<ReceivableReward[]>(
+    () =>
+      timeline.flatMap(({ source, date }) => {
+        const key = source.collectedSourceKey;
+        if (source.type !== "event_reward" || !key || !sourceSets.collectable.has(key)) return [];
+        const reward = sourceSets.rewards.get(key);
+        return reward
+          ? [{ sourceKey: key, label: source.description ?? "", pyroxene: reward.pyroxene, date: date.toDate() }]
+          : [];
+      }),
+    [timeline, sourceSets],
+  );
+  const ownedValues = useMemo<OwnedResourceValues>(
+    () => ({ resources: initialResources, stacks }),
+    [initialResources, stacks],
+  );
+  const saving = Boolean(signedIn) && (fetcher.state !== "idle" || ownedResourcesFetcher.state !== "idle");
+  const guestStatus = guestPlanner.snapshot?.status;
   const hasGuestLegacyConflicts =
     guestPlanner.snapshot && "envelope" in guestPlanner.snapshot
       ? guestPlanner.snapshot.envelope.legacyConflicts.length > 0
       : false;
   const hasGuestData =
-    guestPlanner.snapshot?.status === "ready" ||
-    guestPlanner.snapshot?.status === "memory" ||
-    guestPlanner.snapshot?.status === "conflict"
+    guestPlanner.snapshot &&
+    (isGuestSnapshotUsable(guestStatus) || guestStatus === "conflict") &&
+    "envelope" in guestPlanner.snapshot
       ? guestPlanner.snapshot.legacySources.pyroxeneCorrupt ||
         guestPlanner.snapshot.legacySources.eventShopsCorrupt ||
-        guestPlannerHasData(guestPlanner.snapshot.envelope)
+        guestPlannerHasImportableData(guestPlanner.snapshot.envelope, new Set(localCollectedSourceKeys))
       : false;
-  return (
-    <>
-      {/* Saving indicator */}
-      {isSaving && (
-        <div className="fixed bottom-[var(--mobile-bottom-offset)] right-4 z-layer-toast flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-white shadow-lg dark:bg-neutral-100 dark:text-neutral-900 md:right-8 lg:bottom-4">
-          <ArrowPathIcon className="size-4 animate-spin" />
-          <span className="text-sm font-medium">저장중...</span>
-        </div>
-      )}
+  const revisionConflictError =
+    fetcher.data &&
+    "revisionConflict" in fetcher.data &&
+    fetcher.data.revisionConflict === true &&
+    "error" in fetcher.data
+      ? String(fetcher.data.error)
+      : null;
 
-      <Page
+  const notice = timelineError ? (
+    <StatusNotice tone="danger">청휘석 계산에 실패했어요. 페이지를 새로고침해 주세요.</StatusNotice>
+  ) : revisionConflictError ? (
+    <StatusNotice tone="danger">{revisionConflictError}</StatusNotice>
+  ) : ownedResourceSaveError ? (
+    <StatusNotice tone="danger">{ownedResourceSaveError}</StatusNotice>
+  ) : signedIn && hasGuestLegacyConflicts ? (
+    <StatusNotice tone="warning" action={<ImportLink />}>
+      이전 화면과 이 화면에서 같은 항목을 다르게 바꾼 계획이 있어요. 내용을 확인하고 사용할 값을 선택해주세요.
+    </StatusNotice>
+  ) : signedIn && hasGuestData ? (
+    <StatusNotice tone="neutral" action={<ImportLink />}>
+      로그인하기 전에 입력한 데이터가 있어요. 계정에 저장된 내용과 비교해 사용할 데이터를 선택해주세요.
+    </StatusNotice>
+  ) : !signedIn && guestStatus === "memory" ? (
+    <StatusNotice tone="warning">이 브라우저에 저장하지 못했어요. 탭을 닫으면 입력한 내용이 사라져요.</StatusNotice>
+  ) : !signedIn && guestStatus === "corrupt" ? (
+    <StatusNotice
+      tone="danger"
+      action={
+        <Button size="sm" variant="danger-subtle" onClick={guestPlanner.reset}>
+          저장된 데이터 초기화
+        </Button>
+      }
+    >
+      저장된 데이터를 불러오지 못했어요.
+    </StatusNotice>
+  ) : !signedIn && hasGuestLegacyConflicts ? (
+    <StatusNotice tone="warning">
+      이전 화면과 이 화면에서 같은 항목을 다르게 바꾼 계획이 있어요. 덮어쓰지 않았으니 로그인 후 확인해주세요.
+    </StatusNotice>
+  ) : !signedIn && guestStatus === "conflict" ? (
+    <StatusNotice tone="warning">다른 탭에서 로그인하지 않은 상태의 플래너가 바뀌었어요.</StatusNotice>
+  ) : !signedIn && guestStatus === "unavailable" ? (
+    <StatusNotice tone="danger">브라우저 플래너 저장소를 사용할 수 없어요.</StatusNotice>
+  ) : !signedIn ? (
+    <StatusNotice
+      tone="neutral"
+      action={
+        <Button size="sm" variant="primary" onClick={showSignIn}>
+          로그인
+        </Button>
+      }
+    >
+      지금은 이 브라우저에만 저장돼요. 로그인하면 계정에 저장하고 다른 기기에서도 볼 수 있어요.
+    </StatusNotice>
+  ) : null;
+
+  const incomeHandlers = {
+    onOptionsChange: handleOptionsChange,
+    onRemoveApChargeException: handleRemoveApChargeException,
+    onDeleteItem: handleDeleteItem,
+    onSaveBuy: handleSaveBuy,
+    onSaveMonthlyPackage: handleSaveMonthlyPackage,
+    onSaveApPackage: handleSaveApPackage,
+    onSaveAttendance: handleSaveAttendance,
+    onSaveOther: handleSaveOther,
+  };
+
+  const basisPanel = (
+    <PickupBasisPanel
+      value={options.event.pickupChance}
+      initialValue={loaderData.calcOptions.event.pickupChance}
+      onChange={(pickupChance) => handleOptionsChange({ ...options, event: { pickupChance } })}
+    />
+  );
+  const methodButton = <CalculationMethodButton onClick={() => setMethodDialogOpen(true)} />;
+  const incomePanel = (
+    <IncomePlanPanel
+      options={options}
+      activePackages={activePackages}
+      attendanceStart={attendanceStart}
+      saving={saving}
+      handlers={incomeHandlers}
+      onAdd={setIncomeAddTab}
+    />
+  );
+
+  return (
+    <V2Page width="wide">
+      <PageHeader
         title="청휘석 플래너"
-        description="청휘석 획득/소비 조건을 입력하고 관심 학생 모집 시점의 예상 청휘석을 계산해보세요"
-        links={[
-          {
-            Icon: CalendarIcon,
-            title: "미래시",
-            description: "관심 학생을 등록해주세요",
-            to: "/futures",
-          },
-        ]}
-        panelRequest={plannerSettingsRequest > 0 ? { index: 1, id: plannerSettingsRequest } : null}
-        panels={[
-          {
-            title: "수급/소비 계획",
-            Icon: PlusIcon,
-            description: "청휘석 수급/소비처를 등록해주세요",
-            children: (
-              <PyroxenePlannerSourcePanel
-                options={options}
-                onOptionsChange={handleOptionsChange}
-                onRemoveApChargeException={handleRemoveApChargeException}
-                onSaveBuy={(quantity, date, options) => handleSaveBuy(quantity, date, options)}
-                onSaveMonthlyPackage={(startDate, packageType, autoRepurchase) =>
-                  handleSaveMonthlyPackage(startDate, packageType, autoRepurchase)
-                }
-                onSaveApPackage={(startDate, autoRepurchase) => handleSaveApPackage(startDate, autoRepurchase)}
-                onSaveAttendance={(startDate) => handleSaveAttendance(startDate)}
-                onSaveOther={(resources, description, date) => handleSaveOther(resources, description, date)}
-                savingTimelineItem={isTimelineSaving}
-              />
-            ),
-          },
-          {
-            title: "플래너 설정",
-            Icon: ChartBarIcon,
-            description: "시뮬레이션 조건을 선택해주세요",
-            collapsible: true,
-            children: <PyroxenePlannerOptionsPanel options={options} onOptionsChange={handleOptionsChange} />,
-          },
-        ]}
-      >
-        <div className="space-y-4">
-          <div className="space-y-3">
-            {fetcher.data &&
-            "error" in fetcher.data &&
-            typeof fetcher.data.error === "string" &&
-            "revisionConflict" in fetcher.data &&
-            fetcher.data.revisionConflict === true ? (
-              <Callout tone="destructive" title={fetcher.data.error} />
-            ) : null}
-            {ownedResourceSaveError ? <Callout tone="destructive" title={ownedResourceSaveError} /> : null}
-            {signedIn && hasGuestLegacyConflicts ? (
-              <GuestPlannerLegacyConflictCallout to={PYROXENE_GUEST_IMPORT_HREF} />
-            ) : signedIn && hasGuestData ? (
-              <Callout
-                tone="info"
-                title="비로그인 상태에서 입력한 데이터가 있어요"
-                description="계정에 저장된 내용과 비교 후 최근 데이터를 선택해주세요."
-              >
-                <div className="mt-2">
-                  <Button text="내용 확인" to={PYROXENE_GUEST_IMPORT_HREF} size="sm" variant="primary" />
-                </div>
-              </Callout>
-            ) : !signedIn && guestDataStatus === "memory" ? (
-              <Callout
-                tone="warning"
-                title="이 브라우저에 저장하지 못했어요"
-                description="현재 탭에서는 계속 사용할 수 있지만, 탭을 닫으면 입력한 내용이 사라져요."
-              />
-            ) : !signedIn && guestDataStatus === "corrupt" ? (
-              <Callout tone="destructive" title="저장된 데이터를 불러오지 못했어요">
-                <div className="mt-2">
-                  <Button text="저장된 데이터 초기화" size="sm" variant="danger-subtle" onClick={guestPlanner.reset} />
-                </div>
-              </Callout>
-            ) : !signedIn && hasGuestLegacyConflicts ? (
-              <GuestPlannerLegacyConflictCallout />
-            ) : !signedIn && guestDataStatus === "conflict" ? (
-              <Callout tone="warning" title="다른 탭에서 미로그인 상태의 플래너가 바뀌었어요" />
-            ) : !signedIn && guestDataStatus === "unavailable" ? (
-              <Callout tone="destructive" title="브라우저 플래너 저장소를 사용할 수 없어요" />
-            ) : !signedIn ? (
-              <Callout
-                tone="info"
-                title="로그인 후 더 많은 정보를 관리할 수 있어요"
-                description="정보를 안전하게 저장하고 필요할 때마다 불러와 사용해보세요."
-              >
-                <div className="mt-2">
-                  <Button text="로그인하기" size="sm" variant="primary" onClick={showSignIn} />
-                </div>
-              </Callout>
-            ) : null}
-          </div>
-          <PyroxeneSchedule
-            selectedEventUid={loaderData.selectedEventUid}
-            initialDate={initialDate}
-            initialResources={initialResources}
+        description="관심 학생을 모집하는 데 청휘석이 충분한지 미리 확인해요"
+        trailing={
+          signedIn ? (
+            <span role="status" className="text-xs text-v2-fg-tertiary">
+              {saving ? "저장 중…" : null}
+            </span>
+          ) : null
+        }
+      />
+      <PageMain>
+        <div className="@container flex flex-col gap-v2-block-gap">
+          {notice}
+          <section aria-label="청휘석 변화" className="rounded-lg bg-v2-surface p-3">
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <h2 className="text-sm font-semibold text-v2-fg">청휘석 변화</h2>
+              <p className="flex items-center gap-3 text-xs text-v2-fg-secondary">
+                <span className="inline-flex items-center gap-1.5">
+                  <span aria-hidden="true" className="h-0.5 w-4 rounded-full bg-v2-accent" />
+                  예상 잔액
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span aria-hidden="true" className="h-2.5 w-3 rounded-sm bg-v2-accent/15" />
+                  예상 범위 (80%)
+                </span>
+              </p>
+            </div>
+            <Suspense fallback={<div className="h-56" />}>
+              <BalanceChart timeline={timeline} markers={markers} />
+            </Suspense>
+          </section>
+          <PlannerSchedule
+            rows={rows}
+            pending={timelinePending}
+            hideUntargeted={hideUntargeted}
+            onHideUntargetedChange={handleHideUntargetedChange}
+            selectedEventUid={selectedEventUid}
+            selectedEventRef={selectedEventRef}
+            selectedEventMissing={selectedEventMissing}
             eventDataMap={eventDataMap}
-            scheduleItems={scheduleItems}
-            options={options}
-            collectedSourceKeys={localCollectedSourceKeys}
-            recruitedStudentUids={loaderData.recruitedStudentUids}
-            onPickupComplete={(eventUid, resources, collectedSourceKeys) =>
-              handleSaveOwnedResources(eventUid, resources, collectedSourceKeys)
-            }
-            onDeletePickupComplete={(eventUid) => handleDeletePickupComplete(eventUid)}
-            onDeleteItem={(itemUid) => handleDeleteItem(itemUid)}
-            onUpdateEventData={handleUpdateEventData}
-            onCollectedSourceChange={handleCollectedSourceChange}
-            allowPickupCompletion={Boolean(signedIn)}
-            onFavoriteChange={handleFavoriteChange}
-            onOpenPlannerSettings={() => setPlannerSettingsRequest((request) => request + 1)}
+            defaultBasis={options.event.pickupChance}
+            recruitedStudentUids={recruitedStudentUids}
+            ownedSnapshot={loaderData.recruitmentOwnedSnapshot}
+            canRecordCompletion={Boolean(signedIn)}
+            recordEditLinks={recordEditLinks}
+            eventHandlers={{
+              onFavoriteChange: handleFavoriteChange,
+              onUpdateEventData: handleUpdateEventData,
+              onComplete: (eventUid, values) => handleSaveOwnedResources(eventUid, values),
+              onDeleteCompletion: handleDeleteCompletion,
+            }}
+            incomeHandlers={{ onDeleteItem: handleDeleteItem }}
           />
         </div>
-      </Page>
-    </>
+      </PageMain>
+      <PageAside>
+        <PanelSheet
+          panelId={RESOURCES_DIALOG_PANEL}
+          title="보유 재화"
+          description={formatInputAt(initialDate)}
+          Icon={WalletIcon}
+          headerAction={<OwnedResourcesHeaderAction onEdit={() => setResourcesDialogOpen(true)} />}
+        >
+          <OwnedResourceList values={ownedValues} />
+        </PanelSheet>
+        <PanelSheet panelId="basis" title="계산 기준" Icon={ChartBarIcon} headerAction={methodButton}>
+          {basisPanel}
+        </PanelSheet>
+        <PanelSheet panelId="income" title="수급/소비 계획" Icon={ArrowTrendingUpIcon}>
+          {incomePanel}
+        </PanelSheet>
+        <AsideLinks
+          items={[
+            { key: "futures", title: "미래시", Icon: CalendarIcon, to: "/futures" },
+            { key: "planner", title: "통합 플래너", Icon: Squares2X2Icon, to: "/planner" },
+          ]}
+        />
+      </PageAside>
+      <MobileActionBar
+        panels={[
+          { panelId: RESOURCES_DIALOG_PANEL, title: "보유 재화", Icon: WalletIcon },
+          { panelId: PLAN_SHEET_PANEL_ID, title: "계획", Icon: AdjustmentsHorizontalIcon },
+        ]}
+      />
+      <PlanSheet
+        title="계획"
+        Icon={AdjustmentsHorizontalIcon}
+        sections={[
+          { key: "basis", title: "계산 기준", Icon: ChartBarIcon, headerAction: methodButton, content: basisPanel },
+          {
+            key: "income",
+            title: "수급/소비 계획",
+            Icon: ArrowTrendingUpIcon,
+            content: incomePanel,
+          },
+        ]}
+      />
+      <OwnedResourcesDialog
+        open={resourcesDialogOpen}
+        title="보유 재화"
+        submitLabel="저장"
+        initialValues={ownedValues}
+        rewards={receivableRewards}
+        initialReceived={localCollectedSourceKeys}
+        saving={ownedResourcesFetcher.state !== "idle"}
+        onClose={() => setResourcesDialogOpen(false)}
+        onSubmit={(values, received) => {
+          const before = new Set(localCollectedSourceKeys);
+          const keys = receivableRewards.map(({ sourceKey }) => sourceKey);
+          const collected = keys.filter((key) => received.has(key) && !before.has(key));
+          const uncollected = keys.filter((key) => !received.has(key) && before.has(key));
+          // Saving the resources dates them now. When only the received rewards changed, keep that date, so
+          // income planned since the last input still counts.
+          if (sameOwnedValues(values, ownedValues) && (collected.length > 0 || uncollected.length > 0)) {
+            handleSaveCollectedSources(collected, uncollected);
+          } else {
+            handleSaveOwnedResources(null, values, collected, uncollected);
+          }
+          setResourcesDialogOpen(false);
+        }}
+      />
+      <AddIncomeDialog
+        key={incomeAddTab ?? "closed"}
+        tab={incomeAddTab}
+        onClose={() => setIncomeAddTab(null)}
+        saving={saving}
+        handlers={incomeHandlers}
+      />
+      <CalculationMethodDialog
+        open={methodDialogOpen}
+        onClose={() => setMethodDialogOpen(false)}
+        assumptions={assumptions}
+      />
+    </V2Page>
+  );
+}
+
+function ImportLink() {
+  return (
+    <a
+      href={PYROXENE_GUEST_IMPORT_HREF}
+      className="text-sm font-medium text-v2-link underline-offset-2 hover:underline"
+    >
+      내용 확인
+    </a>
   );
 }

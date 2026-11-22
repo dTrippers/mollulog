@@ -16,7 +16,7 @@ export type OpinionSheetProps = {
   contentUid: string | null;
   isLive: boolean;
   contentName: string;
-  commentCount: number;
+  commentCount: number | null;
   comments: NestedComment[] | undefined;
   loading: boolean;
   unavailable: boolean;
@@ -34,6 +34,7 @@ export type OpinionSheetProps = {
   onRequestSignIn: () => void;
   onClose: () => void;
   onExited?: () => void;
+  headerAction?: ReactNode;
   // The editor's textarea, for focus handoff from the tutorial.
   composerRef?: RefObject<HTMLTextAreaElement | null>;
 };
@@ -61,6 +62,7 @@ export function OpinionSheet({
   onRequestSignIn,
   onClose,
   onExited,
+  headerAction,
   composerRef,
 }: OpinionSheetProps) {
   const [inlineComposerOpen, setInlineComposerOpen] = useState(false);
@@ -92,7 +94,7 @@ export function OpinionSheet({
   let footer: ReactNode;
   if (!signedIn) {
     footer = (
-      <div className="flex min-h-v2-row-min items-center gap-2 rounded-md bg-v2-inset py-1.5 pr-1.5 pl-3 pointer-coarse:py-0">
+      <div className="flex min-h-v2-row-min items-center gap-2 rounded-md bg-v2-inset py-1.5 pr-1.5 pl-3">
         <InformationCircleIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-sm text-v2-fg-secondary">로그인하면 의견을 남길 수 있어요</p>
         <Button variant="primary" onClick={onRequestSignIn}>
@@ -124,7 +126,8 @@ export function OpinionSheet({
       open={open}
       title={title}
       Icon={ChatBubbleOvalLeftEllipsisIcon}
-      description={`${contentName} · 의견 ${commentCount}`}
+      description={commentCount === null ? contentName : `${contentName} · 의견 ${commentCount}`}
+      headerAction={headerAction}
       onClose={onClose}
       onExited={onExited}
       footer={footer}

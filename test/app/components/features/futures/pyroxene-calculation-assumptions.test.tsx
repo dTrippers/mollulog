@@ -112,7 +112,7 @@ describe("PyroxeneCalculationAssumptions", () => {
     expect(html).toContain('aria-label="계산 가정"');
     expect(items).toHaveLength(2);
     expect(items[0]).toContain(">모집 개편 반영</li>");
-    expect(items[1]).toContain(">계산 기준: 평균 (천장 반영)</li>");
+    expect(items[1]).toContain(">계산 기준: 평균</li>");
     for (const item of items) {
       expect(item).not.toContain("<svg");
       expect(item).not.toMatch(/(?:^|[\s"'])(?:px-|py-|rounded|bg-|border|shadow)/);
@@ -194,8 +194,9 @@ describe("PyroxeneCalculationMethodSheet", () => {
     expect(html).toContain("개편 전 규칙에서는 200회마다 픽업 학생과 교환할 수 있다고 보고 계산해요.");
     expect(html).toContain("개편 후 규칙에서는 픽업 학생이 나오기 전까지 100회째 모집에서 50% 확률로, 200회째 모집에서 반드시 픽업 학생을 얻어요.");
     expect(html).toContain("★3 학생 모집 목표");
-    expect(html).toContain("평균 (천장 미반영)");
-    expect(html).toContain("픽업 확률만으로 계산한 평균 모집 횟수를 써요.");
+    // The deprecated average basis is not offered to someone not using it.
+    expect(html).not.toContain("평균 (천장 미반영)");
+    expect(html).toContain("천장에서 픽업을 확정한다고 보고 평균 횟수를 계산해요.");
     expect(html).toContain('aria-current="true"');
     expect(html).toContain("사용 중");
     expect(html).toContain("이벤트에 예상 모집 횟수를 직접 입력했다면 그 횟수로 계산해요.");
@@ -205,7 +206,7 @@ describe("PyroxeneCalculationMethodSheet", () => {
     expect(normalizedHtml).toContain(
       `누적 ${RECRUITMENT_PERK_TEN_PULL_THRESHOLDS.join(", ")}회째에 받는 10회 모집권을 바로 쓴다고 보고 계산해요.`,
     );
-    expect(html).toContain("무료 모집 100회가 있는 이벤트는 그만큼 청휘석을 덜 쓰는 것으로 계산해요.");
+    expect(html).toContain("무료 모집이 있는 이벤트는 무료 모집 횟수만큼 청휘석을 덜 쓰는 것으로 계산해요.");
     expect(html).not.toContain("차지");
   });
 
@@ -235,9 +236,16 @@ describe("PyroxeneCalculationMethodSheet", () => {
     });
 
     expect(html).toContain('href="/utils/pyroxene"');
-    for (const { label, description } of PYROXENE_PICKUP_CHANCE_OPTIONS) {
+    for (const { label, description } of PYROXENE_PICKUP_CHANCE_OPTIONS.filter(({ value }) => value !== "average")) {
       expect(html).toContain(label);
       expect(html).toContain(description);
     }
+  });
+
+  it("keeps listing the deprecated average basis for someone using it", () => {
+    const html = renderMethodSheet({ assumptions: sampleAssumptions({ pickupChance: "average" }) });
+
+    expect(html).toContain("평균 (천장 미반영)");
+    expect(html).toContain("픽업 확률대로 뽑았을 때의 평균 횟수로 계산해요.");
   });
 });

@@ -125,6 +125,11 @@ function getEventShopPlanDisplayCatalog(
       for (const reward of minigame.rewardGroups.flatMap((group) => group.rewards)) {
         addName(resourceNamesByUid, reward.resourceUid, reward.resourceName);
       }
+      if (minigame.minigameType === "road_puzzle") {
+        for (const reward of minigame.roadPuzzle?.rounds.flatMap((round) => round.rewards) ?? []) {
+          addName(resourceNamesByUid, reward.resourceUid, reward.resourceName);
+        }
+      }
     }
   }
 

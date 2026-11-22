@@ -1,4 +1,5 @@
 import { Attack, Defense } from "~/graphql/graphql";
+import { raidTypeToParam } from "~/domain/raid";
 import { compareInstantAsc, getInstantTime, isInstantAfter, type UtcIsoString } from "~/lib/date-time";
 import type { RaidType } from "~/models/content.d";
 
@@ -48,6 +49,33 @@ const RAID_TYPES = new Set(["total_assault", "elimination"]);
 const DEFAULT_TIER_KEYS = [9, 8, 7, 6, 5, 4, 3].map((tier) => `tier${tier}`);
 const MAX_RAID_USAGE_COUNT = 20000;
 const RANKS_STATISTICS_AVAILABLE_FROM = "2024-03-01T00:00:00.000Z" as UtcIsoString;
+export const STUDENT_RAID_USAGE_MAX_BAR_SIZE = 32;
+
+export function getStudentRaidUsageChartLayout(frameWidth: number, rowCount: number) {
+  const categorySlotWidth = rowCount > 0 ? Math.max(0, (frameWidth - 34) / rowCount) : 0;
+  const compactBarSlots = categorySlotWidth < 6;
+  const barSize = frameWidth > 0
+    ? Math.min(STUDENT_RAID_USAGE_MAX_BAR_SIZE, compactBarSlots
+      ? Math.min(categorySlotWidth, Math.max(2, categorySlotWidth - 1))
+      : Math.max(0, categorySlotWidth - 2))
+    : undefined;
+
+  return { categorySlotWidth, compactBarSlots, barSize };
+}
+
+export function observeStudentRaidUsageChartFrameWidth(frame: HTMLDivElement, onWidth: (width: number) => void) {
+  const updateWidth = () => onWidth(frame.getBoundingClientRect().width);
+  updateWidth();
+
+  if (typeof ResizeObserver === "undefined") {
+    window.addEventListener("resize", updateWidth);
+    return () => window.removeEventListener("resize", updateWidth);
+  }
+
+  const observer = new ResizeObserver(updateWidth);
+  observer.observe(frame);
+  return () => observer.disconnect();
+}
 
 export function getDefaultRaidUsageDefenseFilter(attackType: Attack): StudentRaidUsageDefenseFilter {
   const filterByAttackType: Partial<Record<Attack, StudentRaidUsageDefenseFilter>> = {
@@ -208,4 +236,9 @@ export function buildStudentRaidUsageChartData({
     tierKeys,
     yAxisMax: Math.max(MAX_RAID_USAGE_COUNT, maxCount),
   };
+}
+
+export function getRaidDetailPath(row: StudentRaidUsageChartRow) {
+  const path = `/raids/${raidTypeToParam(row.raidType)}/${row.seasonIndex}`;
+  return row.raidType === "elimination" ? `${path}?${new URLSearchParams({ defenseType: row.defenseType })}` : path;
 }

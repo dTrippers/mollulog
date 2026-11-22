@@ -207,7 +207,7 @@ export async function getRecruitmentPoolStudents(env: Env, forceRefresh = false)
 
 export async function warmRecruitmentCache(env: Env, forceRefresh = true): Promise<RecruitmentGroup[]> {
   // Use the throwing fetch paths instead of the []-swallowing public wrappers so warming
-  // failures surface to cron / [__manage] reporting, matching RecruitmentRepository.refresh().
+  // failures surface to cron / admin cache refresh reporting, matching RecruitmentRepository.refresh().
   const [groups] = await Promise.all([
     fetchAllRecruitmentGroups(env, forceRefresh),
     fetchAllHistoricalRecruitmentGroups(env, forceRefresh),

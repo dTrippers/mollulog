@@ -1,6 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { getShopAvailableEvents } from "~/models/event-content";
-import { loader } from "../../../app/routes/utils.event-shop";
+import { loader, meta } from "../../../app/routes/utils.event-shop";
 
 jest.mock("~/models/event-content", () => ({
   getShopAvailableEvents: jest.fn(),
@@ -56,5 +56,17 @@ describe("utils.event-shop loader", () => {
     mockedGetShopAvailableEvents.mockResolvedValueOnce([]);
 
     await expect(loader(args)).resolves.toBeNull();
+  });
+});
+
+describe("utils.event-shop meta", () => {
+  it("gives the empty page a link preview title", () => {
+    expect(meta({ location: { pathname: "/utils/event-shop" } } as never)).toEqual(
+      expect.arrayContaining([
+        { title: "이벤트 상점 계산기 | 몰루로그" },
+        { property: "og:title", content: "이벤트 상점 계산기" },
+        { name: "twitter:title", content: "이벤트 상점 계산기" },
+      ]),
+    );
   });
 });

@@ -1,15 +1,4 @@
-import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ReferenceArea,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { lazy, type MouseEvent, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { SectionCard } from "~/components/primitives";
 import Input from "~/components/primitives/Input";
 import type { Attack, Defense } from "~/graphql/graphql";
@@ -19,9 +8,15 @@ import {
   fetchClearTimeDistribution,
 } from "~/lib/ranks/clear-time-distribution";
 import { fetchRangeStats, type RangeStats } from "~/lib/ranks/range-stats";
-import { difficultyLocale } from "~/locales/ko";
 import type { RaidType, Role } from "~/models/content.d";
+import type { RaidChartRecordContextView } from "~/views/raid-records";
+import { CHART_MARGIN_RIGHT, formatDifficulty, formatTimeLabel } from "./raid-score-histogram-format";
+import { RaidChartRecordLine, RaidChartSaveToast, RaidChartServerChoice } from "./RaidChartMyRecord";
 import RaidScoreRangeDetail from "./RaidScoreRangeDetail";
+import { parseChartScoreInput, type RaidChartMyScore } from "./use-raid-chart-my-score";
+
+// recharts is large, so the bars load separately and the distribution fetch is not held behind that download.
+const RaidScoreHistogramBars = lazy(() => import("./RaidScoreHistogramBars"));
 
 type StudentInfo = {
   name: string;
@@ -38,9 +33,13 @@ type RaidScoreHistogramProps = {
   allStudents: Record<string, StudentInfo>;
   recruitedStudentTiers: Record<string, number>;
   hasRecruitedStudentData: boolean;
+  // The signed-in Sensei's record of the season, which "내 점수" reads and saves. Null for guests.
+  myRecordContext: RaidChartRecordContextView | null;
+  // "내 점수", kept by the season page so a save on its way survives this chart unmounting for another defense type.
+  myScore: RaidChartMyScore;
 };
 
-type ScoreRange = {
+export type ScoreRange = {
   gte: number;
   lt?: number;
 };
@@ -53,7 +52,7 @@ type SelectedRange = {
   };
 };
 
-type HistogramChartRow = {
+export type HistogramChartRow = {
   id: string;
   x: number;
   xStart: number;
@@ -70,14 +69,14 @@ type DifficultyBandStat = ClearTimeDifficultyBand & {
   ratio: number;
 };
 
-type HistogramChartData = {
+export type HistogramChartData = {
   rows: HistogramChartRow[];
   xDomain: [number, number];
   xTicks?: number[];
   xTickLabels?: Record<string, string>;
 };
 
-type ScoreMarker = {
+export type ScoreMarker = {
   x: number;
   difficulty: string;
   timeSec: number;
@@ -86,9 +85,7 @@ type ScoreMarker = {
 const rangeStatsCache = new Map<string, RangeStats>();
 const reportedDifficultyBandStatsMismatches = new Set<string>();
 const RANGE_STATS_CACHE_MAX_SIZE = 50;
-const MY_SCORE_STORAGE_PREFIX = "raid-clear-time-distribution:my-score";
 const CHART_PADDING_PX = 12;
-const CHART_MARGIN_RIGHT = 4;
 const Y_AXIS_WIDTH = 42;
 const CHART_SKELETON_BARS = [
   { key: "bar-1", heightClassName: "h-1/3" },
@@ -113,6 +110,8 @@ export default function RaidScoreHistogram({
   allStudents,
   recruitedStudentTiers,
   hasRecruitedStudentData,
+  myRecordContext,
+  myScore,
 }: RaidScoreHistogramProps) {
   const [overviewDistribution, setOverviewDistribution] = useState<ClearTimeDistribution | null>(null);
   const [chartDistribution, setChartDistribution] = useState<ClearTimeDistribution | null>(null);
@@ -122,33 +121,6 @@ export default function RaidScoreHistogram({
   const [rangeStats, setRangeStats] = useState<RangeStats | null>(null);
   const [rangeStatsLoading, setRangeStatsLoading] = useState(false);
   const [rangeStatsLoadedKey, setRangeStatsLoadedKey] = useState<string | null>(null);
-  const myScoreStorageKey = `${MY_SCORE_STORAGE_PREFIX}:${raidType}:${season}:${defenseType}`;
-  const [myScoreInput, setMyScoreInput] = useState("");
-  const [myScoreStorageLoadedKey, setMyScoreStorageLoadedKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      setMyScoreInput(formatScoreInput(window.localStorage.getItem(myScoreStorageKey) ?? ""));
-    } catch {
-      setMyScoreInput("");
-    }
-    setMyScoreStorageLoadedKey(myScoreStorageKey);
-  }, [myScoreStorageKey]);
-
-  useEffect(() => {
-    if (myScoreStorageLoadedKey !== myScoreStorageKey) {
-      return;
-    }
-    try {
-      if (myScoreInput) {
-        window.localStorage.setItem(myScoreStorageKey, myScoreInput);
-      } else {
-        window.localStorage.removeItem(myScoreStorageKey);
-      }
-    } catch {
-      // Ignore localStorage errors.
-    }
-  }, [myScoreInput, myScoreStorageKey, myScoreStorageLoadedKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -365,7 +337,6 @@ export default function RaidScoreHistogram({
     rangeStatsCache.has(currentRangeStatsCacheKey);
   const waitingForSelectedRange = selectedBandKey !== "all" && !selectedRange && distributionLoading;
   const detailLoading = rangeStatsLoading || !rangeStatsReady || waitingForSelectedRange;
-  const displayedMyScoreInput = myScoreStorageLoadedKey === myScoreStorageKey ? myScoreInput : "";
 
   return (
     <div className="space-y-4">
@@ -381,8 +352,29 @@ export default function RaidScoreHistogram({
             clearLevels={clearLevels}
             selectedRange={selectedRange}
             selectedBandKey={selectedBandKey}
-            myScoreInput={displayedMyScoreInput}
-            onMyScoreInputChange={(value) => setMyScoreInput(formatScoreInput(value))}
+            myScoreInput={myScore.value}
+            onMyScoreInputChange={myScore.onChange}
+            myScoreExtras={
+              myScore.serverOptions ? (
+                <RaidChartServerChoice value={myScore.server} onChange={myScore.selectServer} />
+              ) : null
+            }
+            myRecordLine={
+              <RaidChartRecordLine
+                mode={myScore.mode}
+                server={myScore.server}
+                seasonIndex={myScore.serverOptions?.[myScore.server] ?? myRecordContext?.kr.seasonIndex ?? null}
+                showSeasonIndex={myScore.serverOptions !== null}
+                raidType={myRecordContext?.raidType ?? null}
+                defenseType={defenseType}
+                record={myScore.record}
+                savedScore={myScore.savedScore}
+                inputEmpty={parseChartScoreInput(myScore.value) === null}
+                status={myScore.status}
+                onRetry={myScore.retry}
+                username={myRecordContext?.username ?? null}
+              />
+            }
             onSelectRange={selectRange}
             onSelectBand={selectBand}
           />
@@ -397,6 +389,8 @@ export default function RaidScoreHistogram({
         recruitedStudentTiers={recruitedStudentTiers}
         hasRecruitedStudentData={hasRecruitedStudentData}
       />
+
+      <RaidChartSaveToast visible={myScore.toastVisible} />
     </div>
   );
 }
@@ -456,6 +450,8 @@ function HistogramChart({
   selectedBandKey,
   myScoreInput,
   onMyScoreInputChange,
+  myScoreExtras,
+  myRecordLine,
   onSelectRange,
   onSelectBand,
 }: {
@@ -467,6 +463,8 @@ function HistogramChart({
   selectedBandKey: string;
   myScoreInput: string;
   onMyScoreInputChange: (value: string) => void;
+  myScoreExtras: ReactNode;
+  myRecordLine: ReactNode;
   onSelectRange: (range: SelectedRange) => void;
   onSelectBand: (bandKey: string) => void;
 }) {
@@ -495,7 +493,7 @@ function HistogramChart({
     () => (selectedBandKey === "all" ? buildDifficultyBoundaryLines(rows) : []),
     [rows, selectedBandKey],
   );
-  const myScore = parseScoreInput(myScoreInput);
+  const myScore = parseChartScoreInput(myScoreInput);
   const myScoreMarker = useMemo(
     () =>
       myScore === null
@@ -568,95 +566,16 @@ function HistogramChart({
         onMouseUp={handleDragEnd}
         onMouseLeave={handleDragEnd}
       >
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} margin={{ top: 8, right: CHART_MARGIN_RIGHT, bottom: 0, left: 0 }}>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              vertical={false}
-              className="stroke-neutral-200 dark:stroke-neutral-700"
-            />
-            <XAxis
-              dataKey="x"
-              type="number"
-              domain={chartData.xDomain}
-              ticks={chartData.xTicks}
-              tickFormatter={(value) => formatXAxisTick(Number(value), chartData)}
-              tick={{ fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              width={42}
-              orientation="right"
-              domain={[0, yAxisMax]}
-              tickFormatter={(value) => formatCount(Number(value))}
-              tick={{ fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              cursor={{ fill: "rgba(148, 163, 184, 0.12)" }}
-              content={({ active, payload }) => {
-                const row = active ? getTooltipRow(payload) : null;
-                if (!row) {
-                  return null;
-                }
-                return (
-                  <div className="rounded-md border border-neutral-200 bg-white p-3 text-xs shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
-                    <p className="font-semibold text-neutral-900 dark:text-neutral-100">{formatTooltipTitle(row)}</p>
-                    {row.scoreRange && (
-                      <p className="mt-1 text-neutral-500 dark:text-neutral-400">{formatScoreRange(row.scoreRange)}</p>
-                    )}
-                    <p className="mt-1 text-neutral-500 dark:text-neutral-400">{row.count.toLocaleString()}명</p>
-                  </div>
-                );
-              }}
-            />
-            {highlightRange && (
-              <ReferenceArea
-                x1={highlightRange.xStart}
-                x2={highlightRange.xEnd}
-                fill="rgb(148, 163, 184)"
-                fillOpacity={0.12}
-                strokeOpacity={0}
-                style={{ pointerEvents: "none" }}
-              />
-            )}
-            {previewRange && (
-              <ReferenceArea
-                x1={previewRange.xStart}
-                x2={previewRange.xEnd}
-                fill="var(--raid-selection-fill)"
-                fillOpacity={0.06}
-                strokeOpacity={0}
-                style={{ pointerEvents: "none" }}
-              />
-            )}
-            <Bar dataKey="count" fill="rgb(115, 115, 115)" maxBarSize={12} isAnimationActive={false} />
-            {difficultyBoundaryLines.map((line) => (
-              <ReferenceLine
-                key={line.key}
-                x={line.x}
-                stroke="var(--raid-boundary-stroke)"
-                strokeDasharray="4 4"
-                strokeOpacity={0.7}
-                ifOverflow="extendDomain"
-              />
-            ))}
-            {myScoreMarker && (
-              <ReferenceLine
-                x={myScoreMarker.x}
-                stroke="var(--raid-score-marker-stroke)"
-                strokeDasharray="3 3"
-                strokeWidth={1.5}
-                ifOverflow="hidden"
-                label={{
-                  content: MyScoreReferenceLineLabel,
-                }}
-              />
-            )}
-          </BarChart>
-        </ResponsiveContainer>
+        <Suspense fallback={null}>
+          <RaidScoreHistogramBars
+            chartData={chartData}
+            yAxisMax={yAxisMax}
+            highlightRange={highlightRange}
+            previewRange={previewRange}
+            difficultyBoundaryLines={difficultyBoundaryLines}
+            myScoreMarker={myScoreMarker}
+          />
+        </Suspense>
       </div>
 
       <MyScoreInput
@@ -664,32 +583,10 @@ function HistogramChart({
         marker={myScoreMarker}
         selectedBandKey={selectedBandKey}
         onChange={onMyScoreInputChange}
+        before={myScoreExtras}
+        recordLine={myRecordLine}
       />
     </div>
-  );
-}
-
-function MyScoreReferenceLineLabel(props: unknown) {
-  const viewBox =
-    typeof props === "object" && props !== null && "viewBox" in props
-      ? (props.viewBox as { x?: unknown; y?: unknown } | undefined)
-      : undefined;
-
-  if (typeof viewBox?.x !== "number" || typeof viewBox.y !== "number") {
-    return <g />;
-  }
-
-  return (
-    <text
-      x={viewBox.x + 6}
-      y={viewBox.y + 12}
-      fill="var(--raid-score-marker-stroke)"
-      fontSize={11}
-      fontWeight={700}
-      textAnchor="start"
-    >
-      내 점수
-    </text>
   );
 }
 
@@ -698,13 +595,17 @@ function MyScoreInput({
   marker,
   selectedBandKey,
   onChange,
+  before,
+  recordLine,
 }: {
   value: string;
   marker: ScoreMarker | null;
   selectedBandKey: string;
   onChange: (value: string) => void;
+  before: ReactNode;
+  recordLine: ReactNode;
 }) {
-  const parsedScore = parseScoreInput(value);
+  const parsedScore = parseChartScoreInput(value);
   const helperText =
     parsedScore === null
       ? "내 점수 위치를 표시해요"
@@ -718,6 +619,7 @@ function MyScoreInput({
   return (
     <div className="flex flex-col items-end gap-1 pt-1">
       <div className="flex items-center gap-1.5">
+        {before}
         <label
           htmlFor="raid-clear-time-my-score"
           className="text-sm font-medium text-neutral-600 dark:text-neutral-300"
@@ -748,6 +650,7 @@ function MyScoreInput({
       >
         {parsedScore === null ? "." : helperText}
       </p>
+      {recordLine}
     </div>
   );
 }
@@ -1400,38 +1303,6 @@ function getClosestRow(rows: HistogramChartRow[], x: number): HistogramChartRow 
   }, null);
 }
 
-function getTooltipRow(payload: unknown): HistogramChartRow | null {
-  if (!Array.isArray(payload) || payload.length === 0) {
-    return null;
-  }
-  return (payload[0] as { payload?: HistogramChartRow }).payload ?? null;
-}
-
-function formatXAxisTick(value: number, chartData: HistogramChartData): string {
-  return chartData.xTickLabels?.[value.toString()] ?? "";
-}
-
-function formatTooltipTitle(row: HistogramChartRow): string {
-  const timeRange = `${formatTimeLabel(row.timeStartSec)}-${formatTimeLabel(row.timeEndSec)}`;
-  if (!row.difficulty) {
-    return timeRange;
-  }
-  return `${formatDifficulty(row.difficulty)} ${timeRange}`;
-}
-
-function formatScoreRange(range: ScoreRange): string {
-  if (range.lt === undefined) {
-    return `${range.gte.toLocaleString()}점 이상`;
-  }
-  return `${range.gte.toLocaleString()}-${(range.lt - 1).toLocaleString()}점`;
-}
-
-function formatTimeLabel(totalSeconds: number): string {
-  const minute = Math.floor(totalSeconds / 60);
-  const second = totalSeconds % 60;
-  return `${minute.toString().padStart(2, "0")}:${second.toString().padStart(2, "0")}`;
-}
-
 function formatTimeLabelWithMilliseconds(totalSeconds: number): string {
   const totalMilliseconds = Math.round(totalSeconds * 1_000);
   const minute = Math.floor(totalMilliseconds / 60_000);
@@ -1440,34 +1311,7 @@ function formatTimeLabelWithMilliseconds(totalSeconds: number): string {
   return `${minute.toString().padStart(2, "0")}:${second.toString().padStart(2, "0")}.${millisecond.toString().padStart(3, "0")}`;
 }
 
-function formatCount(value: number): string {
-  if (value >= 10_000) {
-    return `${Math.round(value / 1_000)}k`;
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`;
-  }
-  return value.toString();
-}
-
-function parseScoreInput(value: string): number | null {
-  const digits = value.replace(/\D/g, "");
-  if (!digits) {
-    return null;
-  }
-  const score = Number.parseInt(digits, 10);
-  return Number.isFinite(score) && score > 0 ? score : null;
-}
-
-function formatScoreInput(value: string): string {
-  const score = parseScoreInput(value);
-  return score === null ? "" : score.toLocaleString();
-}
-
 function formatRatio(ratio: number): string {
   return `${(ratio * 100).toFixed(1)}%`;
 }
 
-function formatDifficulty(difficulty: string): string {
-  return difficultyLocale[difficulty as keyof typeof difficultyLocale] ?? difficulty;
-}

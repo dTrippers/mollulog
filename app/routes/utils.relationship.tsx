@@ -35,11 +35,8 @@ import {
 } from "~/domain/student-state-errors";
 import { ActionValidationError } from "~/lib/action-errors";
 import { getLogger } from "~/lib/observability.server";
-import {
-  trackGoogleAnalyticsEvent,
-  trackGoogleAnalyticsEventOncePerPage,
-} from "~/lib/google-analytics-events.client";
-import { canonicalLink } from "~/lib/seo";
+import { trackGoogleAnalyticsEvent, trackGoogleAnalyticsEventOncePerPage } from "~/lib/google-analytics-events.client";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import {
   getRelationshipLevels,
   getStudentStateWriteMode,
@@ -48,7 +45,8 @@ import {
   upsertRelationshipLevel,
 } from "~/models/relationship-level";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
-import { formatVisibleName, getAllStudents } from "~/models/student";
+import { getAllStudents } from "~/models/student";
+import { formatVisibleName } from "~/models/student-name";
 import { getUserResourceInventoryMap } from "~/models/user-resource-inventory";
 import RelationshipGiftCalculationMode, {
   type RelationshipGiftCalculationModeValue,
@@ -60,10 +58,7 @@ export const meta: MetaFunction = ({ location }) => {
   return [
     { title },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };

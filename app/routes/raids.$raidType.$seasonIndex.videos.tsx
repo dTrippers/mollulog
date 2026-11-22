@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getMaxLevelAt, RaidVideosScreen } from "~/components/features/raids";
+import { buildRaidPartyStudentMap, getMaxLevelAt, RaidVideosScreen } from "~/components/features/raids";
 import { raidTypeFromParam, raidTypeToParam } from "~/domain/raid";
 import { getFilterableRaidDifficulties, getRaidDifficultyScoreRange, parseDifficulty } from "~/domain/raid-score";
 import { fetchRaidVideos } from "~/lib/ranks";
@@ -11,7 +11,7 @@ import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey, getRaidSchedule
 import { getRaidVideoParties, parseVideoSort, RAID_VIDEOS_PAGE_SIZE } from "~/models/raid-videos";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
-import { getAllStudentsMap } from "~/models/student";
+import { getAllStudentsMap, getStudentForms } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import RaidVideosPanel from "./raids.$raidType.$seasonIndex._components/RaidVideosPanel";
 import { useRaidVideosFeed } from "./raids.$raidType.$seasonIndex._components/useRaidVideosFeed";
@@ -52,19 +52,13 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
   const difficulty =
     requestedDifficulty && filterableDifficulties.includes(requestedDifficulty) ? requestedDifficulty : null;
   const scoreRange = getRaidDifficultyScoreRange(difficulty);
-  const [rawAllStudents, sensei] = await Promise.all([getAllStudentsMap(env, true), getActiveSensei(env, request)]);
+  const [rawAllStudents, studentForms, sensei] = await Promise.all([
+    getAllStudentsMap(env, true),
+    getStudentForms(env),
+    getActiveSensei(env, request),
+  ]);
   const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};
-  const allStudents = Object.fromEntries(
-    Object.entries(rawAllStudents).map(([uid, student]) => [
-      uid,
-      {
-        name: student.name,
-        attackType: student.attackType,
-        defenseType: student.defenseType,
-        role: student.role,
-      },
-    ]),
-  );
+  const allStudents = buildRaidPartyStudentMap(rawAllStudents, studentForms);
 
   try {
     const initialData = await fetchRaidVideos({

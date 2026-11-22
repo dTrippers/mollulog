@@ -121,6 +121,70 @@ describe("growth-resource", () => {
     });
   });
 
+  it("stores equipment and unique-weapon requirements as EXP by weapon bonus family", async () => {
+    const baseStudent = {
+      initialTier: 3,
+      level: null,
+      skillEx: null,
+      skillNormal: null,
+      skillEnhanced: null,
+      skillSub: null,
+      equipSpecial: null,
+      targetLevel: null,
+      targetSkillEx: null,
+      targetSkillNormal: null,
+      targetSkillEnhanced: null,
+      targetSkillSub: null,
+      targetEquipSpecial: null,
+      targetTier: null,
+    };
+    const requirements = await getStudentGrowthResourceRequirements(
+      {} as Env,
+      [
+        {
+          ...baseStudent,
+          uid: "10000",
+          tier: 9,
+          equip1: 7,
+          equip2: 8,
+          equip3: null,
+          targetEquip1: 8,
+          targetEquip2: 8,
+          targetEquip3: null,
+          weaponLevel: 40,
+          targetWeaponLevel: 50,
+        },
+        {
+          ...baseStudent,
+          uid: "10001",
+          tier: 9,
+          equip1: null,
+          equip2: null,
+          equip3: null,
+          targetEquip1: null,
+          targetEquip2: null,
+          targetEquip3: null,
+          weaponLevel: 0,
+          targetWeaponLevel: 30,
+        },
+      ],
+      {
+        "10000": { equipments: [], weaponType: "ar" },
+        "10001": { equipments: [], weaponType: "taser" },
+      } as never,
+      new Map(),
+    );
+
+    expect(requirements["10000"]).toMatchObject({
+      equipmentExp: 40231,
+      weaponExp: { a: 0, b: 26280 - 11755, c: 0, none: 0 },
+    });
+    expect(requirements["10001"]).toMatchObject({
+      equipmentExp: 0,
+      weaponExp: { a: 0, b: 0, c: 0, none: 4355 },
+    });
+  });
+
   it("treats missing current level as level 1 when a target level exists", () => {
     const student = normalizeStudentGrowthInputForCalculation({
       uid: "10000",
@@ -955,6 +1019,8 @@ describe("growth-resource", () => {
     const aggregated = aggregateGrowthResourceRequirements([
       {
         characterExp: 0,
+        equipmentExp: 0,
+        weaponExp: { a: 0, b: 0, c: 0, none: 0 },
         credit: 0,
         skillUnavailable: false,
         items: [
@@ -978,6 +1044,8 @@ describe("growth-resource", () => {
       },
       {
         characterExp: 12340,
+        equipmentExp: 0,
+        weaponExp: { a: 0, b: 0, c: 0, none: 0 },
         credit: 5000,
         skillUnavailable: true,
         items: [
@@ -1001,10 +1069,36 @@ describe("growth-resource", () => {
     ]);
   });
 
+  it("sums equipment EXP and each weapon bonus family's EXP across students", () => {
+    const aggregated = aggregateGrowthResourceRequirements([
+      {
+        characterExp: 0,
+        equipmentExp: 40231,
+        weaponExp: { a: 4355, b: 0, c: 1000, none: 0 },
+        credit: 0,
+        skillUnavailable: false,
+        items: [],
+      },
+      {
+        characterExp: 0,
+        equipmentExp: 50961,
+        weaponExp: { a: 7400, b: 14525, c: 0, none: 300 },
+        credit: 0,
+        skillUnavailable: false,
+        items: [],
+      },
+    ]);
+
+    expect(aggregated.equipmentExp).toBe(91192);
+    expect(aggregated.weaponExp).toEqual({ a: 11755, b: 14525, c: 1000, none: 300 });
+  });
+
   it("keeps colliding resource uids distinct by resource type", () => {
     const aggregated = aggregateGrowthResourceRequirements([
       {
         characterExp: 0,
+        equipmentExp: 0,
+        weaponExp: { a: 0, b: 0, c: 0, none: 0 },
         credit: 0,
         skillUnavailable: false,
         items: [
@@ -1026,6 +1120,8 @@ describe("growth-resource", () => {
       },
       {
         characterExp: 0,
+        equipmentExp: 0,
+        weaponExp: { a: 0, b: 0, c: 0, none: 0 },
         credit: 0,
         skillUnavailable: false,
         items: [

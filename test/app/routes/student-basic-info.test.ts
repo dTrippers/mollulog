@@ -64,8 +64,10 @@ jest.mock("~/lib/observability.server", () => ({
 
 import { StaleStudentStateRequestError } from "~/domain/student-state-errors";
 import { StudentSkillSelectionCondition } from "~/graphql/graphql";
-import { shouldShowStickyFooterSurface } from "~/routes/students.$id._components/GrowthEditorSheet";
-import { getGrowthProgressPercent } from "~/routes/students.$id._components/GrowthFieldRow";
+import {
+  getGrowthProgressPercent,
+  shouldShowStickyFooterSurface,
+} from "~/routes/students.$id._components/GrowthEditorSheet";
 import {
   getAbilityReleaseDisabledReason,
   getSkillSelectionConditionLabel,
@@ -316,7 +318,7 @@ describe("student basic info equipment-level action", () => {
     expect(response).toMatchObject({
       data: {
         ok: false,
-        error: "육성 상태를 저장하지 못했어요. 잠시 후 다시 시도해주세요",
+        error: "육성 상태를 프로필에 반영하지 못했어요.",
         retryable: true,
       },
       init: { status: 500 },
@@ -346,7 +348,7 @@ describe("student basic info equipment-level action", () => {
       data: {
         ok: false,
         code: "STUDENT_STATE_STALE",
-        error: "페이지가 최신 상태가 아니라 저장하지 못했어요. 새로고침 후 다시 입력해 주세요.",
+        error: "페이지가 최신 상태가 아니라 저장하지 못했어요. 새로고침 후 다시 입력해주세요.",
       },
       init: { status: 409 },
     });

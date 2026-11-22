@@ -23,6 +23,7 @@ const allowedFilterTypes = new Set<EventType | RaidType>([
   "mini_event",
   "main_story",
   "mini_story",
+  "ko_voice",
   "campaign",
   "joint_firing_drill",
   "pickup",
@@ -48,6 +49,11 @@ export function normalizeContentFilterState(value: unknown): ContentFilterState 
         ),
       )
     : [];
+
+  // The story chip gained ko_voice later. A saved story filter predates it, so it gets the whole chip group back.
+  if (types.some((type) => type === "main_story" || type === "mini_story") && !types.includes("ko_voice")) {
+    types.push("ko_voice");
+  }
 
   const onlyPickups = "onlyPickups" in value && typeof value.onlyPickups === "boolean" ? value.onlyPickups : false;
 

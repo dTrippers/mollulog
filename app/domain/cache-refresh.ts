@@ -13,6 +13,7 @@ export const SOURCE_CACHE_REFRESH_TASK_NAMES = [
   "getItemCatalogResources",
   "getFurnitureCatalogSource",
   "getCampaignFarmingStages",
+  "getRecruitTicketSource",
 ] as const;
 
 export const ROUTE_CACHE_REFRESH_TASK_NAMES = [
@@ -27,9 +28,10 @@ export const CACHE_REFRESH_TASK_NAMES = [
   ...ROUTE_CACHE_REFRESH_TASK_NAMES,
 ] as const;
 
+export type SourceCacheRefreshTaskName = (typeof SOURCE_CACHE_REFRESH_TASK_NAMES)[number];
 export type CacheRefreshTaskName = (typeof CACHE_REFRESH_TASK_NAMES)[number];
 export type CacheRefreshJobStatus = "queued" | "running" | "completed" | "partial_failure" | "failed";
-export type CacheRefreshTaskStatus = "pending" | "succeeded" | "failed" | "skipped";
+export type CacheRefreshTaskStatus = "pending" | "running" | "succeeded" | "failed" | "skipped";
 
 export type CacheRefreshTaskResult = {
   status: CacheRefreshTaskStatus;
@@ -39,14 +41,19 @@ export type CacheRefreshTaskResult = {
 
 export type CacheRefreshTaskResults = Record<CacheRefreshTaskName, CacheRefreshTaskResult>;
 
+/**
+ * Task results as stored on a job row. A job created before a task was added to the refresh has no result
+ * for that task, so stored results may lack any task name.
+ */
+export type StoredCacheRefreshTaskResults = Partial<CacheRefreshTaskResults>;
+
 export type CacheRefreshJob = {
   uid: string;
   requestedBy: number;
   status: CacheRefreshJobStatus;
-  currentTask: CacheRefreshTaskName | null;
   completedCount: number;
   totalCount: number;
-  taskResults: CacheRefreshTaskResults;
+  taskResults: StoredCacheRefreshTaskResults;
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
@@ -77,6 +84,7 @@ export const CACHE_REFRESH_TASK_LABELS: Record<CacheRefreshTaskName, string> = {
   getItemCatalogResources: "아이템 카탈로그",
   getFurnitureCatalogSource: "가구 카탈로그",
   getCampaignFarmingStages: "캠페인 파밍 스테이지",
+  getRecruitTicketSource: "모집권 목록",
   getEventList: "이벤트 목록 화면",
   getIndexContents: "홈 화면",
   getFutureContents: "미래시 화면",
@@ -98,5 +106,9 @@ export function isCacheRefreshTaskName(value: string): value is CacheRefreshTask
 }
 
 export function countCompletedCacheRefreshTasks(results: CacheRefreshTaskResults): number {
-  return CACHE_REFRESH_TASK_NAMES.filter((name) => results[name].status !== "pending").length;
+  return CACHE_REFRESH_TASK_NAMES.filter((name) => isCacheRefreshTaskSettled(results[name].status)).length;
+}
+
+export function isCacheRefreshTaskSettled(status: CacheRefreshTaskStatus): boolean {
+  return status !== "pending" && status !== "running";
 }

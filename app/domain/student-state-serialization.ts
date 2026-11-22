@@ -297,7 +297,8 @@ type TargetCandidate = Omit<StudentStateImportTargetState, "targetTier"> & {
   targetTier: number | null;
 };
 
-const userFacingParseError = "SchaleDB 또는 Justin163 학생 데이터 JSON을 인식하지 못했어요.";
+const userFacingParseError =
+  "데이터를 가져오지 못했어요. SchaleDB 또는 Justin163 플래너에서 내보낸 데이터를 그대로 붙여넣었는지 확인해주세요.";
 
 export function parseStudentStateImport(input: string): ParsedImportPayload {
   const parsed = parseJsonInput(input);
@@ -714,7 +715,7 @@ function assertNonEmptyEntries(entries: StudentStateImportEntry[]): StudentState
   const seenStudentIds = new Set<string>();
   for (const entry of entries) {
     if (seenStudentIds.has(entry.studentId)) {
-      throw new Error(`중복된 학생 데이터가 있어요. (${entry.studentId})`);
+      throw new Error("데이터를 가져오지 못했어요. 같은 학생의 데이터가 여러 번 들어 있어요.");
     }
     seenStudentIds.add(entry.studentId);
   }

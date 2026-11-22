@@ -47,11 +47,16 @@ import { bossImageUrl } from "~/models/assets";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getSenseiById, isSenseiProfileVisibleTo } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
+import { socialMeta } from "~/lib/seo";
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => [
-  { title: `${data?.timeline.title ?? "공략 타임라인"} | 몰루로그` },
-  ...(data?.timeline.visibility === "public" ? [] : [{ name: "robots", content: "noindex,nofollow" }]),
-];
+export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
+  const title = data?.timeline.title ?? "공략 타임라인";
+  return [
+    { title: `${title} | 몰루로그` },
+    ...(data?.timeline.visibility === "public" ? [] : [{ name: "robots", content: "noindex,nofollow" }]),
+    ...socialMeta({ title, pathname: location.pathname }),
+  ];
+};
 export const ErrorBoundary = RouteErrorBoundary;
 
 type ActionData = { error: string };

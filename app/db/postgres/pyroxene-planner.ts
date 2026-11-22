@@ -1,15 +1,24 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import { withPlannerStateUpdate } from "~/db/postgres/planner-states";
-import { type PlannerStateDocumentV1, sortPlannerStateTimelineRecords } from "~/domain/planner-state";
+import {
+  applyPyroxeneEventDataPatch,
+  type PlannerStateDocumentV1,
+  type PyroxeneEventDataPatch,
+  sortPlannerStateTimelineRecords,
+} from "~/domain/planner-state";
+import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import {
   normalizePyroxenePlannerOptions,
   type PyroxenePlannerOptions,
   type TimelineSourceType,
 } from "~/domain/pyroxene-planner";
+import type { RecruitmentStacks, RecruitmentTargetTiers } from "~/domain/pyroxene-recruitment-goal";
 import {
   extractPyroxeneTimelineBaseUid,
+  normalizePyroxeneOneOffGainEditAt,
   normalizePyroxeneTimelineEventAt,
+  normalizePyroxeneTimelineRecordAt,
   PYROXENE_AP_PACKAGE_CONFIG,
   PYROXENE_ATTENDANCE_CONFIG,
   PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS,
@@ -34,6 +43,15 @@ export type PyroxeneOwnedResource = {
   pyroxene: number;
   oneTimeTicket: number;
   tenTimeTicket: number;
+  recruitmentStacks?: RecruitmentStacks;
+};
+
+/** A snapshot to save; recruitmentStacks is omitted when the user did not enter stacks. */
+export type OwnedResourceInput = {
+  pyroxene: number;
+  oneTimeTicket: number;
+  tenTimeTicket: number;
+  recruitmentStacks?: RecruitmentStacks;
 };
 
 export type PyroxeneTimelineRepeatType = "fixed_days" | "monthly_first";
@@ -58,7 +76,11 @@ export type PyroxeneEventData = {
   eventUid: string;
   completed: boolean;
   expectedTrials: number | null;
+  pickupChance?: PyroxenePickupChance;
+  targetTiers?: RecruitmentTargetTiers;
 };
+
+export type { PyroxeneEventDataPatch } from "~/domain/planner-state";
 
 type PlannerStateTimelineRecord = Omit<PyroxeneTimelineItem, "userId">;
 
@@ -75,14 +97,14 @@ type TimelineRecordInput = Pick<PlannerStateTimelineRecord, "uid" | "source" | "
     eventAt: Date | string;
   };
 
-function timelineEventAt(date: Date | string): string {
-  return normalizeInstant(normalizePyroxeneTimelineEventAt(date));
+function timelineEventAt(date: Date | string, source: PlannerStateTimelineRecord["source"]): string {
+  return normalizeInstant(normalizePyroxeneTimelineRecordAt(date, source));
 }
 
 function timelineRecord(input: TimelineRecordInput): PlannerStateTimelineRecord {
   return {
     uid: input.uid,
-    eventAt: timelineEventAt(input.eventAt),
+    eventAt: timelineEventAt(input.eventAt, input.source),
     source: input.source,
     repeatType: input.repeatType ?? "fixed_days",
     repeatIntervalDays: input.repeatIntervalDays ?? null,
@@ -138,6 +160,18 @@ function withCollectedSourceKeys(
     ...document,
     pyroxene: { ...document.pyroxene, collectedSourceKeys: [...keys].sort() },
   };
+}
+
+export type CollectedSourceChanges = { add?: readonly string[]; remove?: readonly string[] };
+
+function withCollectedSourceChanges(
+  document: PlannerStateDocumentV1,
+  changes: CollectedSourceChanges,
+): PlannerStateDocumentV1 {
+  return withCollectedSourceKeys(document, (keys) => {
+    for (const sourceKey of changes.add ?? []) if (sourceKey) keys.add(sourceKey);
+    for (const sourceKey of changes.remove ?? []) keys.delete(sourceKey);
+  });
 }
 
 function withPlannerOptions(document: PlannerStateDocumentV1, options: PyroxenePlannerOptions): PlannerStateDocumentV1 {
@@ -201,15 +235,16 @@ function updatePyroxenePlannerDocument(
 /** Keeps the latest owned-resource snapshot; an older input never replaces a newer one. */
 export function withPyroxeneOwnedResource(
   document: PlannerStateDocumentV1,
-  resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
+  resources: OwnedResourceInput,
   inputAt: string = nowUtcIso(),
 ): PlannerStateDocumentV1 {
-  const next = {
+  const next: PlannerStateDocumentV1["pyroxene"]["resources"] & object = {
     inputAt: normalizeInstant(inputAt),
     pyroxene: resources.pyroxene,
     oneTimeTicket: resources.oneTimeTicket,
     tenTimeTicket: resources.tenTimeTicket,
   };
+  if (resources.recruitmentStacks) next.recruitmentStacks = { ...resources.recruitmentStacks };
   const current = document.pyroxene.resources;
   if (current && next.inputAt < current.inputAt) return document;
   return { ...document, pyroxene: { ...document.pyroxene, resources: next } };
@@ -218,14 +253,34 @@ export function withPyroxeneOwnedResource(
 export function createPostgresPyroxeneOwnedResource(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
-  resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
-  options: { inputAt?: string } & PostgresPyroxeneOptions = {},
+  resources: OwnedResourceInput,
+  // Received-reward changes saved with the resources, so both land in one update or neither does.
+  options: { inputAt?: string; collectedSources?: CollectedSourceChanges } & PostgresPyroxeneOptions = {},
 ): Promise<void> {
   return updatePyroxenePlannerDocument(
     env,
     userId,
     "owned_resources.create",
-    (document) => withPyroxeneOwnedResource(document, resources, options.inputAt),
+    (document) => {
+      const next = withPyroxeneOwnedResource(document, resources, options.inputAt);
+      return options.collectedSources ? withCollectedSourceChanges(next, options.collectedSources) : next;
+    },
+    options,
+  );
+}
+
+/** Adds and removes received rewards in one update, without touching the owned resources. */
+export function updatePostgresCollectedSources(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  changes: CollectedSourceChanges,
+  options: PostgresPyroxeneOptions = {},
+): Promise<void> {
+  return updatePyroxenePlannerDocument(
+    env,
+    userId,
+    "collected_sources.update",
+    (document) => withCollectedSourceChanges(document, changes),
     options,
   );
 }
@@ -300,7 +355,11 @@ export async function createPostgresBuyPyroxene(
   userId: number,
   date: Date | string,
   quantity: number,
-  options: { uid?: string; repeatType?: PyroxeneTimelineRepeatType; monthlyCount?: number } & PostgresPyroxeneOptions = {},
+  options: {
+    uid?: string;
+    repeatType?: PyroxeneTimelineRepeatType;
+    monthlyCount?: number;
+  } & PostgresPyroxeneOptions = {},
 ): Promise<void> {
   const { repeatType, monthlyCount } = options;
   if (repeatType !== undefined && repeatType !== "fixed_days" && repeatType !== "monthly_first") {
@@ -373,7 +432,7 @@ export function updatePostgresPyroxeneOneOffTimelineItem(
         isEditable(record)
           ? {
               ...record,
-              eventAt: timelineEventAt(input.date),
+              eventAt: normalizeInstant(normalizePyroxeneOneOffGainEditAt(input.date, record.eventAt)),
               description: input.description,
               pyroxeneDelta: input.pyroxeneDelta,
               oneTimeTicketDelta: input.oneTimeTicketDelta,
@@ -554,7 +613,7 @@ export function upsertPostgresPyroxeneEventData(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
   eventUid: string,
-  data: { completed?: boolean; expectedTrials?: number | null },
+  data: PyroxeneEventDataPatch,
   options: PostgresPyroxeneOptions = {},
 ): Promise<void> {
   return updatePyroxenePlannerDocument(
@@ -569,10 +628,7 @@ export function upsertPostgresPyroxeneEventData(
           ...document.pyroxene,
           eventData: {
             ...document.pyroxene.eventData,
-            [eventUid]: {
-              completed: data.completed ?? current.completed,
-              expectedTrials: data.expectedTrials !== undefined ? data.expectedTrials : current.expectedTrials,
-            },
+            [eventUid]: applyPyroxeneEventDataPatch(current, data),
           },
         },
       };

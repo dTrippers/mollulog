@@ -1,15 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
+import { createGuestSaveGate, resolveAccountSaveResponse, resolveGuestSave } from "~/lib/event-shop/hooks/useAutoSave";
+import { getInitialLastSavedState, type ShopState, toEventShopState } from "~/lib/event-shop/hooks/useShopState";
 import type { GuestPlannerSnapshot } from "~/lib/guest-planner.client";
-import {
-  createGuestSaveGate,
-  resolveAccountSaveResponse,
-  resolveGuestSave,
-} from "../../../../../../../app/components/features/events/shop/hooks/useAutoSave";
-import {
-  getInitialLastSavedState,
-  type ShopState,
-  toEventShopState,
-} from "../../../../../../../app/components/features/events/shop/hooks/useShopState";
 import type { EventShopState } from "../../../../../../../app/models/event-shop-state";
 
 function createLiveState(overrides: Partial<ShopState> = {}): ShopState {

@@ -231,4 +231,20 @@ describe("api.preference", () => {
 
     expect(preference.timeZone).toBe("UTC");
   });
+
+  it("appends dismissed site banners without losing other preferences", async () => {
+    const firstResponse = await callAction({ dismissedSiteBannerUid: "banner-1", darkMode: false });
+    const secondResponse = await callAction(
+      { dismissedSiteBannerUid: "banner-2" },
+      firstResponse.headers.get("Set-Cookie") ?? undefined,
+    );
+    const cookie = secondResponse.headers.get("Set-Cookie");
+    const preference = await getPreference(
+      env,
+      new Request("https://mollulog.net", { headers: cookie ? { Cookie: cookie } : {} }),
+    );
+
+    expect(preference.dismissedSiteBannerUids).toEqual(["banner-1", "banner-2"]);
+    expect(preference.darkMode).toBe(false);
+  });
 });

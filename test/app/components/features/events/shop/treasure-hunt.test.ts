@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
-import { normalizeClueSearchRoundRange } from "~/components/features/events/shop/clue-search";
+import type { TreasureHuntConfig, TreasureHuntRoundConfig } from "~/domain/event-shop";
+import { normalizeClueSearchRoundRange } from "~/domain/event-shop/clue-search";
 import {
   areTreasureHuntRangeEconomicsCompatible,
   calculateTreasureHuntEstimate,
@@ -11,8 +12,7 @@ import {
   isTreasureHuntTargetRoundOverLimit,
   shouldHoldTreasureHuntShopCalculations,
   TREASURE_HUNT_MAX_TARGET_ROUND,
-} from "~/components/features/events/shop/treasure-hunt";
-import type { TreasureHuntConfig, TreasureHuntRoundConfig } from "~/domain/event-shop";
+} from "~/domain/event-shop/treasure-hunt";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { treasureHuntLocale } from "~/locales/ko";
 
@@ -66,8 +66,7 @@ function containsBigInt(value: unknown, seen = new WeakSet<object>()): boolean {
 }
 
 describe("treasure hunt round range and estimates", () => {
-  it("uses the approved basis and open-reward captions", () => {
-    expect(treasureHuntLocale.costMode).toBe("보상 획득 기준");
+  it("uses the approved open-reward caption", () => {
     expect(treasureHuntLocale.openRewards).toBe("오픈 보상");
   });
 

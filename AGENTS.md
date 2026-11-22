@@ -37,11 +37,16 @@ activities, and plan events.
   `withPostgresClient`; never keep a client in module or request-global state.
 - Define BAQL queries with `graphql(...)`, run `mise exec -- pnpm codegen` after
   query changes, and never edit generated files under `app/graphql/` by hand.
-- Treat the local PostgreSQL database as shared. `untracked` migration history is
-  unknown, not permission to replay old files; never reset the database or mark
-  historical migrations applied merely because a table exists.
-- Never drop a table or column unless a preceding step has preserved all of its
-  data intact; retire unused tables as described in
+- You may read and write the local PostgreSQL database freely, as long as no
+  existing data is lost. Every worktree shares it, so statements that remove or
+  overwrite existing data are allowed only on test data you created: `DROP`,
+  `TRUNCATE`, `DELETE`, `UPDATE` of existing rows, and `ALTER` that drops
+  columns or narrows types. Label test data so it can be found and removed.
+  `untracked` migration history is unknown, not permission to replay old files;
+  never reset the database or mark historical migrations applied merely because
+  a table exists.
+- Never drop a table or column unless a preceding step has kept all of its data
+  intact elsewhere. Retire an unused table with a `zzz_` rename, as described in
   [database](docs/data/database.md).
 - `docs/` records durable rules and structure only. Put runbooks, one-time
   rollout or operator steps, and dated snapshots in the PR description or issue.
@@ -50,10 +55,11 @@ activities, and plan events.
   PostgreSQL is unavailable: retry the same read-only check with the execution
   tool's local network permission, then report the exact limitation. Do not change
   credentials or launch another database to mask the failure.
-- Do not start or stop a development server without explicit authorization.
-  Before stopping any server or long-running process, identify its exact PID,
-  working directory, and command, then ask for confirmation; never infer
-  ownership from a port or process name.
+- Start a development server whenever the task needs one, on a free port, and
+  stop the servers you started when you are done. Before stopping a server or
+  long-running process you did not start, identify its exact PID, working
+  directory, and command, then ask for confirmation; never infer ownership from
+  a port or process name.
 - Each applicable outcome needs current evidence. Missing required visual or
   interaction evidence remains `UNVERIFIED`; do not impose a universal
   result-approval workflow on ordinary work.

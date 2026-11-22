@@ -21,7 +21,6 @@ jest.mock("~/models/relationship-level", () => ({
 }));
 jest.mock("~/models/resource", () => ({ getAllStudentsFavoriteItems: mockGetAllStudentsFavoriteItems }));
 jest.mock("~/models/student", () => ({
-  formatVisibleName: (name: string) => name,
   getAllStudents: mockGetAllStudents,
 }));
 jest.mock("~/models/user-resource-inventory", () => ({ getUserResourceInventoryMap: mockGetUserResourceInventoryMap }));

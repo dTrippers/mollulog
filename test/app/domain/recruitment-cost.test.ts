@@ -81,6 +81,39 @@ describe("simulateRecruitmentCost", () => {
   });
 });
 
+describe("simulateRecruitmentCost with many target copies", () => {
+  function copiesPeriod(copiesPerStudent: number[]): RecruitmentCostPeriod {
+    return period(0, {
+      recruitmentType: RecruitmentTypeEnum.Limited,
+      tier3PoolCount: 30,
+      targets: copiesPerStudent.flatMap((copies, student) =>
+        Array.from({ length: copies }, (_, copy) => ({
+          key: `student-${student}#${copy}`,
+          studentKey: `student-${student}`,
+          initialTier: 3,
+          recruitmentType: RecruitmentTypeEnum.Limited,
+        })),
+      ),
+    });
+  }
+
+  it("handles four students aimed at exclusive weapon 4", () => {
+    const distribution = simulateRecruitmentCost(copiesPeriod([8, 8, 8, 8]), "call_charge_v1");
+    const total = distribution.reduce((sum, probability) => sum + probability, 0);
+    expect(total).toBeCloseTo(1, 10);
+    // Every copy costs at most one 200-pull cycle.
+    expect(distribution.length - 1).toBeLessThanOrEqual(32 * 200);
+    expect(expectedPulls(distribution)).toBeGreaterThan(2000);
+    expect(expectedPulls(distribution)).toBeLessThan(3200);
+  });
+
+  it("returns the same distribution for the same input", () => {
+    const first = simulateRecruitmentCost(copiesPeriod([2, 1]), "call_charge_v1", { initialCharge: 40 });
+    const second = simulateRecruitmentCost(copiesPeriod([2, 1]), "call_charge_v1", { initialCharge: 40 });
+    expect(second).toEqual(first);
+  });
+});
+
 describe("distribution helpers", () => {
   it("convolves independent recruitment periods", () => {
     expect(convolvePullCostDistributions([1], [0, 0.5, 0.5])).toEqual([0, 0.5, 0.5]);
@@ -153,5 +186,49 @@ describe("getRecruitmentRuleSet", () => {
     expect(getRecruitmentRuleSet("2026-11-23T02:00:00.000Z", anchor)).toBe("legacy_points");
     expect(getRecruitmentRuleSet(anchor, anchor)).toBe("call_charge_v1");
     expect(getRecruitmentRuleSet("2026-11-25T02:00:00.000Z", anchor)).toBe("call_charge_v1");
+  });
+});
+
+describe("call charge carry-over and copies", () => {
+  it("starts the period from a carried charge", () => {
+    const fresh = simulateRecruitmentCost(period(), "call_charge_v1");
+    const carried = simulateRecruitmentCost(period(), "call_charge_v1", { initialCharge: 120 });
+    expect(carried.length - 1).toBe(80);
+    expect(expectedPulls(carried)).toBeLessThan(expectedPulls(fresh));
+  });
+
+  it("guarantees the pickup on the first pull of a charge carried to 199", () => {
+    const distribution = simulateRecruitmentCost(period(), "call_charge_v1", { initialCharge: 199 });
+    expect(distribution[10]).toBeCloseTo(1, 10);
+  });
+
+  it("acquires copies of one student in order and caps every copy at the ceiling", () => {
+    const copies = period(1, {
+      targets: [0, 1, 2].map((index) => ({
+        key: `student#${index}`,
+        studentKey: "student",
+        initialTier: 3,
+        recruitmentType: RecruitmentTypeEnum.Usual,
+      })),
+    });
+    const distribution = simulateRecruitmentCost(copies, "call_charge_v1");
+    expect(distribution.length - 1).toBe(600);
+    // Every copy can come from the same ten-pull, so the copies cost less than three separate periods.
+    expect(distribution[10]).toBeGreaterThan(0);
+    expect(expectedPulls(distribution)).toBeLessThan(
+      3 * expectedPulls(simulateRecruitmentCost(period(), "call_charge_v1")),
+    );
+  });
+
+  it("acquires every copy within one ten-pull under the legacy rules too", () => {
+    const copies = period(1, {
+      targets: [0, 1].map((index) => ({
+        key: `student#${index}`,
+        studentKey: "student",
+        initialTier: 3,
+        recruitmentType: RecruitmentTypeEnum.Usual,
+      })),
+    });
+    expect(simulateRecruitmentCost(copies, "legacy_points")[10]).toBeGreaterThan(0);
   });
 });

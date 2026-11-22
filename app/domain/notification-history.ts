@@ -6,6 +6,7 @@ export type NotificationHistoryTrigger =
   | "reward-exchange-end"
   | "recruitment-start"
   | "shop-reset"
+  | "coupon-expiry"
   | "feedback-reply"
   | "event-opinion-reply"
   | "connection-verification";
@@ -44,6 +45,7 @@ const NOTIFICATION_TYPE_LABELS: Record<NotificationHistoryTrigger, string> = {
   "reward-exchange-end": "보상 교환 종료",
   "recruitment-start": "학생 모집 시작",
   "shop-reset": "상점 초기화",
+  "coupon-expiry": "쿠폰 만료",
   "feedback-reply": "제안/문의 답변",
   "event-opinion-reply": "이벤트 의견 답변",
   "connection-verification": "Discord 연결 확인",
@@ -100,7 +102,10 @@ function isAllowedNotificationUrl(value: string): string | null {
     }
 
     const isAllowedPath =
-      url.pathname === "/notifications" || url.pathname.startsWith("/events/") || url.pathname.startsWith("/contact/");
+      url.pathname === "/notifications" ||
+      url.pathname === "/coupons" ||
+      url.pathname.startsWith("/events/") ||
+      url.pathname.startsWith("/contact/");
     if (!isAllowedPath) {
       return null;
     }

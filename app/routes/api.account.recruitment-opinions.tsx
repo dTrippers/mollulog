@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { updateSensei } from "~/models/sensei";
 
 type RecruitmentOpinionSettingResponse = { ok: true; hideRecruitmentOpinions: boolean } | { ok: false; error: string };
@@ -43,12 +43,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
         { status: 500 },
       );
     }
-    const authenticator = getAuthenticator(env, ctx);
-    const session = await sessionStorage(env).getSession(request.headers.get("cookie"));
-    session.set(authenticator.sessionKey, { ...sensei, hideRecruitmentOpinions: value });
-    return Response.json({ ok: true, hideRecruitmentOpinions: value } satisfies RecruitmentOpinionSettingResponse, {
-      headers: { "Set-Cookie": await sessionStorage(env).commitSession(session) },
-    });
+    // Readers resolve the setting from PostgreSQL, so the session copy is left as is.
+    return Response.json({ ok: true, hideRecruitmentOpinions: value } satisfies RecruitmentOpinionSettingResponse);
   } catch {
     return Response.json(
       { ok: false, error: "설정을 저장하지 못했어요." } satisfies RecruitmentOpinionSettingResponse,

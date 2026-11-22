@@ -7,6 +7,7 @@ import {
   type StudentStateTransaction,
   withStudentStateProjection,
 } from "~/db/postgres/student-state-projection";
+import { MAX_RECRUITED_STUDENT_BATCH_SIZE } from "~/domain/student-growth-edit";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
   assertAbilityReleaseAvailable,
@@ -18,7 +19,9 @@ import {
 import { withPostgresClient } from "~/lib/postgres.server";
 
 const PG_IN_QUERY_CHUNK_SIZE = 500;
-export const MAX_RECRUITED_STUDENT_BATCH_SIZE = 500;
+
+export { MAX_RECRUITED_STUDENT_BATCH_SIZE };
+
 type RecruitedStudentsDb = NodePgDatabase;
 export type RecruitedStudentsTransaction = StudentStateTransaction;
 

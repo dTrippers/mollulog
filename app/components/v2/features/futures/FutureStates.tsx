@@ -117,7 +117,6 @@ export function LoadFailureState({ onRetry }: { onRetry: () => void }) {
     <div className="flex justify-center py-16">
       <div role="alert" className="w-full max-w-xl rounded-lg bg-v2-surface p-v2-block-p">
         <p className="text-base font-semibold text-v2-fg">미래시를 불러오지 못했어요</p>
-        <p className="mt-1 text-sm text-v2-fg-secondary">일시적인 문제일 수 있어요. 잠시 후 다시 시도해 주세요.</p>
         <Button variant="secondary" className="mt-3" onClick={onRetry}>
           <ArrowPathIcon className="size-4" aria-hidden="true" />
           다시 시도

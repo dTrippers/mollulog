@@ -2,7 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import {
   calculateShopPurchaseDays,
   getShopResourcePurchaseDaysLimit,
-} from "../../../../../../../app/components/features/events/shop/calculations/purchase-days";
+} from "~/domain/event-shop/calculations/purchase-days";
 
 describe("calculateShopPurchaseDays", () => {
   it("counts reset times inside the event period", () => {

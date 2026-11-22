@@ -319,6 +319,7 @@ export async function listPostgresVisibleWalkthroughTimelines(
     maxDifficulty?: WalkthroughTimelineDifficulty | null;
     isAuto?: boolean;
     likedByUserId?: number | null;
+    authorUserId?: number | null;
     viewerUserId?: number | null;
   } = {},
   options: PostgresWalkthroughTimelineOptions = {},
@@ -344,6 +345,7 @@ export async function listPostgresVisibleWalkthroughTimelines(
         conditions.push(eq(pgWalkthroughTimelinesTable.maxDifficulty, filters.maxDifficulty));
       }
       if (filters.isAuto !== undefined) conditions.push(eq(pgWalkthroughTimelinesTable.isAuto, filters.isAuto));
+      if (filters.authorUserId) conditions.push(eq(pgWalkthroughTimelinesTable.userId, filters.authorUserId));
       if (filters.likedByUserId) {
         conditions.push(
           exists(

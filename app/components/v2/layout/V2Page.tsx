@@ -62,6 +62,10 @@ export type V2PageProps = {
   // Reports the measured layout, so a route can choose its view by the same signal as the tabs and the panels. Pass a
   // stable callback. It also receives the stacked value before the first measurement.
   onStackedChange?: (stacked: boolean) => void;
+  // "full" keeps the toolbar on its own full-width row above the Aside and Main, so screens that share one toolbar
+  // (such as tabs) keep it in place whether or not a screen has an Aside. It also adds a full-width row for a page
+  // notice (`PageNotice`) between the toolbar and the content.
+  toolbarSpan?: "main" | "full";
   children: ReactNode;
 };
 
@@ -71,6 +75,7 @@ export function V2Page({
   panelCloseRequest,
   onPanelCloseRequestHandled,
   onStackedChange,
+  toolbarSpan = "main",
   children,
 }: V2PageProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -211,6 +216,7 @@ export function V2Page({
         data-page-max-width={getPageMaxWidth(width)}
         data-width={width}
         data-stacked={stacked ? "true" : "false"}
+        data-toolbar-span={toolbarSpan === "full" ? "full" : undefined}
         className="min-w-0"
       >
         {children}

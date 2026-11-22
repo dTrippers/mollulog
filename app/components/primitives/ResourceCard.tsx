@@ -12,6 +12,7 @@ type ResourceCardProps = {
   labelColor?: "white" | "yellow" | "red";
   labelBgColor?: "black" | "red";
   name?: string;
+  imageAlt?: string;
   size?: "sm" | "md" | "lg";
   expandImageArea?: boolean;
 } & (
@@ -35,6 +36,7 @@ function ResourceCard({
   labelColor = "white",
   labelBgColor = "black",
   name,
+  imageAlt = "아이템 이미지",
   size = "md",
   expandImageArea = false,
 }: ResourceCardProps) {
@@ -62,7 +64,7 @@ function ResourceCard({
           className={`shrink-0 ${sizeClass} flex items-center justify-center overflow-hidden rounded-lg ${rarityBgClass(rarity)}`}
         >
           {imageUrl ? (
-            <img alt="아이템 이미지" src={imageUrl} className={imageClassName} loading="lazy" />
+            <img alt={imageAlt} src={imageUrl} className={imageClassName} loading="lazy" />
           ) : (
             <span
               role="img"

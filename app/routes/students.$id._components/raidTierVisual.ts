@@ -1,13 +1,13 @@
 export const TIER_COLORS: Record<string, string> = {
-  tier9: "#ec4899",
-  tier8: "#d946ef",
-  tier7: "#8b5cf6",
-  tier6: "#3b82f6",
-  tier5: "#06b6d4",
-  tier4: "#22c55e",
-  tier3: "#eab308",
-  tier2: "#f97316",
-  tier1: "#ef4444",
+  tier9: "var(--v2-viz-tier-9)",
+  tier8: "var(--v2-viz-tier-8)",
+  tier7: "var(--v2-viz-tier-7)",
+  tier6: "var(--v2-viz-tier-6)",
+  tier5: "var(--v2-viz-tier-5)",
+  tier4: "var(--v2-viz-tier-4)",
+  tier3: "var(--v2-viz-tier-3)",
+  tier2: "var(--v2-viz-tier-2)",
+  tier1: "var(--v2-viz-tier-1)",
 };
 
 export function formatTierKey(tier: number) {

@@ -7,11 +7,8 @@ import {
   getClueSearchOneTimeRange,
   getClueSearchRoundDetails,
   resolveClueSearchExchange,
-} from "../../../../../../app/components/features/events/shop/clue-search";
-import {
-  calculateMinigamePaymentCosts,
-  calculateMinigameRewards,
-} from "../../../../../../app/components/features/events/shop/utils";
+} from "~/domain/event-shop/clue-search";
+import { calculateMinigamePaymentCosts, calculateMinigameRewards } from "~/domain/event-shop/utils";
 import type { MinigameConfig, ShopResource } from "../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../app/graphql/graphql";
 

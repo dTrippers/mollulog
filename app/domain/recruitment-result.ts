@@ -68,6 +68,10 @@ function resolveStudentTier(student: RecruitmentResultStudent, lookup: StudentLo
 }
 
 function resolveStudentPickup(student: RecruitmentResultStudent, lookup: StudentLookup): boolean {
+  if (student.offPickup) {
+    return false;
+  }
+
   const groupRecruitment = getGroupRecruitment(lookup.group, student.studentUid);
   if (!groupRecruitment) {
     return student.pickup;
@@ -194,7 +198,11 @@ export function sanitizeRecruitmentResultStudents(
     }
 
     const tier = Math.max(1, Math.min(9, Number.isFinite(student.tier) ? Math.trunc(student.tier) : 3));
-    return [{ studentUid, tier, pickup: Boolean(student.pickup) }];
+    return [
+      student.offPickup === true
+        ? { studentUid, tier, pickup: false, offPickup: true as const }
+        : { studentUid, tier, pickup: Boolean(student.pickup) },
+    ];
   });
 }
 
@@ -205,12 +213,31 @@ export function createRecruitmentResultStudentsFromPickupHistory(
 ): RecruitmentResultStudent[] {
   return sanitizeRecruitmentResultStudents(
     history.result.flatMap((trial) =>
-      trial.tier3StudentIds.map((studentUid) => ({
-        studentUid,
-        tier: studentInitialTiers[studentUid] ?? 3,
-        pickup: pickupStudentUids.has(studentUid),
-      })),
+      trial.tier3StudentIds.map((studentUid, index): RecruitmentResultStudent => {
+        const tier = studentInitialTiers[studentUid] ?? 3;
+        if (pickupStudentUids.has(studentUid) && trial.tier3StudentOffPickup?.[index] === true) {
+          return { studentUid, tier, pickup: false, offPickup: true };
+        }
+        return { studentUid, tier, pickup: pickupStudentUids.has(studentUid) };
+      }),
     ),
+  );
+}
+
+// 픽업 외 is a choice for a pickup student of the group only, made per draw.
+export function isValidOffPickupSelection(
+  trial: Pick<PickupHistory["result"][number], "tier3StudentIds" | "tier3StudentOffPickup">,
+  pickupStudentUids: Set<string>,
+): boolean {
+  const flags = trial.tier3StudentOffPickup;
+  if (flags === undefined) {
+    return true;
+  }
+  if (!Array.isArray(flags) || flags.length !== trial.tier3StudentIds.length) {
+    return false;
+  }
+  return flags.every(
+    (flag, index) => typeof flag === "boolean" && (!flag || pickupStudentUids.has(trial.tier3StudentIds[index] ?? "")),
   );
 }
 

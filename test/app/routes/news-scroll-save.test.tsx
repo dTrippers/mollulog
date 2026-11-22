@@ -23,12 +23,21 @@ function post(index: number): Post {
     board: "news",
     timelineContentUid: null,
     thumbnailImageUrl: null,
-    createdAt: `2026-09-${day}T00:00:00.000Z`,
+    publishedAt: `2026-09-${day}T00:00:00.000Z`,
     updatedAt: `2026-09-${day}T00:00:00.000Z`,
   };
 }
 
-const listData = { posts: Array.from({ length: 3 }, (_, index) => post(index)), page: 1, totalPages: 1 };
+const listData = {
+  posts: Array.from({ length: 3 }, (_, index) => post(index)).map(({ uid, title, publishedAt }) => ({
+    uid,
+    title,
+    publishedAt,
+  })),
+  latestContentHtml: "<p>짧은 본문</p>",
+  page: 1,
+  totalPages: 1,
+};
 
 // Mirrors root's layout effect: the scroll container is reset to 0 on a pathname change, unless root keeps a saved
 // news offset for a back navigation (the same condition as app/root.tsx).

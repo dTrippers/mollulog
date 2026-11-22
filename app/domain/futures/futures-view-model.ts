@@ -1,4 +1,5 @@
 import { raidTypeToParam } from "~/domain/raid";
+import { getAvailableFreeRecruitmentPulls } from "~/domain/recruitment-notice";
 import { getRecruitmentPeriodNoticeKind, type RecruitmentPeriod } from "~/domain/recruitment-period-notice";
 import {
   formatInstant,
@@ -70,12 +71,12 @@ export function getFavoriteLabelState({
   };
 }
 
-// The recruitment types whose label reads "신규" without a rerun, as recruitmentLabelLocale reads them. A test keeps the
-// two in step.
-const NEW_RECRUITMENT_TYPES = ["usual", "limited", "fes"];
+// The recruitment types that bring back students already released, so their label is never accented, even without the
+// rerun flag. Every other first-time recruitment, including a given or premium one, is accented as new.
+const RETURNING_RECRUITMENT_TYPES = ["archive", "recollect", "encore"];
 
 export function isNewRecruitment({ recruitmentType, rerun }: { recruitmentType: string; rerun: boolean }): boolean {
-  return !rerun && NEW_RECRUITMENT_TYPES.includes(recruitmentType);
+  return !rerun && !RETURNING_RECRUITMENT_TYPES.includes(recruitmentType);
 }
 
 export type FutureMediaSource =
@@ -111,6 +112,7 @@ export function getFutureContentLink(content: {
   raidInfo?: { raidType: RaidType; seasonIndex?: number } | undefined;
   uid: string;
 }): string {
+  if (content.contentType === "live") return `/lives/${content.uid}`;
   if (content.contentType !== "raid") {
     return `/events/${content.uid}`;
   }
@@ -229,7 +231,7 @@ export function isOngoingFutureContent(since: UtcIsoString, until: UtcIsoString 
 }
 
 export type FutureSpecialCase =
-  | { kind: "perk-free-100" }
+  | { kind: "perk-free"; freePulls: number }
   | { kind: "caution-ended" }
   | { kind: "caution-period"; range: string };
 
@@ -268,11 +270,9 @@ export function getFutureSpecialCases({
   timeZone: string;
 }): FutureSpecialCase[] {
   const cases: FutureSpecialCase[] = [];
-  if (
-    tags.includes("recruit_free_100") &&
-    recruitments.every((recruitment) => recruitment.until !== null && isInstantAfter(recruitment.until, now))
-  ) {
-    cases.push({ kind: "perk-free-100" });
+  const freePulls = getAvailableFreeRecruitmentPulls({ tags, recruitments, now });
+  if (freePulls > 0) {
+    cases.push({ kind: "perk-free", freePulls });
   }
 
   const noticeKind = getRecruitmentPeriodNoticeKind(
@@ -347,17 +347,24 @@ export function getFaceStack<T extends { pickup: boolean }>(
   return { shown: ordered.slice(0, max), extra: Math.max(0, ordered.length - max) };
 }
 
-// Endless main and mini stories are dated by their release, so they read "MM/DD 공개". Other open-ended dates read "MM/DD부터".
+// Endless main and mini stories are dated by their release, so they read "MM/DD 공개". Korean dubbing is dated by
+// when it is added, so it reads "MM/DD 추가". Other open-ended dates read "MM/DD부터".
 export function isStoryContentType(contentType: string): boolean {
   return contentType === "main_story" || contentType === "mini_story";
 }
 
+// Contents dated by a single release or addition day rather than a period.
+export function isReleaseDatedContentType(contentType: string): boolean {
+  return isStoryContentType(contentType) || contentType === "ko_voice";
+}
+
 export function formatOpenEndedStart(startLabel: string, contentType: string): string {
+  if (contentType === "ko_voice") return `${startLabel} 추가`;
   return isStoryContentType(contentType) ? `${startLabel} 공개` : `${startLabel}부터`;
 }
 
 // The period of a content or a list row, as both the timeline and the list show it. Open-ended dates (no end, or
-// endless) read `MM/DD부터`, or `MM/DD 공개` for endless main and mini stories. Hidden spoilers show the same period.
+// endless) read `MM/DD부터`, `MM/DD 공개` for endless main and mini stories, or `MM/DD 추가` for Korean dubbing. Hidden spoilers show the same period.
 export function formatContentPeriod({
   since,
   until,

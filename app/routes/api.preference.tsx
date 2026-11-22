@@ -3,6 +3,7 @@ import { getPreference, serializePreference, type Preference } from "~/auth/pref
 import { normalizeMobileNavigationIds } from "~/domain/mobile-navigation";
 import { normalizeNavigationFavoriteIds } from "~/domain/navigation-favorites";
 import { normalizeDesktopNavigationExpandedGroups } from "~/domain/desktop-navigation-preference";
+import { addDismissedSiteBannerUid } from "~/domain/site-banner";
 import { normalizeTimeZone } from "~/lib/date-time";
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -43,6 +44,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
       submittedPreference.desktopNavigationExpandedGroups === undefined
         ? currentPreference.desktopNavigationExpandedGroups
         : normalizeDesktopNavigationExpandedGroups(submittedPreference.desktopNavigationExpandedGroups),
+    dismissedSiteBannerUids:
+      submittedPreference.dismissedSiteBannerUid === undefined
+        ? currentPreference.dismissedSiteBannerUids
+        : addDismissedSiteBannerUid(
+            currentPreference.dismissedSiteBannerUids ?? [],
+            submittedPreference.dismissedSiteBannerUid,
+          ),
     timeZone:
       submittedPreference.timeZone === undefined
         ? currentPreference.timeZone

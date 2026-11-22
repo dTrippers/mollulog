@@ -1,8 +1,11 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import { Attack, Defense } from "~/graphql/graphql";
 import {
   buildStudentRaidUsageChartData,
   getDefaultRaidUsageDefenseFilter,
+  getStudentRaidUsageChartLayout,
+  observeStudentRaidUsageChartFrameWidth,
+  STUDENT_RAID_USAGE_MAX_BAR_SIZE,
 } from "~/routes/students.$id._components/StudentRaidUsageChartModel";
 
 function makeJpSchedule(seasonIndex: number, startAt: string) {
@@ -18,6 +21,55 @@ const baseRaid = {
   jpSchedule: makeJpSchedule(101, "2025-01-01T00:00:00.000Z"),
   defenseTypes: [{ defenseType: Defense.Heavy, difficulty: "torment" }],
 };
+
+describe("getStudentRaidUsageChartLayout", () => {
+  it("switches between compact and wide bars when the chart resizes", () => {
+    const narrow = getStudentRaidUsageChartLayout(390, 95);
+    const wide = getStudentRaidUsageChartLayout(1440, 95);
+
+    expect(narrow.compactBarSlots).toBe(true);
+    expect(narrow.barSize).toBeLessThan(wide.barSize ?? 0);
+    expect(wide.compactBarSlots).toBe(false);
+  });
+
+  it("caps wide bars for students with only a few seasons", () => {
+    expect(getStudentRaidUsageChartLayout(720, 4).barSize).toBe(STUDENT_RAID_USAGE_MAX_BAR_SIZE);
+  });
+});
+
+describe("observeStudentRaidUsageChartFrameWidth", () => {
+  it("reports initial and resized widths, then disconnects on cleanup", () => {
+    const originalResizeObserver = globalThis.ResizeObserver;
+    let width = 390;
+    let callback: ResizeObserverCallback | undefined;
+    let disconnected = false;
+    globalThis.ResizeObserver = class {
+      constructor(next: ResizeObserverCallback) {
+        callback = next;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {
+        disconnected = true;
+      }
+    } as unknown as typeof ResizeObserver;
+    const frame = { getBoundingClientRect: () => ({ width }) } as HTMLDivElement;
+    const onWidth = jest.fn();
+
+    try {
+      const cleanup = observeStudentRaidUsageChartFrameWidth(frame, onWidth);
+      expect(onWidth).toHaveBeenLastCalledWith(390);
+      width = 1440;
+      callback?.([], {} as ResizeObserver);
+      expect(onWidth).toHaveBeenLastCalledWith(1440);
+
+      cleanup();
+      expect(disconnected).toBe(true);
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver;
+    }
+  });
+});
 
 describe("buildStudentRaidUsageChartData", () => {
   it("builds usage bars from total assault and elimination raids after releaseAt", () => {

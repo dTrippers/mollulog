@@ -317,6 +317,100 @@ export function selectStudentSkills(
   );
 }
 
+export type StudentSkillLinkKind =
+  | { kind: "additional" }
+  | {
+      kind: "selectable";
+      condition: StudentCalculatorSource["skills"][number]["selectableSkills"][number]["condition"];
+    };
+
+export type DisplayedStudentSkill = {
+  skill: SelectedStudentSkill;
+  /**
+   * A skill with selectable skills only frames the choice: the game stores a placeholder as its own text
+   * ("" at level 1, "0" above, for every such skill in BAQL), so only its choices are described.
+   */
+  showsOwnDescription: boolean;
+  linkedSkills: DisplayedLinkedStudentSkill[];
+};
+
+export type DisplayedLinkedStudentSkill = {
+  skill: StudentCalculatorSource["skills"][number];
+  link: StudentSkillLinkKind;
+  /** Links of a hidden slot entry that repeats this linked skill, shown beneath it. */
+  linkedSkills: DisplayedLinkedStudentSkill[];
+};
+
+/**
+ * Game data can split one skill into several entries that share the same text, one per trigger or target
+ * (for example CH0346Public01/02, or CH0187GearPublic03 repeating GearPublic01 and GearPublic04 repeating
+ * its additional skill GearPublic02). The game shows each such skill once, so within a slot this keeps the
+ * first entry with a given displayed content, whether as a row or as a linked skill, and moves the links of a
+ * hidden entry beneath the entry it repeats (CH0294Ex01 repeats a choice of CH0294SelectEx01, so its
+ * additional skill CH0294Ex03 stays under that choice). Stat calculation keeps using every entry from
+ * selectStudentSkills.
+ */
+export function selectDisplayedStudentSkills(
+  selected: readonly SelectedStudentSkill[],
+  allSkills: StudentCalculatorSource["skills"],
+): DisplayedStudentSkill[] {
+  const skillByUid = new Map(allSkills.map((skill) => [skill.uid, skill]));
+  const rows: DisplayedStudentSkill[] = [];
+  let slot: StudentSkillTypeEnum | null = null;
+  let entryByContent = new Map<string, { linkedSkills: DisplayedLinkedStudentSkill[] }>();
+
+  for (const skill of selected) {
+    if (skill.slot !== slot) {
+      slot = skill.slot;
+      entryByContent = new Map();
+    }
+    const content = displayedSkillContent(skill);
+    let entry = entryByContent.get(content);
+    if (!entry) {
+      const row = { skill, showsOwnDescription: skill.selectableSkills.length === 0, linkedSkills: [] };
+      rows.push(row);
+      entryByContent.set(content, row);
+      entry = row;
+    }
+    const links: Array<{ uid: string; link: StudentSkillLinkKind }> = [
+      ...skill.additionalSkillUids.map((uid) => ({ uid, link: { kind: "additional" } as const })),
+      ...skill.selectableSkills.map(({ skillUid, condition }) => ({
+        uid: skillUid,
+        link: { kind: "selectable", condition } as const,
+      })),
+    ];
+    for (const { uid, link } of links) {
+      const linked = skillByUid.get(uid);
+      if (!linked) continue;
+      const linkedContent = displayedSkillContent(linked);
+      if (entryByContent.has(linkedContent)) continue;
+      const linkedEntry = { skill: linked, link, linkedSkills: [] };
+      entry.linkedSkills.push(linkedEntry);
+      entryByContent.set(linkedContent, linkedEntry);
+    }
+  }
+  return rows;
+}
+
+function displayedSkillContent(skill: StudentCalculatorSource["skills"][number]): string {
+  return JSON.stringify([
+    skill.name,
+    skill.iconUrl,
+    skill.maxLevel,
+    skill.levels.map((level) => [level.level, level.cost]),
+    skill.description
+      ? [
+          skill.description.template,
+          skill.description.parameters.map((parameter) => [
+            parameter.id,
+            parameter.emphasized,
+            parameter.values.map((value) => [value.level, value.text]),
+          ]),
+        ]
+      : null,
+  ]);
+}
+
 export function renderStudentSkillDescription(
   skill: Pick<SelectedStudentSkill, "description" | "selectedLevel">,
 ): string | null {
@@ -424,7 +518,11 @@ export function getEquipmentSlotUnlockLevel(index: number): number {
 
 export function validateStudentEquipmentLevels(
   student: Pick<StudentCalculatorSource, "equipments">,
-  catalog: StudentCalculatorCatalog | null | undefined,
+  // Only the equipment list is read, so a caller that has no full catalog can pass just the list.
+  catalog:
+    | { equipment: readonly Pick<StudentCalculatorCatalog["equipment"][number], "category" | "tier" | "maxLevel">[] }
+    | null
+    | undefined,
   state: Pick<StudentCalculatorState, "equip1" | "equip2" | "equip3"> &
     Partial<Pick<StudentCalculatorState, "equip1Level" | "equip2Level" | "equip3Level">>,
 ) {

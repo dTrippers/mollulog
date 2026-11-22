@@ -7,22 +7,25 @@ const root = process.cwd();
 const migratedViewFiles = [
   "app/components/features/community/CommunityFeed.tsx",
   "app/components/features/community/community-feed-presentation.ts",
-  "app/components/features/students/StudentGradingTimeline.tsx",
+  "app/components/v2/features/students/StudentGradingTimeline.tsx",
+  "app/components/v2/features/students/RecruitmentHistoryList.tsx",
   "app/components/features/contents/CommentView.tsx",
   "app/components/v2/features/futures/FutureTimeline.tsx",
   "app/components/v2/features/futures/FutureList.tsx",
   "app/components/v2/features/futures/FutureSchedule.tsx",
-  "app/components/features/events/EventHeader.tsx",
-  "app/components/features/events/EventList.tsx",
   "app/components/features/events/EventSelector.tsx",
-  "app/components/features/events/Recruitments.tsx",
+  "app/routes/events.$uid.tsx",
+  "app/routes/events.$uid._components/event-screens.tsx",
+  "app/routes/events.$uid._index.tsx",
+  "app/routes/events.$uid.recruitment-simulator.tsx",
+  "app/routes/events.$uid.treasure-hunt.tsx",
+  "app/routes/lives.$uid.tsx",
   "app/components/features/forms/ContentSelectForm.tsx",
   "app/components/features/raids/RaidSelector.tsx",
   "app/components/features/raids/RaidStatisticsSlotCount.tsx",
   "app/components/features/raids/RaidVideosScreen.tsx",
-  "app/components/features/students/RecruitmentHistories.tsx",
-  "app/routes/$username.futures._components/FuturePlan.tsx",
   "app/routes/$username.pickups._components/PickupHistoryView.tsx",
+  "app/routes/$username.futures._components/FavoriteEventCard.tsx",
 ];
 
 const migratedModelFiles = [
@@ -42,7 +45,11 @@ describe("date-time guardrails", () => {
     if (
       file !== "app/components/features/raids/RaidVideosScreen.tsx" &&
       file !== "app/components/features/raids/RaidSelector.tsx" &&
-      file !== "app/components/features/community/CommunityFeed.tsx"
+      file !== "app/components/features/community/CommunityFeed.tsx" &&
+      // The layout leaves the event period to event-screens.tsx.
+      file !== "app/routes/events.$uid.tsx" &&
+      file !== "app/routes/events.$uid.recruitment-simulator.tsx" &&
+      file !== "app/routes/events.$uid.treasure-hunt.tsx"
     ) {
       expect(source).toContain("formatInstant");
     }

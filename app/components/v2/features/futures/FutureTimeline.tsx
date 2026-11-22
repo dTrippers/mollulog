@@ -3,6 +3,8 @@ import {
   ChevronRightIcon,
   EyeIcon,
   EyeSlashIcon,
+  InformationCircleIcon,
+  MapIcon,
   PencilSquareIcon,
   RectangleStackIcon,
   Squares2X2Icon,
@@ -23,6 +25,13 @@ import {
   isOngoingFutureContent,
   selectFutureMediaSource,
 } from "~/domain/futures/futures-view-model";
+import {
+  getFreeRecruitmentNotice,
+  isPickupUnavailableRecruitment,
+  PICKUP_UNAVAILABLE_NOTICE,
+  RECRUITMENT_STACK_GUIDE_ANCHOR,
+  RECRUITMENT_STACK_GUIDE_EVENT_UID,
+} from "~/domain/recruitment-notice";
 import { formatInstant, formatInstantDateKey, isInstantAfter, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import {
@@ -36,9 +45,13 @@ import {
 import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
+import { HintChip } from "../../primitives/HintChip";
+import { TrailingIconText } from "../../primitives/TrailingIconText";
 import { StudentSlot } from "../students/StudentSlot";
+import { StudentThumbList } from "../students/StudentThumbList";
 import { ContentMedia } from "./ContentMedia";
 import { FeatureBanner } from "./FeatureBanner";
+import { ContentHighlightOverlay } from "./FeaturedContentBanner";
 import { getFutureMediaTypeLabel } from "./labels";
 import { OpinionRow } from "./OpinionRow";
 import { RemainingLabel } from "./RemainingLabel";
@@ -57,6 +70,8 @@ export type FutureTimelineProps = {
   onDismissBanner: (bannerId: FutureBannerId) => void;
   onOpenOpinion: (contentUid: string) => void;
   onOpenContent: (contentUid: string) => void;
+  highlightedContentUid?: string | null;
+  highlightAnimationKey?: number;
 };
 
 // Feed of contents by date. Dates are dividers, not cards: the first group is the in-progress group. The items of one
@@ -125,6 +140,8 @@ function TimelineItem({
   onDismissBanner,
   onOpenOpinion,
   onOpenContent,
+  highlightedContentUid,
+  highlightAnimationKey = 0,
 }: { content: FutureViewContent; connectsNext: boolean } & FutureTimelineProps) {
   const [openStudentKey, setOpenStudentKey] = useState<string | null>(null);
   const revealed = revealedSpoilers.has(content.uid);
@@ -159,17 +176,23 @@ function TimelineItem({
   const bannerShown = (bannerId: FutureBannerId) => dismissedBanners !== null && !dismissedBanners.has(bannerId);
   const studentAnalysisBanner = !hidden && studentAnalysisKey && bannerShown("student-analysis");
   const pendingBanner = !hidden && pendingKey && bannerShown("pending-student-favorite");
+  // The event overview explains this event's free recruits and stack while the free recruits can still be used.
+  const stackGuideBanner =
+    linkable &&
+    content.uid === RECRUITMENT_STACK_GUIDE_EVENT_UID &&
+    specialCases.some((specialCase) => specialCase.kind === "perk-free");
 
   const title = hidden ? null : linkable ? (
     <Link
       to={content.link}
       state={content.navigationState}
       prefetch="intent"
-      className={cn("group block text-base font-semibold whitespace-pre-line text-v2-fg hover:underline", v2FocusRing)}
+      className={cn("group block text-base font-semibold whitespace-pre-line text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition", v2FocusRing)}
       {...getV2LinkTransitionProps("forward", () => onOpenContent(content.uid))}
     >
-      {content.name}
-      <ChevronRightIcon aria-hidden="true" className="ml-1 inline-block size-4 align-middle text-v2-fg-tertiary" />
+      <TrailingIconText text={content.name}>
+        <ChevronRightIcon aria-hidden="true" className="ml-1 inline-block size-4 align-middle text-v2-fg-tertiary" />
+      </TrailingIconText>
     </Link>
   ) : (
     <p className="text-base font-semibold whitespace-pre-line text-v2-fg">{content.name}</p>
@@ -178,7 +201,8 @@ function TimelineItem({
   return (
     <article
       data-futures-content-uid={content.uid}
-      className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 pb-7 md:grid-cols-[2.75rem_minmax(0,1fr)] md:gap-x-4 lg:grid-cols-[3rem_minmax(0,1fr)]"
+      tabIndex={-1}
+      className="v2-featured-target relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 pb-7 md:grid-cols-[2.75rem_minmax(0,1fr)] md:gap-x-4 lg:grid-cols-[3rem_minmax(0,1fr)]"
     >
       {connectsNext ? (
         <span
@@ -260,6 +284,25 @@ function TimelineItem({
               openKey={openStudentKey}
               onOpenKeyChange={setOpenStudentKey}
             />
+            {stackGuideBanner ? (
+              <Link
+                to={`${content.link}#${RECRUITMENT_STACK_GUIDE_ANCHOR}`}
+                state={content.navigationState}
+                prefetch="intent"
+                className={cn(
+                  "group flex w-fit max-w-[40rem] items-center gap-2 rounded-lg bg-v2-accent-subtle py-2 pr-2 pl-2.5 text-xs leading-4 text-v2-fg",
+                  v2FocusRing,
+                )}
+                {...getV2LinkTransitionProps("forward", () => onOpenContent(content.uid))}
+              >
+                <InformationCircleIcon className="size-4 shrink-0 text-v2-accent" aria-hidden="true" />
+                <span className="min-w-0 font-medium break-keep">무료 모집 횟수와 특별 스택에 대해 확인해 보세요</span>
+                <span className="inline-flex shrink-0 items-center font-semibold whitespace-nowrap text-v2-accent underline decoration-transparent group-hover:decoration-current v2-interaction-transition">
+                  안내 보기
+                  <ChevronRightIcon className="size-3.5" aria-hidden="true" />
+                </span>
+              </Link>
+            ) : null}
             {studentAnalysisBanner || pendingBanner ? (
               <div className="space-y-2">
                 {studentAnalysisBanner ? (
@@ -285,7 +328,7 @@ function TimelineItem({
                 to={content.resultEditLink}
                 prefetch="intent"
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg",
+                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
                   v2FocusRing,
                 )}
                 {...getV2LinkTransitionProps("forward")}
@@ -298,6 +341,9 @@ function TimelineItem({
         )}
         {content.opinion ? <OpinionRow opinion={content.opinion} onOpen={() => onOpenOpinion(content.uid)} /> : null}
       </div>
+      {highlightedContentUid === content.uid && highlightAnimationKey > 0 ? (
+        <ContentHighlightOverlay animationKey={highlightAnimationKey} />
+      ) : null}
     </article>
   );
 }
@@ -318,7 +364,8 @@ function MinigameMark({ minigameType }: { minigameType: string }) {
   if (label === null) {
     return null;
   }
-  const Icon = minigameType === "treasure_hunt" ? Squares2X2Icon : RectangleStackIcon;
+  const Icon =
+    minigameType === "treasure_hunt" ? Squares2X2Icon : minigameType === "road_puzzle" ? MapIcon : RectangleStackIcon;
   return (
     <MetaSeparatorAnd>
       <span className="inline-flex items-center gap-1">
@@ -330,13 +377,14 @@ function MinigameMark({ minigameType }: { minigameType: string }) {
 }
 
 function SpecialCaseChip({ specialCase }: { specialCase: FutureSpecialCase }) {
-  if (specialCase.kind === "perk-free-100") {
+  if (specialCase.kind === "perk-free") {
     return (
       <MetaSeparatorAnd>
         <span className="inline-flex items-center gap-1 font-semibold text-v2-perk">
           <StarIcon className="size-3.5" aria-hidden="true" />
-          100회 무료
+          {specialCase.freePulls}회 무료
         </span>
+        <HintChip {...getFreeRecruitmentNotice(specialCase.freePulls)} />
       </MetaSeparatorAnd>
     );
   }
@@ -446,7 +494,7 @@ function RecruitmentStudents({
             <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
               {pickups.length > 0 ? (
                 <StudentBlock
-                  label={others.length > 0 ? "픽업" : null}
+                  label={others.length > 0 ? "픽업 대상" : null}
                   entries={pickups}
                   signedIn={signedIn}
                   openKey={openKey}
@@ -456,6 +504,7 @@ function RecruitmentStudents({
               {others.length > 0 ? (
                 <StudentBlock
                   label={pickups.length > 0 ? "픽업 외 모집 가능" : null}
+                  showPickupUnavailableNotice={others.some(isPickupUnavailableRecruitment)}
                   entries={others}
                   signedIn={signedIn}
                   openKey={openKey}
@@ -472,12 +521,14 @@ function RecruitmentStudents({
 
 function StudentBlock({
   label,
+  showPickupUnavailableNotice = false,
   entries,
   signedIn,
   openKey,
   onOpenKeyChange,
 }: {
   label: string | null;
+  showPickupUnavailableNotice?: boolean;
   entries: FutureViewContent["students"];
   signedIn: boolean;
   openKey: string | null;
@@ -485,10 +536,15 @@ function StudentBlock({
 }) {
   return (
     <div className="space-y-2">
-      {label ? <p className="text-xs text-v2-fg-tertiary">{label}</p> : null}
-      <ul className="grid grid-cols-5 gap-x-2 gap-y-3 md:flex md:flex-wrap md:gap-3">
+      {label || showPickupUnavailableNotice ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {label ? <p className="text-xs text-v2-fg-tertiary">{label}</p> : null}
+          {showPickupUnavailableNotice ? <HintChip {...PICKUP_UNAVAILABLE_NOTICE} /> : null}
+        </div>
+      ) : null}
+      <StudentThumbList>
         {entries.map((entry) => (
-          <li key={entry.favoriteKey} className="min-w-0">
+          <li key={entry.favoriteKey} className="shrink-0">
             <StudentSlot
               entry={entry}
               signedIn={signedIn}
@@ -497,7 +553,7 @@ function StudentBlock({
             />
           </li>
         ))}
-      </ul>
+      </StudentThumbList>
     </div>
   );
 }
@@ -508,6 +564,9 @@ function minigameLabel(minigameType: string): string | null {
   }
   if (minigameType === "card_flip") {
     return "카드 뒤집기";
+  }
+  if (minigameType === "road_puzzle") {
+    return "철도 연결";
   }
   return null;
 }

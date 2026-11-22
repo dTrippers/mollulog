@@ -12,6 +12,7 @@ import {
   getShopAvailableEvents,
 } from "../../../app/models/event-content";
 import { getEventList } from "../../../app/views/events";
+import { janken860Fixture } from "../domain/fixtures/janken-860";
 
 jest.mock("~/models/timeline-content.server", () => ({
   getAllTimelineContentsMeta: jest.fn(),
@@ -97,6 +98,7 @@ function createTimelineContent(overrides: Partial<NonNullable<Awaited<ReturnType
     isSpoiler: false,
     tags: ["shop"],
     earnablePyroxene: null,
+    featuredUntil: null,
     syncedAt: null,
     ...overrides,
   } as NonNullable<Awaited<ReturnType<typeof getTimelineContent>>>;
@@ -133,6 +135,127 @@ async function loadCardFlipContent(cardFlip: unknown, paymentResource?: unknown)
   mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
   mockedRunQuery.mockResolvedValue(createCardFlipSource(cardFlip, paymentResource));
   return getEventShopContent(env, "main-story-timeline");
+}
+
+function createJankenSource(janken: unknown) {
+  return queryResult({
+    eventContent: {
+      stages: [],
+      shopResources: [],
+      bonuses: [],
+      minigameConfigs: [
+        {
+          minigameType: "janken",
+          payment: { quantity: 5, resource: { type: "item", uid: "legacy-cost", name: "기존 비용" } },
+          payments: [],
+          rewardGroups: [],
+          treasureHunt: null,
+          cardFlip: null,
+          janken,
+        },
+      ],
+    },
+  }) as never;
+}
+
+function createJanken860SourceFixture() {
+  const resource = (uid: string, type: string) => ({ type, uid, name: uid });
+  return {
+    challengeMultipleUnlockScore: janken860Fixture.challengeMultipleUnlockScore,
+    multipleMax: janken860Fixture.multipleMax,
+    stages: janken860Fixture.stages.map((stage) => ({
+      uid: stage.uid,
+      stageType: stage.stageType,
+      stageNumber: stage.stageNumber,
+      previousStageUid: stage.previousStageUid,
+      entryCost: {
+        quantity: stage.entryCost.quantity,
+        resource: resource(stage.entryCost.resourceUid, stage.entryCost.resourceType),
+      },
+      rewards: stage.rewards.map((reward) => ({
+        amount: reward.quantity,
+        probability: reward.probability,
+        tag: reward.tag,
+        resource: resource(reward.resourceUid, reward.resourceType),
+      })),
+    })),
+    scoreRewards: janken860Fixture.scoreRewards.map((reward) => ({
+      tier: reward.tier,
+      score: reward.score,
+      rewards: reward.rewards.map((item) => ({
+        quantity: item.quantity,
+        resource: resource(item.resourceUid, item.resourceType),
+      })),
+    })),
+    equipmentUpgrade: {
+      maxTier: janken860Fixture.equipmentUpgrade.maxTier,
+      costResource: resource(
+        janken860Fixture.equipmentUpgrade.costResource?.resourceUid ?? "",
+        janken860Fixture.equipmentUpgrade.costResource?.resourceType ?? "item",
+      ),
+      tierCosts: janken860Fixture.equipmentUpgrade.tierCosts,
+    },
+    equipments: janken860Fixture.equipments,
+  };
+}
+
+async function loadJankenContent(janken: unknown) {
+  mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+  mockedRunQuery.mockResolvedValue(createJankenSource(janken));
+  return getEventShopContent(env, "main-story-timeline");
+}
+
+function createRoadPuzzleSource(roadPuzzle: unknown) {
+  return queryResult({
+    eventContent: {
+      stages: [],
+      shopResources: [],
+      bonuses: [],
+      minigameConfigs: [
+        {
+          minigameType: "road_puzzle",
+          payment: { quantity: 150, resource: { type: "item", uid: "85410", name: "하이랜더 기념 스티커" } },
+          payments: [{ quantity: 150, resource: { type: "item", uid: "85410", name: "하이랜더 기념 스티커" } }],
+          rewardGroups: [],
+          roadPuzzle,
+        },
+      ],
+    },
+  }) as never;
+}
+
+function createRoadPuzzleFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    instantClearRound: 7,
+    maps: [
+      {
+        uid: "map-1",
+        name: "RoadPuzzle_1",
+        deck: { straight: 7, longCurve: 12, shortCurve: 11 },
+        tiles: [
+          { x: 0, y: 0, z: 0, type: 1, rotation: 0 },
+          { x: 1, y: -1, z: 0, type: 3, rotation: 1 },
+          { x: 2, y: -2, z: 0, type: 2, rotation: 2 },
+        ],
+        fixedRails: [
+          { x: 0, y: 0, z: 0, entranceIndex: 0, exitIndex: 1, rotation: 0 },
+          { x: 1, y: -1, z: 0, entranceIndex: 0, exitIndex: 3, rotation: 1 },
+          { x: 2, y: -2, z: 0, entranceIndex: 0, exitIndex: 1, rotation: 2 },
+        ],
+      },
+    ],
+    railSetReward: [{ quantity: 7_500, resource: { type: "currency", uid: "1", name: "크레딧" } }],
+    rounds: [
+      {
+        round: 1,
+        isLoop: false,
+        mapUids: ["map-1"],
+        rewards: [{ quantity: 40, resource: { type: "item", uid: "wrench", name: "파이프 렌치", rarity: 1 } }],
+        additionalRewards: [{ quantity: 2, resource: { type: "item", uid: "eleph", name: "엘레프", rarity: 1 } }],
+      },
+    ],
+    ...overrides,
+  };
 }
 
 function createCardFlipFixture(overrides: Record<string, unknown> = {}) {
@@ -296,7 +419,7 @@ describe("getEventList", () => {
     );
     expect(mockedFetchSourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-content::v1::list",
+      "source::event-content::v2::list",
       expect.any(Function),
       false,
     );
@@ -398,6 +521,41 @@ describe("getShopAvailableEvents", () => {
     ]);
     expect(mockedRunQuery).not.toHaveBeenCalled();
   });
+
+  it("includes only event-specific pickup names for shop event search", async () => {
+    mockedGetTimelineContents.mockResolvedValue([
+      createTimelineContent({
+        uid: "shop-event",
+        name: "이벤트 상점",
+        contentType: "event",
+        runType: "first",
+        contentUid: "event-content",
+        shopContentUid: "shop-content",
+        recruitmentGroupUid: "banner-1",
+        recruitmentStudentUids: ["pickup-student"],
+      }),
+    ]);
+    mockedRunQuery.mockResolvedValue(
+      queryResult({
+        recruitmentGroups: [
+          {
+            uid: "banner-1",
+            recruitments: [
+              { pickup: true, studentName: "키사키", student: { uid: "pickup-student", name: "키사키" } },
+              { pickup: false, studentName: "다른 학생", student: { uid: "other-student", name: "다른 학생" } },
+            ],
+          },
+        ],
+      }) as never,
+    );
+
+    await expect(getShopAvailableEvents(env)).resolves.toMatchObject([
+      {
+        uid: "shop-event",
+        recruitments: [{ pickup: true, student: { uid: "pickup-student", name: "키사키" } }],
+      },
+    ]);
+  });
 });
 
 describe("getEventMetadata", () => {
@@ -430,6 +588,87 @@ describe("getEventMetadata", () => {
 });
 
 describe("getEventShopContent", () => {
+  it("converts the event 860 payload into an available janken config", async () => {
+    const shopContent = await loadJankenContent(createJanken860SourceFixture());
+    const janken = shopContent?.minigameConfig?.janken;
+
+    expect(janken?.status).toBe("available");
+    if (janken?.status !== "available") throw new Error("Expected event 860 janken config to be available");
+    expect(janken.stages.map(({ uid }) => uid)).toEqual([
+      "100860101",
+      "100860102",
+      "100860103",
+      "100860104",
+      "100860105",
+      "100860201",
+      "100860202",
+      "100860203",
+      "100860204",
+      "100860301",
+    ]);
+    expect(janken.stages.map(({ stageType }) => stageType)).toEqual([
+      "story",
+      "story",
+      "story",
+      "story",
+      "story",
+      "normal",
+      "normal",
+      "normal",
+      "normal",
+      "challenge",
+    ]);
+    expect(janken.stages.map(({ entryCost }) => entryCost.quantity)).toEqual([
+      100, 100, 100, 100, 100, 325, 350, 375, 400, 400,
+    ]);
+    expect(janken.stages.map(({ previousStageUid }) => previousStageUid)).toEqual([
+      null,
+      "100860101",
+      "100860102",
+      "100860103",
+      "100860104",
+      "100860105",
+      "100860201",
+      "100860202",
+      "100860203",
+      "100860204",
+    ]);
+    expect(janken.scoreRewards.map(({ tier, score }) => [tier, score])).toEqual([
+      [5, 500_000],
+      [10, 1_000_000],
+      [15, 1_750_000],
+      [20, 2_500_000],
+      [25, 3_250_000],
+      [30, 4_000_000],
+      [31, 4_150_000],
+      [50, 7_000_000],
+    ]);
+    expect(janken.equipmentUpgrade).toMatchObject({
+      maxTier: 5,
+      costResource: { resourceUid: "80864" },
+      tierCosts: [
+        { tier: 2, quantity: 100 },
+        { tier: 3, quantity: 150 },
+        { tier: 4, quantity: 200 },
+        { tier: 5, quantity: 250 },
+      ],
+    });
+    expect(janken.multipleMax).toBe(99);
+    expect(janken.challengeMultipleUnlockScore).toBe(2_000_000);
+  });
+
+  it("marks a missing janken payload unavailable", async () => {
+    const shopContent = await loadJankenContent(null);
+
+    expect(shopContent?.minigameConfig?.janken).toEqual({ status: "unavailable" });
+  });
+
+  it("marks a malformed janken payload invalid", async () => {
+    const shopContent = await loadJankenContent({ ...createJanken860SourceFixture(), stages: null });
+
+    expect(shopContent?.minigameConfig?.janken).toEqual({ status: "invalid" });
+  });
+
   it.each([
     [[{ uid: "student-1", name: " 학생 " }], [{ uid: "student-1", name: "학생" }]],
     [[], []],
@@ -553,9 +792,9 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v4::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
       expect.any(Function),
-      7 * 24 * 60 * 60,
+      expect.any(Function),
       false,
     );
     expect(mockedRunQuery).toHaveBeenCalledWith(expect.any(Object), {
@@ -586,10 +825,25 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v4::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
       expect.any(Function),
-      7 * 24 * 60 * 60,
+      expect.any(Function),
       true,
+    );
+  });
+
+  it("propagates shop lookup errors instead of caching an empty result", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    const failure = new Error("shop query failed");
+    mockedRunQuery.mockResolvedValue(queryResult(undefined, failure) as never);
+
+    await expect(getEventShopContent(env, "main-story-timeline")).rejects.toThrow("shop query failed");
+    expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
+      env,
+      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
+      expect.any(Function),
+      expect.any(Function),
+      false,
     );
   });
 
@@ -1040,10 +1294,23 @@ describe("getEventContentSchedule", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-content-schedule::v1::eventUid=10::region=gl::runType=rerun",
+      "source::event-content-schedule::v2::eventUid=10::region=gl::runType=rerun",
       expect.any(Function),
       7 * 24 * 60 * 60,
       true,
+    );
+  });
+
+  it("propagates schedule lookup errors instead of treating them as a missing schedule", async () => {
+    mockedRunQuery.mockResolvedValue(queryResult(undefined, new Error("schedule query failed")) as never);
+
+    await expect(getEventContentSchedule(env, "10", "rerun")).rejects.toThrow("schedule query failed");
+    expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
+      env,
+      "source::event-content-schedule::v2::eventUid=10::region=gl::runType=rerun",
+      expect.any(Function),
+      7 * 24 * 60 * 60,
+      false,
     );
   });
 });
@@ -1054,6 +1321,8 @@ describe("getEventMinigameType", () => {
       queryResult({
         eventContent: {
           minigameConfigs: [{ minigameType: "dice" }, { minigameType: "treasure_hunt" }],
+          stages: [],
+          shopResources: [],
         },
       }) as never,
     );
@@ -1068,9 +1337,9 @@ describe("getEventMinigameType", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-minigame-type::v1::contentUid=shop-content::runType=rerun",
+      "source::event-minigame-type::v3::contentUid=shop-content::runType=rerun",
       expect.any(Function),
-      7 * 24 * 60 * 60,
+      expect.any(Function),
       true,
     );
     expect(mockedRunQuery).toHaveBeenCalledWith(expect.anything(), {
@@ -1081,14 +1350,19 @@ describe("getEventMinigameType", () => {
     if (!queryCall) throw new Error("Expected the focused minigame type query to run.");
     const queryText = print(queryCall[0]);
     expect(queryText).toContain("minigameConfigs(runType: $runType)");
+    expect(queryText).toMatch(/stages\(runType: \$runType\) \{\s+uid\s+\}/);
+    expect(queryText).toMatch(/shopResources\(runType: \$runType\) \{\s+uid\s+\}/);
     expect(queryText).toContain("minigameType");
-    expect(queryText).not.toContain("shopResources");
-    expect(queryText).not.toContain("stages(");
+    // Stages and shop items are read only as uids, to tell a run with nothing entered yet from one without a minigame.
+    expect(queryText).not.toContain("rewards");
+    expect(queryText).not.toContain("purchaseTiers");
     expect(queryText).not.toContain("bonuses(");
   });
 
   it("falls back to contentUid and caches successful absence by run type", async () => {
-    mockedRunQuery.mockResolvedValue(queryResult({ eventContent: { minigameConfigs: [] } }) as never);
+    mockedRunQuery.mockResolvedValue(
+      queryResult({ eventContent: { minigameConfigs: [], stages: [{ uid: "stage-1" }], shopResources: [] } }) as never,
+    );
 
     await expect(
       getEventMinigameType(
@@ -1099,9 +1373,9 @@ describe("getEventMinigameType", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-minigame-type::v1::contentUid=base-content::runType=permanent",
+      "source::event-minigame-type::v3::contentUid=base-content::runType=permanent",
       expect.any(Function),
-      7 * 24 * 60 * 60,
+      expect.any(Function),
       false,
     );
     expect(mockedRunQuery).toHaveBeenCalledWith(expect.anything(), {
@@ -1126,6 +1400,80 @@ describe("getEventMinigameType", () => {
     await expect(getEventMinigameType(env, createEventMetadata())).rejects.toBe(transportError);
   });
 
+  it("normalizes typed road puzzle data and bumps the event source cache key", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue(createRoadPuzzleSource(createRoadPuzzleFixture()));
+
+    const content = await getEventShopContent(env, "main-story-timeline");
+    expect(content?.minigameConfig).toMatchObject({
+      minigameType: "road_puzzle",
+      payment: { resourceUid: "85410", quantity: 150 },
+      payments: [{ resourceUid: "85410", quantity: 150 }],
+      rewardGroups: [],
+      roadPuzzle: {
+        instantClearRound: 7,
+        maps: [
+          {
+            uid: "map-1",
+            deck: { straight: 7, longCurve: 12, shortCurve: 11 },
+            fixedRails: [
+              { x: 0, y: 0, z: 0, entranceIndex: 0, exitIndex: 1, rotation: 0 },
+              { x: 1, y: -1, z: 0, entranceIndex: 0, exitIndex: 3, rotation: 1 },
+              { x: 2, y: -2, z: 0, entranceIndex: 0, exitIndex: 1, rotation: 2 },
+            ],
+          },
+        ],
+        rounds: [{ round: 1, mapUids: ["map-1"], additionalRewards: [{ resourceUid: "eleph", quantity: 2 }] }],
+      },
+    });
+    expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
+      env,
+      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
+      expect.any(Function),
+      expect.any(Function),
+      false,
+    );
+
+    const queryCall = mockedRunQuery.mock.calls[0];
+    if (!queryCall) throw new Error("Expected the road puzzle shop query to run.");
+    const queryText = print(queryCall[0]);
+    expect(queryText).toContain("roadPuzzle");
+    expect(queryText).toContain("fixedRails");
+    expect(queryText).toContain("additionalRewards");
+  });
+
+  it("keeps missing road puzzle data explicit instead of choosing the generic minigame section", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue(createRoadPuzzleSource(null));
+
+    await expect(getEventShopContent(env, "main-story-timeline")).resolves.toMatchObject({
+      minigameConfig: { minigameType: "road_puzzle", roadPuzzle: null },
+    });
+  });
+
+  it("rejects road puzzle rounds that reference a missing map", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue(
+      createRoadPuzzleSource(
+        createRoadPuzzleFixture({
+          rounds: [
+            {
+              round: 1,
+              isLoop: false,
+              mapUids: ["missing-map"],
+              rewards: [],
+              additionalRewards: [],
+            },
+          ],
+        }),
+      ),
+    );
+
+    await expect(getEventShopContent(env, "main-story-timeline")).rejects.toThrow(
+      "Road puzzle round 1 references a missing map.",
+    );
+  });
+
   it("does not query or cache when neither content UID is available", async () => {
     await expect(
       getEventMinigameType(env, createEventMetadata({ contentUid: null, shopContentUid: null })),
@@ -1133,5 +1481,54 @@ describe("getEventMinigameType", () => {
 
     expect(mockedFetchLazySourceCached).not.toHaveBeenCalled();
     expect(mockedRunQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe("event snapshots that BAQL has not filled yet", () => {
+  const staticTtl = 7 * 24 * 60 * 60;
+  const unregisteredTtl = 10 * 60;
+
+  function lastFreshTtl(): (data: unknown) => number {
+    const call = mockedFetchLazySourceCached.mock.calls.at(-1);
+    if (!call || typeof call[3] !== "function") throw new Error("Expected a data-dependent fresh TTL.");
+    return call[3] as (data: unknown) => number;
+  }
+
+  it("rechecks a missing or itemless shop soon and keeps a filled shop for the static TTL", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue(queryResult({ eventContent: null }) as never);
+
+    await expect(getEventShopContent(env, "main-story-timeline")).resolves.toBeNull();
+    const ttl = lastFreshTtl();
+
+    expect(ttl(null)).toBe(unregisteredTtl);
+    expect(ttl({ stages: [{}], shopResources: [], eventRewardBonus: [], minigameConfig: null })).toBe(unregisteredTtl);
+    expect(ttl({ stages: [], shopResources: [{}], eventRewardBonus: [], minigameConfig: null })).toBe(staticTtl);
+  });
+
+  it.each([
+    ["no event content", null, null, unregisteredTtl],
+    ["nothing entered for the run", { minigameConfigs: [], stages: [], shopResources: [] }, null, unregisteredTtl],
+    ["stages without a minigame", { minigameConfigs: [], stages: [{ uid: "s" }], shopResources: [] }, null, staticTtl],
+    [
+      "shop items without a minigame",
+      { minigameConfigs: [], stages: [], shopResources: [{ uid: "r" }] },
+      null,
+      staticTtl,
+    ],
+    [
+      "a minigame",
+      { minigameConfigs: [{ minigameType: "card_flip" }], stages: [], shopResources: [] },
+      "card_flip",
+      staticTtl,
+    ],
+  ])("caches the minigame type for %s with the matching fresh TTL", async (_label, eventContent, type, expectedTtl) => {
+    mockedRunQuery.mockResolvedValue(queryResult({ eventContent }) as never);
+
+    await expect(getEventMinigameType(env, createEventMetadata({ runType: "rerun" }))).resolves.toBe(type);
+
+    const call = mockedFetchLazySourceCached.mock.calls.at(-1);
+    const cached = await (call?.[2] as () => Promise<unknown>)();
+    expect(lastFreshTtl()(cached)).toBe(expectedTtl);
   });
 });

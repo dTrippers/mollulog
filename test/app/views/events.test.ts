@@ -66,29 +66,29 @@ function createTimelineContent(uid: string, contentUid: string) {
 }
 
 describe("warmActiveUpcomingEventContent", () => {
-  it("shares a concurrency limit of two across schedule and shop warm tasks", async () => {
+  it("shares a concurrency limit of six across schedule and shop warm tasks", async () => {
     const env = {} as Env;
-    const firstTwoStarted = createDeferred();
+    const eventUids = ["event-1", "event-2", "event-3", "event-4"];
+    const firstSixStarted = createDeferred();
     const allTasksStarted = createDeferred();
     const pendingTasks: Deferred[] = [];
     let startedTaskCount = 0;
     let activeTaskCount = 0;
     let maxActiveTaskCount = 0;
 
-    mockedGetEventContentsList.mockResolvedValue([createEventContent("event-1"), createEventContent("event-2")]);
-    mockedGetAllTimelineContentsMeta.mockResolvedValue([
-      createTimelineContent("timeline-1", "event-1"),
-      createTimelineContent("timeline-2", "event-2"),
-    ]);
+    mockedGetEventContentsList.mockResolvedValue(eventUids.map(createEventContent));
+    mockedGetAllTimelineContentsMeta.mockResolvedValue(
+      eventUids.map((uid, index) => createTimelineContent(`timeline-${index + 1}`, uid)),
+    );
 
     const runWarmTask = async () => {
       startedTaskCount += 1;
       activeTaskCount += 1;
       maxActiveTaskCount = Math.max(maxActiveTaskCount, activeTaskCount);
-      if (startedTaskCount === 2) {
-        firstTwoStarted.resolve();
+      if (startedTaskCount === 6) {
+        firstSixStarted.resolve();
       }
-      if (startedTaskCount === 4) {
+      if (startedTaskCount === 8) {
         allTasksStarted.resolve();
       }
 
@@ -111,23 +111,23 @@ describe("warmActiveUpcomingEventContent", () => {
 
     const warmPromise = warmActiveUpcomingEventContent(env);
 
-    await firstTwoStarted.promise;
-    expect(activeTaskCount).toBe(2);
-    expect(mockedGetEventContentSchedule).toHaveBeenCalledTimes(2);
-    expect(mockedGetEventShopContent).not.toHaveBeenCalled();
+    await firstSixStarted.promise;
+    expect(activeTaskCount).toBe(6);
+    expect(mockedGetEventContentSchedule).toHaveBeenCalledTimes(4);
+    expect(mockedGetEventShopContent).toHaveBeenCalledTimes(2);
 
     for (const task of pendingTasks.splice(0, 2)) {
       task.resolve();
     }
     await allTasksStarted.promise;
-    expect(activeTaskCount).toBe(2);
+    expect(activeTaskCount).toBe(6);
 
-    for (const task of pendingTasks.splice(0, 2)) {
+    for (const task of pendingTasks.splice(0)) {
       task.resolve();
     }
     await expect(warmPromise).resolves.toBeUndefined();
-    expect(maxActiveTaskCount).toBe(2);
-    expect(mockedGetEventContentSchedule).toHaveBeenCalledTimes(2);
-    expect(mockedGetEventShopContent).toHaveBeenCalledTimes(2);
+    expect(maxActiveTaskCount).toBe(6);
+    expect(mockedGetEventContentSchedule).toHaveBeenCalledTimes(4);
+    expect(mockedGetEventShopContent).toHaveBeenCalledTimes(4);
   });
 });

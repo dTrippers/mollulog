@@ -3,6 +3,16 @@
  */
 import { describe, expect, it, jest } from "@jest/globals";
 import { render, screen } from "@testing-library/react";
+jest.mock("react-router", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  return {
+    Link: ({ to, prefetch, children, ...props }: { to: string; prefetch?: string; children: React.ReactNode }) =>
+      React.createElement("a", { ...props, href: to, "data-prefetch": prefetch }, children),
+  };
+});
+jest.mock("~/components/v2/layout/screen-transition", () => ({
+  getV2LinkTransitionProps: () => ({ "data-transition": "forward" }),
+}));
 import { getFavoriteLabelState } from "~/domain/futures/futures-view-model";
 import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
 
@@ -36,6 +46,19 @@ describe("StudentThumb accessible name", () => {
 
     expect(screen.getByRole("button", { name: "키사키(수영복) 상세" })).toBeTruthy();
   });
+
+  it("uses an opt-in selection action label and exposes pressed state", () => {
+    renderThumb({
+      onOpen: undefined,
+      onSelect: jest.fn<() => void>(),
+      selected: false,
+      selectionActionLabel: "선택",
+      favorite: quiet,
+    });
+
+    const button = screen.getByRole("button", { name: "키사키(수영복) 선택, 선택 안 됨" });
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+  });
 });
 
 describe("StudentThumb new recruitment accent", () => {
@@ -64,5 +87,106 @@ describe("StudentThumb without onOpen", () => {
     renderThumb();
 
     expect(screen.getByRole("button")).toBeTruthy();
+  });
+});
+
+describe("StudentThumb while the student data is being prepared", () => {
+  it("shows the in-game placeholder icon and only the name below it", () => {
+    const { container } = renderThumb({ studentUid: null, name: "라나", variant: null, recruitmentLabel: "배포" });
+
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(
+      "https://assets.mollulog.net/assets/images/students/-1",
+    );
+    expect(screen.queryByText("정보 준비 중")).toBeNull();
+    expect(screen.getByText("라나")).toBeTruthy();
+  });
+});
+
+describe("StudentThumb directory links", () => {
+  it("links to the student detail, and exposes the scrim value accessibly", () => {
+    const { container } = renderThumb({
+      onOpen: undefined,
+      linkTo: "/students/42",
+      recruitmentLabel: undefined,
+      favorite: undefined,
+      scrimLabel: "2025/03/07 예정",
+      scrimAriaLabel: "2025/03/07 예정",
+    });
+
+    const link = screen.getByRole("link", { name: "키사키(수영복) 상세, 2025/03/07 예정" });
+    expect(link.getAttribute("href")).toBe("/students/42");
+    expect(link.getAttribute("data-prefetch")).toBe("intent");
+    expect(link.getAttribute("data-transition")).toBe("forward");
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+});
+
+describe("StudentThumb shop grid options", () => {
+  it("fills its grid cell, overlays the caption, and grays an unselected portrait", () => {
+    const { container } = renderThumb({
+      onOpen: undefined,
+      onSelect: jest.fn<() => void>(),
+      selected: false,
+      fluid: true,
+      captionPlacement: "overlay",
+      grayscaleWhenUnselected: true,
+      recruitmentLabel: "모집",
+      showRecruitmentLabel: true,
+    });
+
+    expect(container.firstElementChild?.className).toContain("w-full");
+    expect(container.querySelector("img")?.className).toContain("grayscale");
+    expect(container.querySelector(".bg-linear-15")?.textContent).toContain("키사키");
+    expect(screen.getByText("모집")).toBeTruthy();
+  });
+
+  it("shows an overlay caption on mobile by default", () => {
+    const { container } = renderThumb({
+      onOpen: undefined,
+      captionPlacement: "overlay",
+    });
+
+    const caption = container.querySelector(".bg-linear-15");
+    expect(caption?.className).toContain("flex");
+    expect(caption?.className).not.toContain("hidden");
+    // The variant sits small above the name, as the 1.x cards did.
+    expect(caption?.textContent).toBe("수영복키사키");
+  });
+
+  it("hides an overlay caption on mobile only when opted out", () => {
+    const { container } = renderThumb({
+      onOpen: undefined,
+      captionPlacement: "overlay",
+      hideOverlayCaptionOnMobile: true,
+    });
+
+    const caption = container.querySelector(".bg-linear-15");
+    expect(caption?.className).toContain("hidden");
+    expect(caption?.className).toContain("md:flex");
+  });
+
+  it("moves the selected check below the recruitment badge when opted in", () => {
+    const { container } = renderThumb({
+      onOpen: undefined,
+      onSelect: jest.fn<() => void>(),
+      selected: true,
+      selectedIndicatorPosition: "mobile-bottom-left",
+      recruitmentLabel: "모집",
+      captionPlacement: "overlay",
+    });
+
+    const selectedIndicator = container.querySelector(".bg-v2-selected-on-media");
+    expect(selectedIndicator?.className).toContain("bottom-1");
+    expect(selectedIndicator?.className).toContain("md:top-1");
+    expect(selectedIndicator?.className).toContain("md:bottom-auto");
+    expect(screen.getByText("모집")).toBeTruthy();
+  });
+
+  it("keeps the selected check at the top for callers that do not opt in", () => {
+    const { container } = renderThumb({ onOpen: undefined, onSelect: jest.fn<() => void>(), selected: true });
+
+    const selectedIndicator = container.querySelector(".bg-v2-selected-on-media");
+    expect(selectedIndicator?.className).toContain("top-1");
+    expect(selectedIndicator?.className).not.toContain("bottom-1");
   });
 });

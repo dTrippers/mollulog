@@ -24,9 +24,34 @@
 }
 @plugin "@tailwindcss/typography";
 
+/* GyeonggiTitle is only used for the "몰루로그" logo text, so these files are subset to those four glyphs.
+   Regenerate them with pyftsubset --text="몰루로그" if the logo text changes. */
+@font-face {
+  font-family: 'GyeonggiTitle';
+  src: url('/fonts/gyeonggi-title-logo-L.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'GyeonggiTitle';
+  src: url('/fonts/gyeonggi-title-logo-M.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'GyeonggiTitle';
+  src: url('/fonts/gyeonggi-title-logo-B.woff2') format('woff2');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 @custom-variant hover (&:hover);
-@custom-variant pointer-coarse (@media (pointer: coarse));
 
 @theme {
   --font-*: initial;
@@ -90,22 +115,10 @@
   }
 }
 
-@utility navigation-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent) transparent;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent);
-  }
-
-  &::-webkit-scrollbar-track {
-    background-color: transparent;
-  }
+/* Fades a raid boss backdrop in from the left by the image's own alpha, so it works on any background. Only the
+   mask's alpha matters, which is why it uses literal black rather than a theme color. */
+@utility raid-boss-backdrop-mask {
+  mask-image: linear-gradient(to right, transparent, rgb(0 0 0 / 0.2) 33%, rgb(0 0 0 / 0.45));
 }
 
 @utility no-scrollbar {
@@ -124,6 +137,38 @@
   --muted-foreground: var(--floating-muted-foreground);
   --border: var(--floating-border);
   --input: var(--floating-input);
+}
+
+/* A floating surface in the inverse lightness of the page, such as the page action bar and toasts. Content inside keeps
+   using the v2 tokens; this remaps them to the inverse set, so buttons and status text need no inverse variants. */
+@utility v2-floating-inverse {
+  --v2-fg: var(--v2-inverse-fg);
+  --v2-fg-secondary: var(--v2-inverse-fg-secondary);
+  --v2-fg-tertiary: var(--v2-inverse-fg-tertiary);
+  --v2-fg-disabled: var(--v2-inverse-fg-disabled);
+  --v2-inset: var(--v2-inverse-fill);
+  --v2-filled-hover: var(--v2-inverse-fill-hover);
+  --v2-hover: var(--v2-inverse-hover);
+  --v2-divider: var(--v2-inverse-divider);
+  --v2-accent: var(--v2-inverse-accent);
+  --v2-link: var(--v2-inverse-accent);
+  --v2-info: var(--v2-inverse-accent);
+  --v2-focus: var(--v2-inverse-accent);
+  --v2-success: var(--v2-inverse-success);
+  --v2-warning: var(--v2-inverse-warning);
+  --v2-danger: var(--v2-inverse-danger);
+  --v2-danger-subtle: var(--v2-inverse-danger-subtle);
+  --v2-danger-solid: var(--v2-inverse-danger-solid);
+  background-color: var(--v2-inverse-surface);
+  color: var(--v2-inverse-fg);
+}
+
+/* Hover and press feedback on a 2.0 pressable element: color, fill, and opacity change over the fast duration. It never
+   animates size or position. */
+@utility v2-interaction-transition {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, filter;
+  transition-duration: var(--transition-duration-v2-fast);
+  transition-timing-function: var(--ease-v2-standard);
 }
 
 @utility popover-surface {
@@ -480,6 +525,11 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-fg: var(--v2-fg);
   --color-v2-fg-secondary: var(--v2-fg-secondary);
   --color-v2-fg-tertiary: var(--v2-fg-tertiary);
+  --color-v2-accent: var(--v2-accent);
+  --color-v2-accent-subtle: var(--v2-accent-subtle);
+  --color-v2-on-accent: var(--v2-on-accent);
+  --color-v2-accent-solid: var(--v2-accent-solid);
+  --color-v2-on-accent-solid: var(--v2-on-accent-solid);
   --color-v2-link: var(--v2-link);
   --color-v2-on-media: var(--v2-on-media);
   --color-v2-hover: var(--v2-hover);
@@ -499,6 +549,24 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-warning: var(--v2-warning);
   --color-v2-warning-subtle: var(--v2-warning-subtle);
   --color-v2-perk: var(--v2-perk);
+  --color-v2-star: var(--v2-star);
+  --color-v2-relationship: var(--v2-relationship);
+  --color-v2-ap: var(--v2-ap);
+  --color-v2-perk-on-media: var(--v2-perk-on-media);
+  --color-v2-selected-on-media: var(--v2-selected-on-media);
+  --color-v2-item-rarity-1: var(--v2-item-rarity-1);
+  --color-v2-item-rarity-2: var(--v2-item-rarity-2);
+  --color-v2-item-rarity-3: var(--v2-item-rarity-3);
+  --color-v2-item-rarity-4: var(--v2-item-rarity-4);
+  --color-v2-recruitment-tier-1: var(--v2-recruitment-tier-1);
+  --color-v2-recruitment-tier-2: var(--v2-recruitment-tier-2);
+  --color-v2-recruitment-tier-3: var(--v2-recruitment-tier-3);
+  --color-v2-treasure-heat-0: var(--v2-treasure-heat-0);
+  --color-v2-treasure-heat-1: var(--v2-treasure-heat-1);
+  --color-v2-treasure-heat-2: var(--v2-treasure-heat-2);
+  --color-v2-treasure-heat-3: var(--v2-treasure-heat-3);
+  --color-v2-treasure-heat-4: var(--v2-treasure-heat-4);
+  --color-v2-treasure-heat-5: var(--v2-treasure-heat-5);
   --color-v2-selected: var(--v2-selected);
   --color-v2-on-selected: var(--v2-on-selected);
   --color-v2-attr-red: var(--v2-attr-red);
@@ -519,8 +587,33 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-dev-shadow: var(--v2-dev-shadow);
   --shadow-v2-marker: inset 0 0 0 1px var(--v2-marker-shade), 0 0 0 1px var(--v2-marker-light);
   --color-v2-info: var(--v2-info);
+  --color-v2-nav: var(--v2-nav);
+  --color-v2-nav-active: var(--v2-nav-active);
+  --color-v2-unread: var(--v2-unread);
+  --color-v2-account-dot: var(--v2-account-dot);
+  --color-v2-on-unread: var(--v2-on-unread);
+  --color-v2-banner-red: var(--v2-banner-red);
+  --color-v2-banner-red-fg: var(--v2-banner-red-fg);
+  --color-v2-banner-green: var(--v2-banner-green);
+  --color-v2-banner-green-fg: var(--v2-banner-green-fg);
+  --color-v2-banner-blue: var(--v2-banner-blue);
+  --color-v2-banner-blue-fg: var(--v2-banner-blue-fg);
+  --color-v2-banner-pink: var(--v2-banner-pink);
+  --color-v2-banner-pink-fg: var(--v2-banner-pink-fg);
+  --color-v2-banner-black: var(--v2-banner-black);
+  --color-v2-banner-black-fg: var(--v2-banner-black-fg);
+  --color-v2-viz-tier-1: var(--v2-viz-tier-1);
+  --color-v2-viz-tier-2: var(--v2-viz-tier-2);
+  --color-v2-viz-tier-3: var(--v2-viz-tier-3);
+  --color-v2-viz-tier-4: var(--v2-viz-tier-4);
+  --color-v2-viz-tier-5: var(--v2-viz-tier-5);
+  --color-v2-viz-tier-6: var(--v2-viz-tier-6);
+  --color-v2-viz-tier-7: var(--v2-viz-tier-7);
+  --color-v2-viz-tier-8: var(--v2-viz-tier-8);
+  --color-v2-viz-tier-9: var(--v2-viz-tier-9);
   --background-image-v2-ai-gradient: linear-gradient(135deg, var(--v2-ai-from), var(--v2-ai-to));
   --shadow-v2-ai-glow: 0 0 1.25rem var(--v2-ai-glow);
+  --shadow-v2-popover: 0 10px 15px -3px var(--v2-popover-shadow), 0 4px 6px -4px var(--v2-popover-shadow);
   --animate-v2-ai-working: v2-ai-working 2s ease-in-out infinite;
 }
 
@@ -541,10 +634,16 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-fg: oklch(0.205 0 0);
   --v2-fg-secondary: oklch(0.439 0 0);
   --v2-fg-tertiary: oklch(0.52 0 0);
-  --v2-link: oklch(0.546 0.215 262.881);
+  --v2-accent: oklch(0.53 0.13 252);
+  --v2-accent-subtle: oklch(0.955 0.03 250);
+  --v2-on-accent: oklch(1 0 0);
+  /* One saturated blue in both themes for a filled accent button, from the DS 1.0 primary. */
+  --v2-accent-solid: oklch(0.623 0.214 259.815);
+  --v2-on-accent-solid: oklch(0.985 0 0);
+  --v2-link: var(--v2-accent);
   --v2-on-media: oklch(1 0 0);
   --v2-hover: oklch(0.205 0 0 / 5%);
-  --v2-focus: oklch(0.623 0.214 259.815);
+  --v2-focus: var(--v2-accent);
   --v2-success: oklch(0.527 0.154 150.069);
   --v2-success-subtle: oklch(0.982 0.018 155.826);
   --v2-danger: oklch(0.505 0.213 27.518);
@@ -561,6 +660,25 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-warning: oklch(0.55 0.163 48.998);
   --v2-warning-subtle: oklch(0.965 0.05 95);
   --v2-perk: oklch(0.52 0.105 223.128);
+  --v2-star: oklch(0.795 0.184 86.047);
+  --v2-relationship: oklch(0.645 0.246 16.439);
+  --v2-ap: oklch(0.448 0.119 151.328);
+  --v2-perk-on-media: #fdba74;
+  /* The selected check on a portrait: one blue in both themes, deep enough for a white check on any image. */
+  --v2-selected-on-media: oklch(0.6 0.15 252);
+  --v2-item-rarity-1: #f5f5f5;
+  --v2-item-rarity-2: #bfdbfe;
+  --v2-item-rarity-3: #fed7aa;
+  --v2-item-rarity-4: #e9d5ff;
+  --v2-recruitment-tier-1: oklch(0.488 0.243 264.376);
+  --v2-recruitment-tier-2: oklch(0.555 0.163 48.998);
+  --v2-recruitment-tier-3: oklch(0.496 0.265 301.924);
+  --v2-treasure-heat-0: oklch(0.96 0.02 255);
+  --v2-treasure-heat-1: oklch(0.91 0.04 255);
+  --v2-treasure-heat-2: oklch(0.86 0.07 255);
+  --v2-treasure-heat-3: oklch(0.80 0.10 255);
+  --v2-treasure-heat-4: oklch(0.74 0.13 255);
+  --v2-treasure-heat-5: oklch(0.68 0.16 255);
   --v2-selected: oklch(0.205 0 0);
   --v2-on-selected: oklch(1 0 0);
   --v2-attr-red: oklch(0.637 0.237 25.331);
@@ -572,13 +690,55 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-fg-disabled: oklch(0.72 0 0);
   --v2-elevated: oklch(1 0 0);
   --v2-popover-surface: rgb(255 255 255 / 94%);
+  /* The inverse floating surface: a dark capsule over the light page (page action bar, toasts). Its content reads the
+     v2 tokens, which the v2-floating-inverse utility maps to the --v2-inverse-* values below. */
+  --v2-inverse-surface: oklch(0.22 0.015 255 / 92%);
+  --v2-inverse-fg: oklch(0.985 0 0);
+  --v2-inverse-fg-secondary: oklch(0.85 0 0);
+  --v2-inverse-fg-tertiary: oklch(0.78 0 0);
+  --v2-inverse-fg-disabled: oklch(0.56 0 0);
+  --v2-inverse-fill: oklch(1 0 0 / 12%);
+  --v2-inverse-fill-hover: oklch(1 0 0 / 18%);
+  --v2-inverse-hover: oklch(1 0 0 / 7%);
+  --v2-inverse-divider: oklch(1 0 0 / 18%);
+  --v2-inverse-accent: oklch(0.74 0.11 250);
+  --v2-inverse-success: oklch(0.792 0.209 151.711);
+  --v2-inverse-warning: oklch(0.828 0.189 84.429);
+  --v2-inverse-danger: oklch(0.78 0.128 22.1);
+  --v2-inverse-danger-subtle: oklch(0.33 0.09 25);
+  --v2-inverse-danger-solid: oklch(0.586 0.201 26.79);
   --v2-popover-divider: rgb(0 0 0 / 18%);
+  --v2-popover-shadow: rgb(0 0 0 / 10%);
   --v2-backdrop: oklch(0 0 0 / 30%);
-  --v2-highlight: oklch(0.623 0.214 259.815 / 10%);
+  --v2-highlight: color-mix(in srgb, var(--v2-accent) 16%, transparent);
   --v2-ai-from: oklch(0.623 0.214 259.815);
   --v2-ai-to: oklch(0.606 0.25 292.717);
-  --v2-info: oklch(0.546 0.215 262.881);
+  --v2-info: var(--v2-accent);
   --v2-ai-glow: oklch(0.606 0.25 292.717 / 16%);
+  --v2-nav: oklch(0.945 0 0);
+  --v2-nav-active: oklch(0.89 0 0);
+  --v2-unread: oklch(0.577 0.245 27.325);
+  --v2-account-dot: oklch(0.68 0.16 80);
+  --v2-on-unread: oklch(1 0 0);
+  --v2-banner-red: oklch(0.95 0.025 25);
+  --v2-banner-red-fg: oklch(0.39 0.14 25);
+  --v2-banner-green: oklch(0.95 0.025 150);
+  --v2-banner-green-fg: oklch(0.4 0.11 150);
+  --v2-banner-blue: oklch(0.97 0.018 237);
+  --v2-banner-blue-fg: oklch(0.48 0.12 240);
+  --v2-banner-pink: oklch(0.95 0.025 340);
+  --v2-banner-pink-fg: oklch(0.4 0.12 340);
+  --v2-banner-black: oklch(0.89 0 0);
+  --v2-banner-black-fg: oklch(0.35 0 0);
+  --v2-viz-tier-1: #ef4444;
+  --v2-viz-tier-2: #f97316;
+  --v2-viz-tier-3: #eab308;
+  --v2-viz-tier-4: #22c55e;
+  --v2-viz-tier-5: #06b6d4;
+  --v2-viz-tier-6: #3b82f6;
+  --v2-viz-tier-7: #8b5cf6;
+  --v2-viz-tier-8: #d946ef;
+  --v2-viz-tier-9: #ec4899;
   /* Fixed, not theme-dependent: a game screenshot keeps its own colors in both themes. */
   --v2-marker-shade: oklch(0.2 0 0 / 80%);
   --v2-marker-light: oklch(1 0 0 / 90%);
@@ -605,10 +765,13 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-fg: oklch(0.985 0 0);
   --v2-fg-secondary: oklch(0.85 0 0);
   --v2-fg-tertiary: oklch(0.78 0 0);
-  --v2-link: oklch(0.809 0.105 251.813);
+  --v2-accent: oklch(0.74 0.11 250);
+  --v2-accent-subtle: oklch(0.32 0.04 250);
+  --v2-on-accent: oklch(0.205 0 0);
+  --v2-link: var(--v2-accent);
   --v2-on-media: oklch(1 0 0);
   --v2-hover: oklch(1 0 0 / 7%);
-  --v2-focus: oklch(0.707 0.165 254.624);
+  --v2-focus: var(--v2-accent);
   --v2-success: oklch(0.792 0.209 151.711);
   --v2-success-subtle: oklch(0.31 0.065 152.934);
   --v2-danger: oklch(0.704 0.191 22.216);
@@ -621,6 +784,22 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-warning: oklch(0.828 0.189 84.429);
   --v2-warning-subtle: oklch(0.33 0.07 75);
   --v2-perk: oklch(0.865 0.127 207.078);
+  --v2-star: oklch(0.852 0.199 91.936);
+  --v2-relationship: oklch(0.712 0.194 13.428);
+  --v2-ap: oklch(0.871 0.15 154.449);
+  --v2-item-rarity-1: #737373;
+  --v2-item-rarity-2: #93c5fd;
+  --v2-item-rarity-3: #fdba74;
+  --v2-item-rarity-4: #d8b4fe;
+  --v2-recruitment-tier-1: oklch(0.707 0.165 254.624);
+  --v2-recruitment-tier-2: oklch(0.828 0.189 84.429);
+  --v2-recruitment-tier-3: oklch(0.714 0.203 305.504);
+  --v2-treasure-heat-0: oklch(0.30 0.055 255);
+  --v2-treasure-heat-1: oklch(0.35 0.075 255);
+  --v2-treasure-heat-2: oklch(0.40 0.095 255);
+  --v2-treasure-heat-3: oklch(0.45 0.115 255);
+  --v2-treasure-heat-4: oklch(0.50 0.135 255);
+  --v2-treasure-heat-5: oklch(0.55 0.155 255);
   --v2-selected: oklch(0.985 0 0);
   --v2-on-selected: oklch(0.205 0 0);
   --v2-attr-red: oklch(0.704 0.191 22.216);
@@ -632,13 +811,53 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-fg-disabled: oklch(0.56 0 0);
   --v2-elevated: oklch(0.36 0 0);
   --v2-popover-surface: rgb(24 24 24 / 94%);
+  --v2-inverse-surface: oklch(0.94 0.01 255 / 92%);
+  --v2-inverse-fg: oklch(0.205 0 0);
+  --v2-inverse-fg-secondary: oklch(0.439 0 0);
+  --v2-inverse-fg-tertiary: oklch(0.439 0 0);
+  --v2-inverse-fg-disabled: oklch(0.62 0 0);
+  --v2-inverse-fill: oklch(0.205 0 0 / 9%);
+  --v2-inverse-fill-hover: oklch(0.205 0 0 / 14%);
+  --v2-inverse-hover: oklch(0.205 0 0 / 5%);
+  --v2-inverse-divider: oklch(0.205 0 0 / 16%);
+  --v2-inverse-accent: oklch(0.48 0.13 252);
+  --v2-inverse-success: oklch(0.46 0.13 150);
+  --v2-inverse-warning: oklch(0.48 0.12 52);
+  --v2-inverse-danger: oklch(0.46 0.18 28);
+  --v2-inverse-danger-subtle: oklch(0.885 0.05 30);
+  --v2-inverse-danger-solid: oklch(0.552 0.205 24.53);
   --v2-popover-divider: rgb(255 255 255 / 22%);
+  --v2-popover-shadow: rgb(0 0 0 / 40%);
   --v2-backdrop: oklch(0 0 0 / 55%);
-  --v2-highlight: oklch(0.707 0.165 254.624 / 16%);
+  --v2-highlight: color-mix(in srgb, var(--v2-accent) 20%, transparent);
   --v2-ai-from: oklch(0.707 0.165 254.624);
   --v2-ai-to: oklch(0.702 0.183 293.541);
-  --v2-info: oklch(0.809 0.105 251.813);
+  --v2-info: var(--v2-accent);
   --v2-ai-glow: oklch(0.702 0.183 293.541 / 24%);
+  --v2-nav: oklch(0.205 0 0);
+  --v2-nav-active: oklch(0.30 0 0);
+  --v2-unread: oklch(0.704 0.191 22.216);
+  --v2-account-dot: oklch(0.828 0.189 84.429);
+  --v2-on-unread: oklch(0.205 0 0);
+  --v2-banner-red: oklch(0.30 0.06 25);
+  --v2-banner-red-fg: oklch(0.86 0.10 25);
+  --v2-banner-green: oklch(0.30 0.05 150);
+  --v2-banner-green-fg: oklch(0.86 0.09 150);
+  --v2-banner-blue: oklch(0.30 0.05 240);
+  --v2-banner-blue-fg: oklch(0.86 0.08 235);
+  --v2-banner-pink: oklch(0.30 0.05 340);
+  --v2-banner-pink-fg: oklch(0.86 0.08 340);
+  --v2-banner-black: oklch(0.30 0 0);
+  --v2-banner-black-fg: oklch(0.90 0 0);
+  --v2-viz-tier-1: #ef4444;
+  --v2-viz-tier-2: #f97316;
+  --v2-viz-tier-3: #eab308;
+  --v2-viz-tier-4: #22c55e;
+  --v2-viz-tier-5: #06b6d4;
+  --v2-viz-tier-6: #3b82f6;
+  --v2-viz-tier-7: #8b5cf6;
+  --v2-viz-tier-8: #d946ef;
+  --v2-viz-tier-9: #ec4899;
   --v2-dev-accent: oklch(0.623 0.214 259.815);
   --v2-dev-accent-strong: oklch(0.515 0.215 263.6);
   --v2-dev-on-accent: oklch(0.985 0 0);
@@ -655,12 +874,14 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --spacing-v2-media-gap: 0.75rem;
   --spacing-v2-list-gap: 0.125rem;
   --spacing-v2-group-gap: 1rem;
-  --spacing-v2-block-p: 1.25rem;
+  --spacing-v2-block-p: 1rem;
   --spacing-v2-block-gap: 0.75rem;
+  --spacing-v2-section-gap: 2rem;
+  --spacing-v2-tile-p: 0.75rem;
   --spacing-v2-column-gap: 2rem;
   --spacing-v2-row-min: 2.25rem;
   --spacing-v2-control-min: 2rem;
-  --spacing-v2-input-min: 2rem;
+  --spacing-v2-input-min: 1.75rem;
 
   --transition-duration-v2-fast: 120ms;
   --transition-duration-v2-base: 200ms;
@@ -672,19 +893,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 
 @media (max-width: 767px) {
   :root {
-    --spacing-v2-block-p: 1rem;
+    --spacing-v2-block-p: 0.875rem;
     --spacing-v2-block-gap: 0.5rem;
-    --spacing-v2-row-min: 2.75rem;
-    --spacing-v2-control-min: 2.5rem;
-    --spacing-v2-input-min: 2.25rem;
-  }
-}
-
-@media (pointer: coarse) {
-  :root {
-    --spacing-v2-row-min: 2.75rem;
-    --spacing-v2-control-min: 2.5rem;
-    --spacing-v2-input-min: 2.25rem;
   }
 }
 
@@ -767,9 +977,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   grid-template-areas:
     "header"
+    "summary"
     "toolbar"
     "main";
 }
@@ -777,6 +988,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 .v2-header {
   grid-area: header;
   padding-top: var(--spacing-v2-group-gap);
+}
+
+.v2-stacked-summary {
+  grid-area: summary;
 }
 
 .v2-toolbar,
@@ -794,12 +1009,75 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   margin-bottom: var(--spacing-v2-group-gap);
 }
 
+/* Screen navigation tabs sit between the header and the screen, so they keep the header's gap below them at every
+   width, where other stacked toolbars tighten to the block gap. */
+.v2-toolbar:has([data-v2-screen-navigation-item]) {
+  margin-bottom: var(--spacing-v2-group-gap);
+}
+
 .v2-tabs {
   margin-left: -0.75rem;
 }
 
 .v2-main {
   grid-area: main;
+}
+
+/* A full-width toolbar layout (V2Page toolbarSpan="full") adds a notice row between the toolbar and the content. */
+[data-v2-layout][data-toolbar-span="full"] {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-areas:
+    "header"
+    "toolbar"
+    "notice"
+    "main";
+}
+
+.v2-notice {
+  grid-area: notice;
+  margin-bottom: var(--spacing-v2-block-gap);
+}
+
+.v2-range-slider {
+  --v2-range-progress: 0%;
+}
+
+.v2-range-slider::-webkit-slider-runnable-track {
+  height: 0.25rem;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--v2-fg) 0 var(--v2-range-progress), var(--v2-range-track, var(--v2-inset)) var(--v2-range-progress) 100%);
+}
+
+.v2-range-slider::-moz-range-track {
+  height: 0.25rem;
+  border-radius: 999px;
+  /* Unfilled track. Set --v2-range-track on an inset background, where the default disappears. */
+  background: var(--v2-range-track, var(--v2-inset));
+}
+
+.v2-range-slider::-moz-range-progress {
+  height: 0.25rem;
+  border-radius: 999px;
+  background: var(--v2-fg);
+}
+
+.v2-range-slider::-webkit-slider-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: -0.3125rem;
+  appearance: none;
+  border-radius: 999px;
+  background: var(--v2-surface);
+  box-shadow: 0 0 0 2px var(--v2-fg);
+}
+
+.v2-range-slider::-moz-range-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--v2-surface);
+  box-shadow: 0 0 0 2px var(--v2-fg);
 }
 
 .v2-aside {
@@ -819,6 +1097,43 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   view-transition-name: v2-action-bar;
 }
 
+/* Tall enough that the empty-state composer reaches the viewport bottom and sticks like a conversation's. */
+.v2-chat-root {
+  min-height: calc(100dvh - 5rem);
+}
+
+.v2-chat-composer {
+  position: sticky;
+  bottom: 0;
+  left: auto;
+  width: 100%;
+  margin-top: auto;
+  padding-bottom: 1rem;
+}
+
+.v2-chat-turn-list {
+  padding-bottom: calc(var(--question-composer-height) + 1rem);
+}
+
+.v2-chat-latest-turn {
+  min-height: calc(100dvh - var(--question-composer-height) - 1rem);
+}
+
+/* Below lg the bottom navigation overlays the page in the side-by-side layout too. */
+@media (max-width: 1023px) {
+  .v2-chat-composer {
+    bottom: var(--mobile-nav-height);
+  }
+
+  .v2-chat-turn-list {
+    padding-bottom: calc(var(--question-composer-height) + var(--mobile-nav-height) + 1rem);
+  }
+
+  .v2-chat-latest-turn {
+    min-height: calc(100dvh - var(--question-composer-height) - var(--mobile-nav-height) - 1rem);
+  }
+}
+
 @container page-available (width >= 64rem) {
   [data-v2-layout] {
     --v2-aside-w: 18rem;
@@ -833,8 +1148,17 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 }
 
 @container page-available (width >= 48rem) {
-  [data-v2-layout]:has(> .v2-aside) {
+  .v2-stacked-summary,
+  /* Content that stands in for the aside while the aside is hidden. */
+  .v2-stacked-only,
+  /* The header action also renders in Sheet's portal, outside this container. */
+  .v2-chat-new-conversation-stacked {
+    display: none;
+  }
+
+  [data-v2-layout]:has(> .v2-aside:not([data-reveal="extra-wide"])) {
     grid-template-columns: var(--v2-aside-w) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas:
       "header header"
       "aside toolbar"
@@ -842,38 +1166,117 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
     column-gap: var(--spacing-v2-column-gap);
   }
 
-  [data-v2-layout][data-width="reading"]:has(> .v2-aside) {
+  [data-v2-layout][data-toolbar-span="full"]:has(> .v2-aside:not([data-reveal="extra-wide"])) {
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "header header"
+      "toolbar toolbar"
+      "notice notice"
+      "aside main";
+  }
+
+  [data-v2-layout][data-width="reading"]:has(> .v2-aside:not([data-reveal="extra-wide"])) {
     grid-template-columns: var(--v2-aside-w) minmax(0, 48rem);
   }
 
-  [data-v2-layout]:has(> .v2-aside):has(> .v2-toolbar[data-stacked-only="true"]) {
+  [data-v2-layout]:has(> .v2-aside:not([data-reveal="extra-wide"])):has(> .v2-toolbar[data-stacked-only="true"]) {
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       "header header"
       "aside main";
   }
 
+  [data-v2-layout]:has(> .v2-aside:not([data-reveal="extra-wide"])):has(.v2-header[data-stacked-only="true"]) {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "aside toolbar"
+      "aside main";
+  }
+
+  /* The aside starts the page, so it sticks at the content's top padding (pt-2 lg:pt-6 in root.tsx) and stays level with
+     the toolbar. */
+  [data-v2-layout]:has(.v2-header[data-stacked-only="true"]) > .v2-aside {
+    top: 0.5rem;
+
+    @media (width >= 64rem) {
+      top: 1.5rem;
+    }
+  }
+
+  .v2-header[data-stacked-only="true"],
   .v2-toolbar[data-stacked-only="true"],
   .v2-toolbar-sentinel[data-stacked-only="true"] {
     display: none;
   }
 
-  .v2-aside {
+  .v2-aside:not([data-reveal="extra-wide"]) {
     display: flex;
+  }
+
+  .janken-mobile-action-bar {
+    display: none;
   }
 
   .v2-action-bar {
     display: none;
   }
 
-  .v2-toolbar[data-sticky-desktop="true"] {
+  /* Screen tabs stay in reach while the screen scrolls, as on stacked layouts. */
+  .v2-toolbar[data-sticky-desktop="true"],
+  .v2-toolbar:has(.v2-tabs) {
     position: sticky;
     top: 0;
     z-index: 20;
   }
 }
 
+/* An Aside that opts into "extra-wide" (PageAside revealAt) joins the page only from 96rem of page-available width. */
+@container page-available (width >= 96rem) {
+  [data-v2-layout]:has(> .v2-aside[data-reveal="extra-wide"]) {
+    grid-template-columns: var(--v2-aside-w) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "header header"
+      "aside toolbar"
+      "aside main";
+    column-gap: var(--spacing-v2-column-gap);
+  }
+
+  .v2-aside[data-reveal="extra-wide"] {
+    display: flex;
+  }
+}
+
 @container page-available (width < 48rem) {
+  /* The fixed composer is for the bottom-navigation layout; at lg the stacked page keeps it in the content column. */
+  @media (max-width: 1023px) {
+    .v2-chat-root {
+      min-height: calc(100dvh - 8rem);
+    }
+
+    .v2-chat-composer {
+      position: fixed;
+      bottom: var(--mobile-nav-height);
+      left: var(--v2-gutter);
+      width: min(48rem, calc(100vw - var(--v2-gutter) - var(--v2-gutter)));
+      padding-bottom: 0.5rem;
+    }
+
+    .v2-chat-turn-list {
+      padding-bottom: calc(var(--question-composer-height) + var(--mobile-nav-height) + 1rem);
+    }
+
+    .v2-chat-latest-turn {
+      min-height: calc(
+        100dvh - var(--question-composer-height) - var(--mobile-nav-height) - var(--spacing-v2-row-min) - 1rem
+      );
+    }
+  }
+
+  .v2-chat-new-conversation-wide {
+    display: none;
+  }
+
   .v2-toolbar {
     position: sticky;
     top: 0;
@@ -881,6 +1284,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
     margin-inline: calc(var(--v2-gutter) * -1);
     margin-bottom: var(--spacing-v2-block-gap);
     padding-inline: 0;
+  }
+
+  .v2-toolbar[data-sticky="true"]:has([data-student-directory-toolbar]) {
+    padding-block: var(--spacing-v2-block-gap);
   }
 
   /* The toolbar is full-bleed. The list padding keeps the first and last tab at the content edge when at rest. */
@@ -934,6 +1341,11 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 .v2-panel-highlight {
   animation: v2-highlight calc(var(--transition-duration-v2-slow) * 4) both;
 }
+
+.v2-featured-target {
+  scroll-margin-top: 1rem;
+}
+
 
 @keyframes v2-panel-in {
   from {
@@ -1127,9 +1539,8 @@ html[data-v2-transition]::view-transition-new(v2-action-bar) {
   animation: v2-fade-in var(--transition-duration-v2-base) var(--ease-v2-enter) both;
 }
 
-/* Temporary coupling until the shell migration (MLLG-121): the 1.x mobile header and bottom nav are named here because
-   NavigationBar is outside 2.0. The names apply only on a v2 page during a v2 transition, and only below lg. Each gets a
-   non-animated group above the v2 snapshots, so the shell stays put while the content moves under it. */
+/* Keep the shared mobile navigation shell stationary during v2 screen transitions. These selectors target the shell
+   outside [data-v2-layout] only below lg. Non-animated groups keep the shell above the content snapshots. */
 @media (max-width: 63.999rem) {
   html[data-v2-transition]:has([data-v2-layout]) header.fixed.top-0:not([data-v2-layout] *) {
     view-transition-name: v2-shell-header;

@@ -5,12 +5,15 @@ import {
   type PyroxenePlannerOptions,
   type StoredPyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
+import type { RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
 import {
   createOptimisticApPackageTimelineItems,
   createOptimisticAttendanceTimelineItems,
   createOptimisticBuyTimelineItems,
   createOptimisticMonthlyPackageTimelineItems,
   createOptimisticOtherTimelineItems,
+  getPyroxeneGameDayStartAt,
+  isPyroxeneOneOffGainSource,
   PYROXENE_AP_CHARGE_MAX_COUNT,
   PYROXENE_SOURCE_DEFINITIONS,
   type PyroxeneMonthlyPackageType,
@@ -21,7 +24,8 @@ import type { PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/
 export const GUEST_PYROXENE_PLANNER_VERSION = 1 as const;
 export const GUEST_PYROXENE_PLANNER_STORAGE_KEY = "mollulog::guest-pyroxene-planner::v1";
 
-export type GuestPyroxeneResources = PickupResources & { inputAt: string };
+// recruitmentStacks is absent when the user has not entered stacks; the planner then counts them as 0.
+export type GuestPyroxeneResources = PickupResources & { inputAt: string; recruitmentStacks?: RecruitmentStacks };
 export type GuestPyroxeneFavorite = { contentUid: string; studentUid: string };
 
 type GuestRecordBase = { recordId: string; createdAt: string };
@@ -280,6 +284,8 @@ export function parseGuestPyroxenePlanner(raw: string): GuestPyroxenePlannerEnve
   };
 }
 
+// A purchase or direct gain is projected with the time the record was created, so projecting a stored record again
+// later (legacy merge or migration) gives the same instant.
 export function guestPyroxeneRecordToTimelineItems(record: GuestPyroxeneRecord): PyroxeneTimelineItem[] {
   switch (record.kind) {
     case "buy":
@@ -287,6 +293,7 @@ export function guestPyroxeneRecordToTimelineItems(record: GuestPyroxeneRecord):
         repeatType: record.repeatType,
         monthlyCount: record.monthlyCount,
         uid: record.recordId,
+        now: record.createdAt,
       });
     case "monthlyPackage":
       return createOptimisticMonthlyPackageTimelineItems(
@@ -305,6 +312,7 @@ export function guestPyroxeneRecordToTimelineItems(record: GuestPyroxeneRecord):
         record.description,
         new Date(record.date),
         record.recordId,
+        record.createdAt,
       );
   }
 }
@@ -315,7 +323,8 @@ export function guestPyroxeneTimelineItems(data: GuestPyroxenePlannerData): Pyro
 
 export function pyroxeneTimelineItemFingerprint(item: PyroxeneTimelineItem): string {
   return JSON.stringify({
-    eventAt: item.eventAt,
+    // A purchase or direct gain keeps the time it was recorded on its own game day, so compare those by game day.
+    eventAt: isPyroxeneOneOffGainSource(item.source) ? getPyroxeneGameDayStartAt(item.eventAt) : item.eventAt,
     source: item.source,
     repeatType: item.repeatType,
     repeatIntervalDays: item.repeatIntervalDays,

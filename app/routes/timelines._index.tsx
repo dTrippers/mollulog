@@ -1,8 +1,8 @@
-import { ArrowRightIcon, FunnelIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { BoltIcon } from "@heroicons/react/16/solid";
+import { ArrowRightIcon, FunnelIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData, useSearchParams } from "react-router";
+import { Link, useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import LikeButton from "~/components/features/engagement/LikeButton";
 import { Page, RouteErrorBoundary } from "~/components/features/layout";
@@ -22,7 +22,7 @@ import {
 import { DEMO_WALKTHROUGH_BOSS_NAME, DEMO_WALKTHROUGH_TIMELINE } from "~/domain/walkthrough-timeline-demo";
 import { formatInstant } from "~/lib/date-time";
 import { trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import {
   defenseTypeColor,
   defenseTypeLocale,
@@ -31,19 +31,22 @@ import {
   terrainLocale,
 } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
+import { getUserParties } from "~/models/party.server";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getVisibleSenseisById } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
 
-export const meta: MetaFunction = ({ location }) => [
-  { title: "공략 타임라인 | 몰루로그" },
-  {
-    name: "description",
-    content: "보스와 지형, 방어 타입, 난이도에 맞는 공략 타임라인을 찾아보세요.",
-  },
-  canonicalLink(location.pathname),
-];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "공략 타임라인";
+  const description = "보스와 지형, 방어 타입, 난이도에 맞는 공략 타임라인을 찾아보세요.";
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+    canonicalLink(location.pathname),
+  ];
+};
 
 export const ErrorBoundary = RouteErrorBoundary;
 
@@ -65,6 +68,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const searchParams = new URL(request.url).searchParams;
   const requestedBossUid = searchParams.get("bossUid");
   const likedOnly = sensei !== null && searchParams.get("liked") === "1";
+  const mineOnly = sensei !== null && searchParams.get("mine") === "1";
   const filters = {
     bossUid: bosses.some((boss) => boss.uid === requestedBossUid) ? requestedBossUid : null,
     terrain: WALKTHROUGH_TIMELINE_TERRAINS.find((terrain) => terrain === searchParams.get("terrain")) ?? null,
@@ -74,6 +78,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       WALKTHROUGH_TIMELINE_DIFFICULTIES.find((difficulty) => difficulty === searchParams.get("difficulty")) ?? null,
     autoOnly: searchParams.get("auto") === "1",
     likedOnly,
+    mineOnly,
   };
   const timelines = await listPostgresVisibleWalkthroughTimelines(
     env,
@@ -84,6 +89,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       maxDifficulty: filters.maxDifficulty,
       isAuto: filters.autoOnly ? true : undefined,
       likedByUserId: likedOnly ? sensei.id : null,
+      authorUserId: mineOnly ? sensei.id : null,
       viewerUserId: sensei?.id,
     },
     { ctx },
@@ -97,9 +103,15 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const visibleAuthorIds = new Set(authors.map((author) => author.id));
   const visibleTimelines = timelines.filter((timeline) => visibleAuthorIds.has(timeline.userId));
   const timelineUids = visibleTimelines.map((timeline) => timeline.uid);
-  const [recruitedStudentTiers, engagementByUid] = await Promise.all([
+  const [recruitedStudentTiers, engagementByUid, earlierPartiesPath] = await Promise.all([
     sensei ? getRecruitedStudentTiers(env, sensei.id) : Promise.resolve({}),
     getPostgresWalkthroughTimelineLikeSummaries(env, timelineUids, sensei?.id, { ctx }),
+    // The earlier parties page is only offered to someone who still has parties there.
+    mineOnly
+      ? getUserParties(env, sensei.username, { includePrivate: true }).then((parties) =>
+          parties.length > 0 ? `/timelines/parties/@${sensei.username}` : null,
+        )
+      : null,
   ]);
 
   return {
@@ -122,6 +134,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     recruitedStudentTiers,
     hasRecruitedStudentData: sensei !== null,
     signedIn: sensei !== null,
+    earlierPartiesPath,
   };
 };
 
@@ -136,6 +149,7 @@ export default function WalkthroughTimelineCatalogPage() {
     recruitedStudentTiers,
     hasRecruitedStudentData,
     signedIn,
+    earlierPartiesPath,
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showUnrecruitedStudents, setShowUnrecruitedStudents] = useState(true);
@@ -239,6 +253,14 @@ export default function WalkthroughTimelineCatalogPage() {
                 ) : null}
                 {signedIn ? (
                   <PanelSwitchRow
+                    title="내 공략만 보기"
+                    checked={filters.mineOnly}
+                    onChange={(checked) => setFilter("mine", checked ? "1" : null)}
+                    className="border-t-0 pt-0"
+                  />
+                ) : null}
+                {signedIn ? (
+                  <PanelSwitchRow
                     title="좋아요한 공략만 보기"
                     checked={filters.likedOnly}
                     onChange={(checked) => setFilter("liked", checked ? "1" : null)}
@@ -259,17 +281,27 @@ export default function WalkthroughTimelineCatalogPage() {
           </div>
         ) : null}
 
-        {filters.autoOnly && timelines.length === 0 ? (
+        {filters.mineOnly && earlierPartiesPath ? (
+          <p className="mb-4 text-sm text-muted-foreground">
+            이전 방식으로 등록한 편성과 공략은{" "}
+            <Link to={earlierPartiesPath} className="font-medium text-foreground underline">
+              이전 편성·공략
+            </Link>
+            에서 볼 수 있어요.
+          </p>
+        ) : null}
+
+        {(filters.autoOnly || filters.mineOnly) && timelines.length === 0 ? (
           <div
             className="rounded-lg bg-card p-8 text-center text-sm text-muted-foreground"
             role="status"
             aria-live="polite"
           >
-            조건에 맞는 오토 공략이 없어요.
+            {filters.mineOnly ? "조건에 맞는 내 공략이 없어요." : "조건에 맞는 오토 공략이 없어요."}
           </div>
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
-            {!filters.autoOnly ? (
+            {!filters.autoOnly && !filters.mineOnly ? (
               <WalkthroughTimelineCard
                 timeline={DEMO_WALKTHROUGH_TIMELINE}
                 bossName={

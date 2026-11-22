@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
-import { createGuestSaveGate } from "~/components/features/events/shop/hooks/useAutoSave";
 import { createDefaultEventShopState } from "~/domain/event-shop-state";
 import {
   createEmptyGuestEventShopPlanner,
@@ -24,6 +23,7 @@ import {
   type GuestPyroxeneRecord,
   parseGuestPyroxenePlanner,
 } from "~/domain/guest-pyroxene-planner";
+import { createGuestSaveGate } from "~/lib/event-shop/hooks/useAutoSave";
 import {
   flushGuestPlannerEventShopPlan,
   readGuestPlanner,

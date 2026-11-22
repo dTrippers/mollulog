@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid/non-secure";
 import {
+  type CollectedSourceChanges,
   createPostgresAttendance,
   createPostgresBuyPyroxene,
   createPostgresOtherPyroxeneGain,
@@ -10,7 +11,10 @@ import {
   deletePostgresPyroxeneEventData,
   deletePostgresPyroxeneTimelineItem,
   ensurePostgresCollectedSource,
+  type OwnedResourceInput,
   type PostgresPyroxeneOptions,
+  type PyroxeneEventDataPatch,
+  updatePostgresCollectedSources,
   updatePostgresPyroxeneOneOffTimelineItem,
   updatePostgresPyroxenePlannerOptions,
   upsertPostgresCollectedSource,
@@ -23,9 +27,11 @@ import type { PyroxeneMonthlyPackageType } from "~/domain/pyroxene-sources";
 import { getPyroxenePlannerState } from "~/models/planner-state";
 
 export type {
+  OwnedResourceInput,
   PostgresPyroxeneOptions,
   PostgresPyroxeneUserState,
   PyroxeneEventData,
+  PyroxeneEventDataPatch,
   PyroxeneOwnedResource,
   PyroxeneTimelineItem,
 } from "~/db/postgres/pyroxene-planner";
@@ -45,8 +51,8 @@ export async function getLatestPyroxeneOwnedResource(env: Env, userId: number, o
 export async function createPyroxeneOwnedResource(
   env: Env,
   userId: number,
-  resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
-  options: { inputAt?: string } = {},
+  resources: OwnedResourceInput,
+  options: { inputAt?: string; collectedSources?: CollectedSourceChanges } = {},
 ): Promise<void> {
   return createPostgresPyroxeneOwnedResource(env, userId, resources, options);
 }
@@ -69,6 +75,10 @@ export async function ensureCollectedSource(env: Env, userId: number, sourceKey:
 
 export async function upsertCollectedSources(env: Env, userId: number, sourceKeys: string[]): Promise<void> {
   return upsertPostgresCollectedSources(env, userId, sourceKeys);
+}
+
+export async function updateCollectedSources(env: Env, userId: number, changes: CollectedSourceChanges): Promise<void> {
+  return updatePostgresCollectedSources(env, userId, changes);
 }
 
 export async function deleteCollectedSource(env: Env, userId: number, sourceKey: string): Promise<void> {
@@ -205,7 +215,7 @@ export async function upsertPyroxeneEventData(
   env: Env,
   userId: number,
   eventUid: string,
-  data: { completed?: boolean; expectedTrials?: number | null },
+  data: PyroxeneEventDataPatch,
 ): Promise<void> {
   return upsertPostgresPyroxeneEventData(env, userId, eventUid, data);
 }

@@ -19,8 +19,6 @@ export function PanelAction({ variant = "neutral", onClick, children, disabled =
       disabled={disabled}
       className={cn(
         "relative inline-flex h-7 cursor-pointer items-center rounded-md px-2 text-xs font-medium whitespace-nowrap",
-        // The visible box stays 28px. On coarse pointers the hit area grows to 44px without a larger visible target.
-        "pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 before:content-['']",
         // Hover and press share one overlay. It reads on the neutral and the danger-subtle backgrounds alike.
         "after:absolute after:inset-0 after:rounded-[inherit] after:bg-v2-hover after:opacity-0 after:content-[''] enabled:hover:after:opacity-100 enabled:active:after:opacity-100 after:transition-opacity after:duration-v2-fast after:ease-v2-standard",
         variant === "danger" ? "bg-v2-danger-subtle text-v2-danger" : "text-v2-fg-secondary",

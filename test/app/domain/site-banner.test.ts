@@ -1,9 +1,13 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  addDismissedSiteBannerUid,
+  excludeDismissedSiteBanner,
   getSiteBannerPageScreen,
   isSiteBannerActive,
   isSiteBannerPreset,
   isValidSiteBannerLink,
+  MAX_DISMISSED_SITE_BANNER_UIDS,
+  normalizeDismissedSiteBannerUids,
   type SiteBanner,
   shouldRenderGlobalSiteBanner,
 } from "~/domain/site-banner";
@@ -53,5 +57,38 @@ describe("site banner domain", () => {
     expect(getSiteBannerPageScreen("/futures")).toBe("futures_top");
     expect(shouldRenderGlobalSiteBanner(pageBanner, "desktop_navigation", "/futures")).toBe(false);
     expect(shouldRenderGlobalSiteBanner(pageBanner, "desktop_navigation", "/community")).toBe(true);
+  });
+});
+
+describe("dismissed site banner uids", () => {
+  it("drops invalid entries and duplicates", () => {
+    expect(normalizeDismissedSiteBannerUids(undefined)).toEqual([]);
+    expect(normalizeDismissedSiteBannerUids(["a", "", 1, "a", "b", "x".repeat(65)])).toEqual(["a", "b"]);
+  });
+
+  it("appends a new uid and moves a repeated one to the end", () => {
+    expect(addDismissedSiteBannerUid(["a", "b"], "c")).toEqual(["a", "b", "c"]);
+    expect(addDismissedSiteBannerUid(["a", "b"], "a")).toEqual(["b", "a"]);
+    expect(addDismissedSiteBannerUid(["a"], 42)).toEqual(["a"]);
+  });
+
+  it("keeps only the most recent dismissals", () => {
+    const uids = Array.from({ length: MAX_DISMISSED_SITE_BANNER_UIDS }, (_, index) => `banner-${index}`);
+    const next = addDismissedSiteBannerUid(uids, "latest");
+
+    expect(next).toHaveLength(MAX_DISMISSED_SITE_BANNER_UIDS);
+    expect(next[0]).toBe("banner-1");
+    expect(next.at(-1)).toBe("latest");
+  });
+});
+
+describe("excludeDismissedSiteBanner", () => {
+  it("drops only a banner whose uid was dismissed", () => {
+    const item = { uid: "banner" };
+
+    expect(excludeDismissedSiteBanner(item, ["banner"])).toBeNull();
+    expect(excludeDismissedSiteBanner(item, ["other"])).toBe(item);
+    expect(excludeDismissedSiteBanner(item, undefined)).toBe(item);
+    expect(excludeDismissedSiteBanner(null, ["banner"])).toBeNull();
   });
 });

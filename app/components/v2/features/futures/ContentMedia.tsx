@@ -4,6 +4,7 @@ import {
   MegaphoneIcon,
   ShieldCheckIcon,
   SparklesIcon,
+  SpeakerWaveIcon,
   TvIcon,
   ViewfinderCircleIcon,
 } from "@heroicons/react/24/outline";
@@ -14,24 +15,31 @@ import { bossImageUrl, eventIconImageUrl } from "~/models/assets";
 import type { EventType, RaidType } from "~/models/content.d";
 import { useImageFailure } from "../../primitives/use-image-failure";
 
-export type ContentMediaSize = "timeline" | "row" | "table";
+export type ContentMediaSize = "timeline" | "row" | "table" | "header" | "mark";
 
 const sizeClassName: Record<ContentMediaSize, string> = {
   timeline: "size-10 md:size-11 lg:size-12",
   row: "size-8",
   table: "size-7 lg:size-9",
+  // Fills the `PageHeader` media slot beside a page title.
+  header: "size-[3.75rem]",
+  // The compact event mark in a feed attachment.
+  mark: "size-7",
 };
 
 const iconSizeClassName: Record<ContentMediaSize, string> = {
   timeline: "size-5 md:size-[1.375rem]",
   row: "size-4 lg:size-3.5",
   table: "size-3.5",
+  header: "size-7",
+  mark: "size-3.5",
 };
 
 const typeIcon: Record<string, typeof CalendarDaysIcon> = {
   live: TvIcon,
   main_story: BookOpenIcon,
   mini_story: BookOpenIcon,
+  ko_voice: SpeakerWaveIcon,
   campaign: MegaphoneIcon,
   joint_firing_drill: ViewfinderCircleIcon,
   pickup: SparklesIcon,

@@ -2,7 +2,11 @@ import { describe, expect, it } from "@jest/globals";
 import type { RaidRankFilterState } from "~/components/features/raids/RaidRankFilter";
 import { buildRaidRankApiFilter } from "~/components/features/raids/RaidRankScreen";
 import type { RaidPartyStudentMap } from "~/components/features/raids/toRaidPartyRow";
-import { toRaidPartyRow } from "~/components/features/raids/toRaidPartyRow";
+import {
+  buildRaidPartyStudentMap,
+  isRepresentativeStudent,
+  toRaidPartyRow,
+} from "~/components/features/raids/toRaidPartyRow";
 import { Attack, Defense } from "~/graphql/graphql";
 
 const allStudents: RaidPartyStudentMap = {
@@ -135,5 +139,78 @@ describe("rank API filter conversion", () => {
 
     expect(borrowedRow.slots[0]).toMatchObject({ grayscale: true, unrecruited: true, startingSkillOrder: 2 });
     expect(regularRow.slots[0]).toMatchObject({ grayscale: false, unrecruited: false, startingSkillOrder: 2 });
+  });
+});
+
+describe("multi-form students in rank parties", () => {
+  const swimsuitShun = {
+    name: "슌(수영복)",
+    attackType: Attack.Sonic,
+    defenseType: Defense.Light,
+    role: "striker" as const,
+  };
+  const formStudents = buildRaidPartyStudentMap(
+    { "10143": swimsuitShun, owned: allStudents.owned },
+    {
+      "10143": { ...swimsuitShun, primaryUid: "10143", formIndex: 1 },
+      "10144": { ...swimsuitShun, name: "슈에링(수영복)", primaryUid: "10143", formIndex: 2 },
+    },
+  );
+  const party = (studentUid: string) => ({
+    partyIndex: 0,
+    slots: [{ slotIndex: 0, tier: 8, level: 90, isAssist: false, startingSkillOrder: null, studentUid }],
+  });
+
+  it("shows the deployed form's name and form number", () => {
+    const row = toRaidPartyRow({ party: party("10144"), allStudents: formStudents, maxLevel: 90 });
+
+    expect(row.slots[0]).toMatchObject({ uid: "10144", name: "슈에링(수영복)", formIndex: 2 });
+    expect(toRaidPartyRow({ party: party("10143"), allStudents: formStudents, maxLevel: 90 }).slots[0]).toMatchObject({
+      name: "슌(수영복)",
+      formIndex: 1,
+    });
+    expect(toRaidPartyRow({ party: party("owned"), allStudents: formStudents, maxLevel: 90 }).slots[0]).toMatchObject({
+      formIndex: undefined,
+    });
+  });
+
+  it("judges ownership of every form by the representative student", () => {
+    const owned = toRaidPartyRow({
+      party: party("10144"),
+      allStudents: formStudents,
+      maxLevel: 90,
+      recruitedStudentTiers: { "10143": 5 },
+      showUnrecruitedStudents: true,
+    });
+    const unowned = toRaidPartyRow({
+      party: party("10144"),
+      allStudents: formStudents,
+      maxLevel: 90,
+      recruitedStudentTiers: { owned: 5 },
+      showUnrecruitedStudents: true,
+    });
+
+    expect(owned.slots[0]).toMatchObject({ unrecruited: false });
+    expect(unowned.slots[0]).toMatchObject({ unrecruited: true });
+  });
+
+  it("excludes other forms only when the representative student is not owned", () => {
+    const filterFor = (recruitedStudentTiers: Record<string, number>) =>
+      buildRaidRankApiFilter({
+        filterState: { ...baseState, filterNotOwned: true },
+        allStudents: formStudents,
+        recruitedStudentTiers,
+        signedIn: true,
+      }).excludeStudents.map(({ uid }) => uid);
+
+    expect(filterFor({ owned: 5, "10143": 5 })).toEqual([]);
+    expect(filterFor({ owned: 5 })).toEqual(["10143", "10144"]);
+  });
+
+  it("keeps statistics on the representative student only", () => {
+    expect(isRepresentativeStudent("10143", formStudents["10143"])).toBe(true);
+    expect(isRepresentativeStudent("10144", formStudents["10144"])).toBe(false);
+    expect(isRepresentativeStudent("owned", formStudents.owned)).toBe(true);
+    expect(isRepresentativeStudent("missing", formStudents.missing)).toBe(false);
   });
 });

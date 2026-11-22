@@ -1,10 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import Decimal from "decimal.js";
-import {
-  calculateStageInfos,
-  optimizeStageRuns,
-} from "../../../../../../../app/components/features/events/shop/calculations/optimization";
-import type { StageInfo } from "../../../../../../../app/components/features/events/shop/calculations/types";
+import { calculateStageInfos, optimizeStageRuns } from "~/domain/event-shop/calculations/optimization";
+import type { StageInfo } from "~/domain/event-shop/calculations/types";
 import type { Stage } from "../../../../../../../app/domain/event-shop";
 
 function createStage(overrides: Partial<Stage>): Stage {
@@ -12,7 +9,7 @@ function createStage(overrides: Partial<Stage>): Stage {
     uid: "stage",
     entryAp: 10,
     index: "1-1",
-    difficulty: 0,
+    difficulty: 1,
     rewards: [],
     ...overrides,
   };

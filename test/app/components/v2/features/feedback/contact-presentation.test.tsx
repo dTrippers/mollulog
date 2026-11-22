@@ -231,13 +231,13 @@ describe("contact presentation", () => {
     expect(screen.getByText("내용을 입력해주세요.").getAttribute("role")).toBe("alert");
   });
 
-  it("distinguishes an empty reply thread from an in-progress ticket", () => {
+  it("shows an empty reply thread once, without a zero reply count", () => {
     render(
       <ContactThread ticket={makeTicket({ status: "in_progress" })} replies={[]} />,
     );
 
     expect(screen.getByText("아직 등록된 답글이 없어요.")).toBeTruthy();
-    expect(screen.getByText("문의를 확인 후 처리중이에요. 조금만 기다려주세요.")).toBeTruthy();
+    expect(screen.queryByText("0개의 답글")).toBeNull();
   });
 
   it("places replies on opposite sides according to their author", () => {

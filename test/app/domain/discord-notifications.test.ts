@@ -25,7 +25,22 @@ describe("Discord notification timing and copy", () => {
     ).toBe("작성한 이벤트 의견에 새 답글이 등록되었습니다.");
   });
 
-  it("maps all seven settings to their notification triggers", () => {
+  it("names every coupon that expires at the same time in one message", () => {
+    expect(
+      formatDiscordNotificationMessage({
+        trigger: "coupon-expiry",
+        sourceAnchor: "2026-11-09T14:59:00.000Z",
+        couponNames: ["Memories in Melody MV 공개 기념 선물", "에리가 드리는 할로윈 특별 선물!"],
+      }),
+    ).toBe(
+      '11/9(월) 23:59, 쿠폰 "Memories in Melody MV 공개 기념 선물", "에리가 드리는 할로윈 특별 선물!"의 사용 기한이 끝납니다.',
+    );
+    expect(() =>
+      formatDiscordNotificationMessage({ trigger: "coupon-expiry", sourceAnchor: new Date(), couponNames: [] }),
+    ).toThrow();
+  });
+
+  it("maps all eight settings to their notification triggers", () => {
     expect(
       getEnabledTriggers({
         eventStartEnabled: true,
@@ -33,6 +48,7 @@ describe("Discord notification timing and copy", () => {
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
         shopResetEnabled: false,
+        couponExpiryEnabled: false,
         feedbackReplyEnabled: true,
         eventOpinionReplyEnabled: true,
         leadHours: 24,

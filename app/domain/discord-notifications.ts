@@ -10,6 +10,7 @@ export const DISCORD_NOTIFICATION_DEFAULTS = {
   rewardExchangeEndEnabled: false,
   recruitmentStartEnabled: false,
   shopResetEnabled: false,
+  couponExpiryEnabled: false,
   feedbackReplyEnabled: false,
   eventOpinionReplyEnabled: false,
   leadHours: 24,
@@ -46,6 +47,7 @@ export type DiscordNotificationSettingsInput = {
   rewardExchangeEndEnabled: boolean;
   recruitmentStartEnabled: boolean;
   shopResetEnabled: boolean;
+  couponExpiryEnabled: boolean;
   feedbackReplyEnabled: boolean;
   eventOpinionReplyEnabled: boolean;
   leadHours: number;
@@ -140,11 +142,13 @@ export function formatDiscordNotificationMessage({
   sourceAnchor,
   contentName,
   studentNames = [],
+  couponNames = [],
 }: {
   trigger: DiscordNotificationTrigger;
   sourceAnchor: Date | string;
   contentName?: string | null;
   studentNames?: readonly (string | null | undefined)[];
+  couponNames?: readonly (string | null | undefined)[];
 }): string {
   if (trigger === "feedback-reply") return DISCORD_NOTIFICATION_FEEDBACK_REPLY_MESSAGE;
   if (trigger === "event-opinion-reply") return DISCORD_NOTIFICATION_EVENT_OPINION_REPLY_MESSAGE;
@@ -157,6 +161,12 @@ export function formatDiscordNotificationMessage({
   }
 
   if (trigger === "shop-reset") return `${at}, 상점이 초기화됩니다.`;
+
+  if (trigger === "coupon-expiry") {
+    const names = couponNames.map(requireName);
+    if (names.length === 0) throw new MissingNotificationNameError();
+    return `${at}, 쿠폰 ${names.map((name) => `"${name}"`).join(", ")}의 사용 기한이 끝납니다.`;
+  }
 
   const name = requireName(contentName);
   switch (trigger) {
@@ -176,6 +186,7 @@ export function getEnabledTriggers(settings: DiscordNotificationSettingsInput): 
     settings.rewardExchangeEndEnabled ? "reward-exchange-end" : null,
     settings.recruitmentStartEnabled ? "recruitment-start" : null,
     settings.shopResetEnabled ? "shop-reset" : null,
+    settings.couponExpiryEnabled ? "coupon-expiry" : null,
     settings.feedbackReplyEnabled ? "feedback-reply" : null,
     settings.eventOpinionReplyEnabled ? "event-opinion-reply" : null,
   ].filter((trigger): trigger is DiscordNotificationTrigger => trigger !== null);

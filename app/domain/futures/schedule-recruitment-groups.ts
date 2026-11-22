@@ -1,6 +1,6 @@
 import { compareInstantAsc, formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
 
-export const SCHEDULE_PICKUP_SECTION_TITLE = "픽업 학생";
+export const SCHEDULE_PICKUP_SECTION_TITLE = "픽업 대상 학생";
 export const SCHEDULE_OTHERS_SECTION_TITLE = "픽업 대상 외 모집 가능 학생";
 
 export type ScheduleRecruitment = {
