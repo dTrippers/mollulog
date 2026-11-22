@@ -49,6 +49,10 @@ single owner for commands and claim-to-evidence mapping.
   through `postgresUniqueConstraintName` (`app/lib/db.ts`)? Drizzle wraps driver
   errors in `DrizzleQueryError`, so the code and constraint are on its `cause`,
   and a check on the thrown error itself never matches.
+- Does a screen's own validation use the same rules as the save, through the
+  domain parse functions rather than restated bounds? A value the screen accepts
+  but the save rejects fails with an error the screen may not show, such as on
+  a field that is hidden.
 - Does one user action that saves several parts write them in one update or
   transaction, so a failure cannot keep some parts and drop the others?
 - Does a save write only what the user changed? A combined save, such as a
