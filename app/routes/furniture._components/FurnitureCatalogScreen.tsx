@@ -117,6 +117,9 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
   const [selectedRarities, setSelectedRarities] = useState<FurnitureRarity[]>([]);
   const [onlyWithInteractionStudents, setOnlyWithInteractionStudents] = useState(false);
   const [storageHydrated, setStorageHydrated] = useState(false);
+  // The view the user last chose, which is what gets stored. A theme opened from the address shows the theme view
+  // without replacing it.
+  const [preferredMode, setPreferredMode] = useState<FurnitureCatalogMode>("themes");
 
   const [ownedQuantities, setOwnedQuantities] = useState(view?.ownedQuantities ?? {});
   const [draftValues, setDraftValues] = useState<Record<string, string>>(() =>
@@ -151,6 +154,7 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
   useEffect(() => {
     const stored = readStoredFurnitureCatalogState();
     if (stored) {
+      setPreferredMode(stored.mode);
       if (!initialThemeParamRef.current) {
         setMode(stored.mode);
       }
@@ -164,12 +168,12 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
   useEffect(() => {
     if (!storageHydrated) return;
     writeStoredFurnitureCatalogState({
-      mode,
+      mode: preferredMode,
       categories: selectedCategories,
       rarities: selectedRarities,
       onlyWithInteractionStudents,
     });
-  }, [storageHydrated, mode, selectedCategories, selectedRarities, onlyWithInteractionStudents]);
+  }, [storageHydrated, preferredMode, selectedCategories, selectedRarities, onlyWithInteractionStudents]);
 
   // Keep query/preview/mode consistent when navigating into or out of `?theme=...`.
   useEffect(() => {
@@ -268,6 +272,8 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
         job.furnitureUid,
       );
       setOwnedQuantities((current) => ({ ...current, ...result.quantities }));
+      // The value reached the server even when the field has changed since, so the saved toast still shows.
+      savedToastPendingRef.current = true;
       if (wasClearedWhileUnregisteredSaveWasInFlight) {
         setSaveStates((current) => ({
           ...current,
@@ -279,7 +285,6 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
         draftValuesRef.current = { ...draftValuesRef.current, [job.furnitureUid]: savedValue };
         setDraftValues((current) => ({ ...current, [job.furnitureUid]: savedValue }));
         setSaveStates((current) => ({ ...current, [job.furnitureUid]: { kind: "saved" } }));
-        savedToastPendingRef.current = true;
       }
     } else {
       const wasClearedWhileUnregisteredSaveWasInFlight = pendingUnregisteredClearUidsRef.current.delete(
@@ -393,7 +398,9 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
 
   const handleQuantityChange = useCallback(
     (furnitureUid: string, value: string) => {
-      if (value !== "") pendingUnregisteredClearUidsRef.current.delete(furnitureUid);
+      // Whitespace alone is an empty field, the same as the validation and the save queue read it.
+      const empty = value.trim() === "";
+      if (!empty) pendingUnregisteredClearUidsRef.current.delete(furnitureUid);
       draftValuesRef.current = { ...draftValuesRef.current, [furnitureUid]: value };
       setDraftValues((current) => ({ ...current, [furnitureUid]: value }));
       dirtyUidsRef.current.add(furnitureUid);
@@ -402,7 +409,7 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
       if (previousTimer) clearTimeout(previousTimer);
 
       const storedQuantity = ownedQuantitiesRef.current[furnitureUid];
-      if (value === "") {
+      if (empty) {
         queueRef.current = queueRef.current.filter((queued) => queued.furnitureUid !== furnitureUid);
         const behavior = getEmptyFurnitureInventoryInputBehavior({
           storedQuantity,
@@ -493,6 +500,7 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
   const handleModeChange = useCallback(
     (nextMode: FurnitureCatalogMode) => {
       setSelectedPreview(null);
+      setPreferredMode(nextMode);
       setMode(nextMode);
       if (themeParam) {
         void navigate("/furniture");
@@ -501,9 +509,13 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
     [navigate, themeParam],
   );
 
+  // A sent request counts as saving even after its field turns invalid, so the toast does not drop a save in progress.
+  const requestInFlight = fetcher.state !== "idle";
   const isSaving = useMemo(
-    () => Object.values(saveStates).some((state) => state.kind === "queued" || state.kind === "saving"),
-    [saveStates],
+    () =>
+      requestInFlight ||
+      Object.values(saveStates).some((state) => state.kind === "queued" || state.kind === "saving"),
+    [requestInFlight, saveStates],
   );
   const hasSaveFailure = useMemo(
     () => Object.values(saveStates).some((state) => state.kind === "error"),

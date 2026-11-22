@@ -273,6 +273,68 @@ describe("FurnitureCatalogScreen state branches", () => {
     expect(screen.getAllByText("전체 2종 중 1종 표시 중").length).toBeGreaterThanOrEqual(1);
   });
 
+  it("keeps the stored all-furniture view when a theme opens from the address", () => {
+    writeStoredFurnitureCatalogState({
+      mode: "all",
+      categories: [],
+      rarities: [],
+      onlyWithInteractionStudents: false,
+    });
+    mockSearchParams = new URLSearchParams("theme=theme-1");
+    render(<FurnitureCatalogScreen view={createSampleView()} signedIn={false} loadError={null} />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "젤리즈 오락실 세트" })).toBeTruthy();
+    expect(readStoredFurnitureCatalogState(window.localStorage)?.mode).toBe("all");
+  });
+
+  it("treats whitespace in an unregistered field as empty, so no saving toast is left behind", () => {
+    jest.useFakeTimers();
+    try {
+      mockSearchParams = new URLSearchParams("theme=theme-1");
+      render(<FurnitureCatalogScreen view={createSampleView()} signedIn loadError={null} />);
+
+      const input = screen.getByLabelText("아케이드 네온 전광판 보유 수량");
+      fireEvent.change(input, { target: { value: "  " } });
+      act(() => {
+        jest.advanceTimersByTime(450);
+      });
+
+      expect(mockFetcherSubmit).not.toHaveBeenCalled();
+      expect(screen.queryByRole("status")).toBeNull();
+      expect(input.getAttribute("aria-description")).toBe("미등록 상태예요. 수량을 확인한 뒤 0 이상으로 입력해 주세요.");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("keeps saving while a sent request is in flight after its field turns invalid, then shows saved", () => {
+    jest.useFakeTimers();
+    try {
+      mockSearchParams = new URLSearchParams("theme=theme-1");
+      const { rerender } = render(<FurnitureCatalogScreen view={createSampleView()} signedIn loadError={null} />);
+
+      const input = screen.getByLabelText("핑크색 심플 스툴 보유 수량");
+      fireEvent.change(input, { target: { value: "0" } });
+      act(() => {
+        jest.advanceTimersByTime(450);
+      });
+      const body = mockFetcherSubmit.mock.calls[0]?.[0] as { requestId: string };
+      mockFetcherState = "submitting";
+      rerender(<FurnitureCatalogScreen view={createSampleView()} signedIn loadError={null} />);
+
+      fireEvent.change(input, { target: { value: "" } });
+      expect(input.getAttribute("aria-description")).toBe(FURNITURE_INPUT_ERROR_MESSAGES.emptyRecorded);
+      expect(screen.getByRole("status").textContent).toContain("저장 중...");
+
+      mockFetcherState = "idle";
+      mockFetcherData = { ok: true, requestId: body.requestId, quantities: { "chair-1": 0 } };
+      rerender(<FurnitureCatalogScreen view={createSampleView()} signedIn loadError={null} />);
+      expect(screen.getByRole("status").textContent).toContain("저장됨");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("matches aria-description to the empty-recorded error when clearing a recorded furniture", () => {
     mockSearchParams = new URLSearchParams("theme=theme-1");
     render(<FurnitureCatalogScreen view={createSampleView()} signedIn loadError={null} />);

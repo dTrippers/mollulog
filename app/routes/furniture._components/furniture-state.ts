@@ -59,10 +59,11 @@ export function getFurnitureQuantityAriaDescription({
   if (errorMessage) {
     return errorMessage;
   }
-  if (draftValue === "") {
+  const normalizedValue = draftValue.trim();
+  if (normalizedValue === "") {
     return "미등록 상태예요. 수량을 확인한 뒤 0 이상으로 입력해 주세요.";
   }
-  if (draftValue === "0") {
+  if (normalizedValue === "0") {
     return "확인된 미보유 상태예요.";
   }
   return "보유 상태예요.";
