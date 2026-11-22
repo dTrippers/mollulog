@@ -1,7 +1,7 @@
 import { Portal, Transition } from "@headlessui/react";
 import { type PointerEvent, type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
-import { getPopoverPosition, type PopoverPosition } from "./popover-position";
+import { getPopoverMaxHeight, getPopoverPosition, type PopoverPosition } from "./popover-position";
 
 export type PopoverProps = {
   open: boolean;
@@ -74,6 +74,7 @@ export function Popover({
   // The transition mounts the panel one commit after `open` turns true, so focus waits for the node itself.
   const [panelNode, setPanelNode] = useState<HTMLDivElement | null>(null);
   const [position, setPosition] = useState<PopoverPosition | null>(null);
+  const [maxHeight, setMaxHeight] = useState<number | null>(null);
   const placement = position?.placement ?? "below";
   const setPanelElement = useCallback((node: HTMLDivElement | null) => {
     panelRef.current = node;
@@ -108,12 +109,15 @@ export function Popover({
       if (!anchor) {
         return;
       }
+      const insets = getFixedBarInsets(window.innerHeight);
+      const nextMaxHeight = getPopoverMaxHeight({ viewportHeight: window.innerHeight, insets });
+      setMaxHeight((prev) => (prev === nextMaxHeight ? prev : nextMaxHeight));
       const next = getPopoverPosition({
         anchor,
         panel: { width: panelNode.offsetWidth, height: panelNode.offsetHeight },
         viewport: { width: window.innerWidth, height: window.innerHeight },
         placement: placementMode,
-        insets: getFixedBarInsets(window.innerHeight),
+        insets,
       });
       setPosition((prev) =>
         prev && prev.top === next.top && prev.left === next.left && prev.placement === next.placement ? prev : next,
@@ -185,9 +189,11 @@ export function Popover({
           data-placement={placement}
           onPointerEnter={onPanelPointerEnter}
           onPointerLeave={onPanelPointerLeave}
-          style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
+          style={{ top: position?.top ?? 0, left: position?.left ?? 0, maxHeight: maxHeight ?? undefined }}
           className={cn(
             "fixed z-30 w-72 rounded-lg bg-v2-popover-surface p-v2-block-p shadow-md ring-1 ring-v2-popover-divider backdrop-blur-md",
+            // A panel taller than the room between the fixed bars scrolls inside, up to the max height set above.
+            "overflow-y-auto overscroll-contain",
             "focus:outline-none",
             placement === "above" ? "origin-bottom-left" : "origin-top-left",
             className,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { getPopoverPosition } from "~/components/v2/primitives/popover-position";
+import { getPopoverMaxHeight, getPopoverPosition } from "~/components/v2/primitives/popover-position";
 
 const viewport = { width: 1024, height: 700 };
 const panel = { width: 288, height: 200 };
@@ -112,5 +112,16 @@ describe("getPopoverPosition", () => {
     });
 
     expect(position.left).toBe(8);
+  });
+});
+
+describe("getPopoverMaxHeight", () => {
+  it("is the room between the fixed bars, less the margins", () => {
+    // A landscape phone: 380px tall, with a 46px header and a 58px bottom navigation.
+    expect(getPopoverMaxHeight({ viewportHeight: 380, insets: { top: 46, bottom: 58 } })).toBe(260);
+  });
+
+  it("is the viewport less the margins when no bar is shown", () => {
+    expect(getPopoverMaxHeight({ viewportHeight: 700 })).toBe(684);
   });
 });

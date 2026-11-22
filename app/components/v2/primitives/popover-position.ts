@@ -41,3 +41,17 @@ export function getPopoverPosition({
   const left = Math.min(Math.max(anchor.left, margin), maxLeft);
   return { top, left, placement };
 }
+
+// The tallest the panel may be: the viewport between the fixed bars, less the margin on each side. A taller panel scrolls,
+// so its end is never left under a bar.
+export function getPopoverMaxHeight({
+  viewportHeight,
+  insets = { top: 0, bottom: 0 },
+  margin = 8,
+}: {
+  viewportHeight: number;
+  insets?: { top: number; bottom: number };
+  margin?: number;
+}): number {
+  return Math.max(0, viewportHeight - insets.top - insets.bottom - margin * 2);
+}
