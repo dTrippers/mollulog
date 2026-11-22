@@ -171,7 +171,9 @@ These rules come from the product owner's reviews of design proposals and implem
 - Do not add text that restates what the screen already shows: the title, a label, a value, the current state, where a value came from, or what a control obviously does. A total score shown alone already says that only the total was recorded, so a "합산만 기록" tag or a note saying so repeats it. A placeholder does not repeat its field's label.
 - Explain only what the user cannot infer and would otherwise get wrong: a control or value that is not intuitive, or an interaction that exists only on this screen. Use one short phrase where it is needed, and put anything longer behind a tooltip, `HintChip`, or help action.
 - Explain a type or category once, not on every item that has it: a type explained in a chip popover is not repeated on each card.
-- An error message is one short sentence that names the field and the problem ("최대 점수(N)보다 높아요.", "점수를 확인해 주세요."). Do not tell the user how to fix it or add context the screen already shows.
+- A page header may carry one sentence that states what the page is for. It never explains how to operate the page.
+- An Aside link's description is a noun phrase that says what the linked screen does ("아이템 구매에 필요한 AP 계산"), not a sentence, and does not repeat the link title.
+- An error message is one short sentence that names what failed, or the field and the problem ("최대 점수(N)보다 높아요.", "점수를 확인해 주세요."). Do not tell the user how to fix it or add context the screen already shows; next to a retry action, do not add "잠시 후 다시 시도해 주세요" or "일시적인 문제일 수 있어요".
 - Do not show internal or system labels the user cannot interpret, such as IDs, code names, or internal cost terms.
 - Secondary content, such as a video list, does not take a large share of the screen.
 - A step in the user's plan belongs in Main, not in an Aside.
