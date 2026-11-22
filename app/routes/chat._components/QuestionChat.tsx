@@ -430,7 +430,7 @@ export function QuestionChat({
     ? "로그인하면 쓸 수 있어요"
     : consentUnavailable
       ? "설정을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
-      : "보유 학생, 관심 학생, 편성, 재화와 모집 계획을 함께 보내요";
+      : "모집한 학생, 관심 학생, 편성, 재화와 모집 계획을 함께 보내요";
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -762,7 +762,7 @@ export function QuestionChat({
               { label: "일정", question: "다음 픽업 학생과 기간 알려 줘" },
               { label: "학생", question: "미카 EX 스킬 효과 정리해 줘" },
               { label: "총력전", question: "이번 총력전 상위권은 누구를 많이 써?" },
-              { label: "내 데이터", question: "내 보유 학생으로 신비 편성 추천해 줘", personal: true },
+              { label: "내 데이터", question: "내 모집한 학생으로 신비 편성 추천해 줘", personal: true },
             ].map((suggestion) => (
               <button
                 key={suggestion.label}
@@ -919,7 +919,7 @@ export function QuestionChat({
             스위치를 켜 두면 질문할 때마다 몰루로그에 저장된 아래 정보를 질문과 함께 외부 AI 모델 제공사에 전달해요.
           </p>
           <ul className="border-l-2 border-v2-divider pl-3">
-            <li>· 보유 학생과 엘레프</li>
+            <li>· 모집한 학생과 엘레프</li>
             <li>· 관심 학생</li>
             <li>· 편성</li>
             <li>· 청휘석, 모집 티켓, 모집 스택</li>
