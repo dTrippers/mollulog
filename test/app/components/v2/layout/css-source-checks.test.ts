@@ -28,7 +28,22 @@ function panelTransitionValue(source: string, name: string): string {
 
 describe("corr-2 layout CSS", () => {
   it("T1: side-by-side grid has the v2 column gap between Aside and Main", () => {
-    expect(ruleBody(css, "  [data-v2-layout]:has(> .v2-aside)")).toContain("column-gap: var(--spacing-v2-column-gap);");
+    expect(ruleBody(css, '  [data-v2-layout]:has(> .v2-aside:not([data-reveal="extra-wide"]))')).toContain(
+      "column-gap: var(--spacing-v2-column-gap);",
+    );
+  });
+
+  it("T1: an extra-wide Aside joins the page only from 96rem", () => {
+    const selector = '  [data-v2-layout]:has(> .v2-aside[data-reveal="extra-wide"])';
+    const rule = css.indexOf(`${selector} {`);
+    const extraWide = css.lastIndexOf("@container page-available (width >= 96rem) {", rule);
+    const sideBySide = css.lastIndexOf("@container page-available (width >= 48rem) {", rule);
+
+    expect(rule).toBeGreaterThan(-1);
+    expect(extraWide).toBeGreaterThan(sideBySide);
+    expect(ruleBody(css, selector)).toContain("column-gap: var(--spacing-v2-column-gap);");
+    expect(ruleBody(css, '  .v2-aside[data-reveal="extra-wide"]')).toContain("display: flex;");
+    expect(ruleBody(css, '  .v2-aside:not([data-reveal="extra-wide"])')).toContain("display: flex;");
   });
 
   it("T2: toolbar margin is on the toolbar only, and stacked uses the block gap", () => {

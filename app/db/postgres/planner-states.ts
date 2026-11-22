@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { normalizeApPlannerState } from "~/domain/ap-planner";
+import { normalizeGrowthPlannerState } from "~/domain/growth-planner";
 import { normalizePyroxenePlannerOptions, type StoredPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { type PlannerStateDocumentV1, normalizeJankenPlannerProgress, projectPlannerStateDocument } from "~/domain/planner-state";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
@@ -72,11 +73,15 @@ function readStoredPlannerStateDocument(value: unknown): PlannerStateDocumentV1 
   const options = normalizePyroxenePlannerOptions(pyroxene.options as StoredPyroxenePlannerOptions);
   const ap = value.ap == null ? null : normalizeApPlannerState(value.ap);
   if (value.ap != null && ap === null) throw new Error("Unable to read planner state document");
+  const { growth: storedGrowth, ...rest } = value as unknown as PlannerStateDocumentV1;
+  const growth = storedGrowth === undefined ? undefined : normalizeGrowthPlannerState(storedGrowth);
+  if (growth === null) throw new Error("Unable to read planner state document");
   return {
-    ...(value as unknown as PlannerStateDocumentV1),
+    ...rest,
     pyroxene: { ...pyroxene, options } as PlannerStateDocumentV1["pyroxene"],
     jankenProgress,
     ap,
+    ...(growth ? { growth } : {}),
   };
 }
 

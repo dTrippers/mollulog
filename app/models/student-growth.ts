@@ -48,7 +48,8 @@ export type StudentGrowth = {
   targetAbilityHeal: number | null;
 };
 
-export type StudentGrowthWithMetadata = StudentGrowth & { createdAt: string };
+// plannerPosition is the manual order: ascending from the top, null above every positioned row.
+export type StudentGrowthWithMetadata = StudentGrowth & { createdAt: string; plannerPosition: number | null };
 export type StudentGrowthInput = Omit<StudentGrowth, "uid" | "studentUid">;
 type StudentGrowthRow = Pick<
   typeof pgStudentTargetsTable.$inferSelect,
@@ -68,7 +69,7 @@ type StudentGrowthRow = Pick<
   | "targetAbilityAtk"
   | "targetAbilityHeal"
 > & { studentGrowthUid: string | null };
-type StudentGrowthMetadataRow = StudentGrowthRow & { createdAt: string | null };
+type StudentGrowthMetadataRow = StudentGrowthRow & { createdAt: string | null; plannerPosition: number | null };
 
 const studentGrowthColumns = {
   studentGrowthUid: pgStudentTargetsTable.studentGrowthUid,
@@ -146,6 +147,7 @@ function toModelWithMetadata(row: StudentGrowthMetadataRow): StudentGrowthWithMe
   return {
     ...toModel(row),
     createdAt: row.createdAt,
+    plannerPosition: row.plannerPosition,
   };
 }
 
@@ -360,6 +362,7 @@ export async function getStudentGrowthsWithMetadata(env: Env, senseiId: number):
         createdAt: sql<
           string | null
         >`to_char(${pgStudentTargetsTable.plannerAddedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+        plannerPosition: pgStudentTargetsTable.plannerPosition,
       })
       .from(pgStudentTargetsTable)
       .where(
@@ -403,6 +406,7 @@ export async function getStudentGrowthWithMetadata(
         createdAt: sql<
           string | null
         >`to_char(${pgStudentTargetsTable.plannerAddedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+        plannerPosition: pgStudentTargetsTable.plannerPosition,
       })
       .from(pgStudentTargetsTable)
       .where(
@@ -508,6 +512,58 @@ export async function removeStudentGrowth(env: Env, senseiId: number, studentUid
         null,
         null,
       );
+      // Adding the student again places it at the top, as a new planner row.
+      await tx
+        .update(pgStudentTargetsTable)
+        .set({ plannerPosition: null })
+        .where(and(eq(pgStudentTargetsTable.userId, senseiId), eq(pgStudentTargetsTable.studentUid, studentUid)));
+    }),
+  );
+}
+
+/** The submitted order does not list exactly the planner's current students, such as after another tab changed them. */
+export class StudentGrowthOrderConflictError extends Error {
+  constructor() {
+    super("The submitted planner order does not match the planner's students.");
+    this.name = "StudentGrowthOrderConflictError";
+  }
+}
+
+/**
+ * Store the planner's manual order. The list must hold every student in the planner exactly once, so an order built
+ * from a stale list is rejected instead of being applied partially.
+ */
+export async function reorderStudentGrowths(env: Env, senseiId: number, orderedStudentUids: readonly string[]) {
+  await withDb(env, (db) =>
+    db.transaction(async (tx) => {
+      const rows = await tx
+        .select({ studentUid: pgStudentTargetsTable.studentUid })
+        .from(pgStudentTargetsTable)
+        .where(
+          and(
+            eq(pgStudentTargetsTable.userId, senseiId),
+            isNotNull(pgStudentTargetsTable.studentGrowthUid),
+            isNull(pgStudentTargetsTable.deletedAt),
+          ),
+        )
+        .for("update");
+      const current = new Set(rows.map((row) => row.studentUid));
+      const submitted = new Set(orderedStudentUids);
+      if (
+        submitted.size !== orderedStudentUids.length ||
+        submitted.size !== current.size ||
+        orderedStudentUids.some((studentUid) => !current.has(studentUid))
+      ) {
+        throw new StudentGrowthOrderConflictError();
+      }
+      if (orderedStudentUids.length === 0) return;
+      await tx.execute(sql`
+        update ${pgStudentTargetsTable}
+        set planner_position = ordered.position - 1
+        from unnest(${sql.param([...orderedStudentUids])}::text[]) with ordinality as ordered(student_uid, position)
+        where ${pgStudentTargetsTable.userId} = ${senseiId}
+          and ${pgStudentTargetsTable.studentUid} = ordered.student_uid
+      `);
     }),
   );
 }

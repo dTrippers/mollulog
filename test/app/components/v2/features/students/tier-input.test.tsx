@@ -24,9 +24,11 @@ function render(value: number | null, warning = false) {
 }
 
 describe("tier input", () => {
-  it("shows a star tier as ★n and reads it as n성", () => {
+  it("shows a star tier as a yellow star and n, and reads it as n성", () => {
     const markup = render(5);
-    expect(markup).toContain("★5");
+    expect(markup).toMatch(/<svg[^>]*class="[^"]*text-v2-star[^"]*"/);
+    expect(markup).toContain(">5<");
+    expect(markup).not.toContain("★");
     expect(markup).not.toContain("exclusive_weapon.png");
     expect(markup).toContain('aria-label="케이 5성"');
   });
