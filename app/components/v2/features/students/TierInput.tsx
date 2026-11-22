@@ -1,3 +1,4 @@
+import { StarIcon } from "@heroicons/react/16/solid";
 import { type FocusEventHandler, type KeyboardEventHandler, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 import { Popover } from "../../primitives/Popover";
@@ -25,9 +26,17 @@ export type TierInputProps = {
 
 export { getTierMeaning };
 
-// The visible face of a tier: "★n" up to 5, and the exclusive weapon icon with its level after 5 (the GrowthTier pattern).
+// The visible face of a tier: a star and the number up to 5, and the exclusive weapon icon with its level after 5 (the
+// GrowthTier pattern).
 function TierFace({ tier }: { tier: number }) {
-  if (tier <= 5) return <span>★{tier}</span>;
+  if (tier <= 5) {
+    return (
+      <span className="inline-flex items-center gap-0.5">
+        <StarIcon className="size-3.5 shrink-0 text-v2-star" />
+        <span>{tier}</span>
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center gap-1">
       <img src="/icons/exclusive_weapon.png" alt="" className="size-3.5 shrink-0" />
@@ -76,7 +85,10 @@ export function TierInput({
           className,
         )}
       >
-        <span aria-hidden="true" className={cn("flex items-center justify-center px-2", compact ? "min-h-7" : "min-h-v2-input-min")}>
+        <span
+          aria-hidden="true"
+          className={cn("flex items-center justify-center px-2", compact ? "min-h-7" : "min-h-v2-input-min")}
+        >
           {value === null ? "—" : <TierFace tier={value} />}
         </span>
       </button>

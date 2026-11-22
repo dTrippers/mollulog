@@ -337,8 +337,12 @@ export default function GrowthTable({
               {rows}
             </StackedList>
           ) : (
-            <div ref={frameRef} className="max-h-[calc(100dvh-9rem)] max-w-full overflow-auto rounded-lg bg-v2-surface">
-              <table aria-label="학생 성장 목표" className="w-max min-w-full border-separate border-spacing-0 text-sm">
+            // The surface ends where the columns end; a wider frame would spread its extra width into the field cells.
+            <div
+              ref={frameRef}
+              className="max-h-[calc(100dvh-9rem)] w-fit max-w-full overflow-auto rounded-lg bg-v2-surface"
+            >
+              <table aria-label="학생 성장 목표" className="w-max border-separate border-spacing-0 text-sm">
                 <TableHead showSteps={showSteps} manual={manual} />
                 <tbody>
                   {displayStudents.length === 0 ? (

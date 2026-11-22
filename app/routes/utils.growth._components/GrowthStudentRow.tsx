@@ -9,7 +9,13 @@ import { Dialog } from "~/components/v2/primitives/Dialog";
 import type { NumberInputFlowNavigationInputProps } from "~/components/v2/primitives/use-number-input-flow-navigation";
 import { STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
 import { cn } from "~/lib/utils";
-import { GrowthResourceRequirements } from "./GrowthResourceRequirements";
+import {
+  GrowthResourceList,
+  GrowthResourceRequirements,
+  GrowthResourceToggle,
+  isGrowthResourceListShown,
+  useGrowthResourceDisclosure,
+} from "./GrowthResourceRequirements";
 import { GrowthRowMenu, type GrowthRowMenuItem } from "./GrowthRowMenu";
 import { GrowthValueInput } from "./GrowthValueInput";
 import {
@@ -169,13 +175,21 @@ function FieldBox({
   );
 }
 
-function EquipmentPartNames({ student, showSteps }: { student: GrowthStudent; showSteps: boolean }) {
+function EquipmentPartNames({
+  student,
+  showSteps,
+  className,
+}: {
+  student: GrowthStudent;
+  showSteps: boolean;
+  className?: string;
+}) {
   const group = getGrowthGroup("equipment");
   const labels = getEquipmentLabels(student);
   return (
     <div
       aria-hidden="true"
-      className="mt-0.5 grid text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary"
+      className={cn("grid text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary", className)}
       style={columnsStyle(group.cells, showSteps)}
     >
       {labels.map((label, index) => (
@@ -491,6 +505,21 @@ function TableStudentRows({
   };
   const valueColumnCount = 1 + GROWTH_GROUPS.length;
   const dataAttributes = { "data-growth-student": student.uid };
+  const resources = useGrowthResourceDisclosure();
+  const resourceListShown = isGrowthResourceListShown(row.resourceRequirements, resources);
+  const resourceParts = {
+    studentName: name,
+    requirements: row.resourceRequirements,
+    calculating: row.isCalculatingResources,
+    disclosure: resources,
+  };
+  // The 재화 line shares the line of the equipment part names: the toggle fills the columns before 장비 티어, and stays
+  // inside them when the table scrolls sideways, so it never covers the names.
+  const equipmentIndex = GROWTH_GROUPS.findIndex((group) => group.key === "equipment");
+  const groupsAfterEquipment = GROWTH_GROUPS.length - equipmentIndex - 1;
+  // The bottom divider goes on the student's last row.
+  const lastRow = resourceListShown ? "list" : issues ? "issues" : "resources";
+  const divider = (rowKey: typeof lastRow) => !last && lastRow === rowKey && "border-b border-v2-divider";
 
   return (
     <>
@@ -499,9 +528,10 @@ function TableStudentRows({
           scope="rowgroup"
           rowSpan={2}
           style={{ width: `${studentColumnRem}rem` }}
-          className={cn("sticky left-0 z-10 py-1.5 pr-1 pl-3 text-left align-middle font-normal", highlight)}
+          className={cn("sticky left-0 z-10 py-1.5 pr-1 pl-3 text-left align-top font-normal", highlight)}
         >
-          <div className="flex items-center gap-2">
+          {/* The menu sits on the 현재 row line, beside the portrait's top. */}
+          <div className="flex items-start gap-2">
             {reorder ? (
               <span className="flex shrink-0 items-center">
                 <DragHandle name={name} reorder={reorder} />
@@ -542,52 +572,61 @@ function TableStudentRows({
         )}
       </tr>
       <tr {...dataAttributes}>
-        <RowLabel style={stickyLabelStyle} highlight={highlight}>
+        <RowLabel style={stickyLabelStyle} highlight={highlight} className="pb-0.5">
           목표
         </RowLabel>
-        <td className={cn(cellBase, "px-1.5 py-1.5")}>
+        <td className={cn(cellBase, "px-1.5 pt-1.5 pb-0.5")}>
           <SetAllMaxButton side="target" row={row} name={name} />
         </td>
         {GROWTH_GROUPS.map((group) => (
-          <td key={group.key} className={groupCell}>
+          <td key={group.key} className={cn(cellBase, "px-1.5 pt-1.5 pb-0.5")}>
             <FieldBox group={group} side="target" context={context} />
-            {group.key === "equipment" ? <EquipmentPartNames student={student} showSteps={showSteps} /> : null}
           </td>
         ))}
       </tr>
+      <tr {...dataAttributes}>
+        <td className={cn("sticky left-0 z-10", highlight, divider("resources"))} />
+        <RowLabel
+          style={stickyLabelStyle}
+          highlight={highlight}
+          className={cn("py-0 pb-2 leading-6", divider("resources"))}
+        >
+          재화
+        </RowLabel>
+        <td colSpan={1 + equipmentIndex} className={cn(cellBase, "px-1.5 pb-2", divider("resources"))}>
+          <div className="sticky w-fit" style={spanContentStyle}>
+            <GrowthResourceToggle {...resourceParts} />
+          </div>
+        </td>
+        <td className={cn(cellBase, "px-1.5 pb-2", divider("resources"))}>
+          <EquipmentPartNames student={student} showSteps={showSteps} className="h-6 items-center" />
+        </td>
+        {groupsAfterEquipment > 0 ? (
+          <td colSpan={groupsAfterEquipment} className={cn(cellBase, divider("resources"))} />
+        ) : null}
+      </tr>
       {issues ? (
         <tr {...dataAttributes}>
-          <td className={cn("sticky left-0 z-10", highlight)} />
-          <td className={cn("sticky z-10", highlight)} style={stickyLabelStyle} />
-          <td colSpan={valueColumnCount} className={cn(cellBase, "px-1.5 pb-1.5")}>
+          <td className={cn("sticky left-0 z-10", highlight, divider("issues"))} />
+          <td className={cn("sticky z-10", highlight, divider("issues"))} style={stickyLabelStyle} />
+          <td colSpan={valueColumnCount} className={cn(cellBase, "px-1.5 pb-2", divider("issues"))}>
             <div className="sticky" style={spanContentStyle}>
               <RowIssues row={row} />
             </div>
           </td>
         </tr>
       ) : null}
-      <tr {...dataAttributes}>
-        <td className={cn("sticky left-0 z-10", highlight, !last && "border-b border-v2-divider")} />
-        <RowLabel
-          style={stickyLabelStyle}
-          highlight={highlight}
-          className={cn("pb-2", !last && "border-b border-v2-divider")}
-        >
-          재화
-        </RowLabel>
-        <td
-          colSpan={valueColumnCount}
-          className={cn(cellBase, "px-1.5 pt-0.5 pb-2", !last && "border-b border-v2-divider")}
-        >
-          <div className="sticky" style={spanContentStyle}>
-            <GrowthResourceRequirements
-              studentName={name}
-              requirements={row.resourceRequirements}
-              calculating={row.isCalculatingResources}
-            />
-          </div>
-        </td>
-      </tr>
+      {resourceListShown ? (
+        <tr {...dataAttributes}>
+          <td className={cn("sticky left-0 z-10", highlight, divider("list"))} />
+          <td className={cn("sticky z-10", highlight, divider("list"))} style={stickyLabelStyle} />
+          <td colSpan={valueColumnCount} className={cn(cellBase, "px-1.5 pb-2.5", divider("list"))}>
+            <div className="sticky" style={spanContentStyle}>
+              <GrowthResourceList {...resourceParts} />
+            </div>
+          </td>
+        </tr>
+      ) : null}
     </>
   );
 }
@@ -686,7 +725,7 @@ function StackedStudentCard({
                       <div key={group.key}>
                         <FieldBox group={group} side={side} context={context} />
                         {side === "target" && group.key === "equipment" && showEquipmentNames ? (
-                          <EquipmentPartNames student={student} showSteps={showSteps} />
+                          <EquipmentPartNames student={student} showSteps={showSteps} className="mt-0.5" />
                         ) : null}
                       </div>
                     ))}
@@ -713,9 +752,9 @@ function StackedStudentCard({
           <RowIssues row={row} />
         </div>
       ) : null}
-      <div className="mt-1 flex items-start gap-2">
+      <div className="mt-1.5 flex items-start gap-2">
         <span
-          className="shrink-0 text-xs leading-7 text-v2-fg-secondary"
+          className="shrink-0 text-xs leading-6 text-v2-fg-secondary"
           style={{ width: `${STACKED_LABEL_COLUMN_REM}rem` }}
         >
           재화
