@@ -41,9 +41,16 @@ This local command is separate from the production procedure below.
 
 Migration files use `yyyymmddhhmmss_{name}.sql` and are applied through the repository's approved PostgreSQL migration process. Apply and verify every required migration before deploying code that depends on the new schema. Runtime deploy commands never apply schema migrations automatically.
 
+## Student state tables
+
+- The `nullable_semantics_enabled` value of the `default` row in `student_state_migration_control` selects how a student's current state and targets are written. Every writer runs inside `withStudentStateProjection` and branches on its `mode`.
+- On (`nullable`): writers use only the canonical tables `student_states` and `student_targets`, and each change adds a `student_state_audits` row. Production runs in this mode, and turning it on cannot be undone: fix a problem with a compatible forward change, never by switching it off. The legacy tables `recruited_students`, `student_growth`, and `relationship_levels` no longer receive production writes, so new student state belongs in the canonical tables.
+- Off (`legacy`): writers update the legacy tables and project them into the canonical tables. The shared local database runs in this mode.
+
 ## Retiring tables and columns
 
-- Do not drop a table or column. Leave a table that is no longer used in place; after a retention period, rename it with the `zzz_` prefix in a separate change.
+- Do not drop a table or column. A table that no code reads stays in place, and in `app/db/postgres/schema.ts`, until a later change retires it.
+- Retire a table by renaming it with the `zzz_` prefix (`ALTER TABLE x RENAME TO zzz_x;`) in its own migration, applied after every running deployment has stopped reading and writing it. The same change removes the table from `schema.ts`. Earlier retirements follow this pattern, for example `20260929000100_rename_legacy_planner_tables_with_zzz_prefix.sql`.
 - A `DROP` is acceptable only when a preceding step has already preserved all of that data intact elsewhere, for example a migration that copies every value into the new table or column before dropping the old one. A copy that keeps only some columns or converts values lossily does not qualify.
 
 ## Operational safety
