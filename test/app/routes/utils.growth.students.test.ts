@@ -9,9 +9,12 @@ const mockUpsertRecruitedStudent = jest.fn();
 const mockUpdateRecruitedStudentTier = jest.fn();
 const mockUpsertStudentGrowth = jest.fn();
 const mockSaveStudentGrowthAndCurrentState = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockReorderStudentGrowths = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockSaveGrowthPlannerSortOrder = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
 class RecruitedStudentValidationError extends Error {}
 class StudentGrowthValidationError extends Error {}
+class StudentGrowthOrderConflictError extends Error {}
 
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
@@ -36,9 +39,15 @@ jest.mock("~/models/recruited-student", () => ({
 
 jest.mock("~/models/student-growth", () => ({
   removeStudentGrowth: jest.fn(),
+  reorderStudentGrowths: mockReorderStudentGrowths,
+  StudentGrowthOrderConflictError,
   StudentGrowthValidationError,
   saveStudentGrowthAndCurrentState: mockSaveStudentGrowthAndCurrentState,
   upsertStudentGrowth: mockUpsertStudentGrowth,
+}));
+
+jest.mock("~/models/planner-state", () => ({
+  saveGrowthPlannerSortOrder: mockSaveGrowthPlannerSortOrder,
 }));
 
 jest.mock("~/models/relationship-level", () => ({
@@ -397,6 +406,58 @@ describe("utils.growth.students action", () => {
         code: "STUDENT_STATE_STALE",
         error: "페이지가 최신 상태가 아니라 저장하지 못했어요. 새로고침 후 다시 입력해주세요.",
       },
+      init: { status: 409 },
+    });
+  });
+
+  function postJson(body: unknown) {
+    return action({
+      context: { cloudflare: { env } },
+      request: new Request("http://localhost/utils/growth/students", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+      }),
+    } as never);
+  }
+
+  it("stores a planner sort choice without naming a student", async () => {
+    const response = await postJson({ _intent: "sort", sortOrder: "manual" });
+
+    expect(mockSaveGrowthPlannerSortOrder).toHaveBeenCalledWith(env, 1, "manual");
+    expect(mockGetAllStudentsMap).not.toHaveBeenCalled();
+    expect(response).toMatchObject({ data: { kind: "sortOrder", sortOrder: "manual" } });
+  });
+
+  it("rejects an unknown sort choice", async () => {
+    const response = await postJson({ _intent: "sort", sortOrder: "unknown" });
+
+    expect(mockSaveGrowthPlannerSortOrder).not.toHaveBeenCalled();
+    expect(response).toMatchObject({ data: { retryable: false }, init: { status: 400 } });
+  });
+
+  it("stores a manual order", async () => {
+    const response = await postJson({ _intent: "reorder", orderedStudentUids: ["studentB", "studentA"] });
+
+    expect(mockReorderStudentGrowths).toHaveBeenCalledWith(env, 1, ["studentB", "studentA"]);
+    expect(response).toMatchObject({ data: { kind: "order", orderedStudentUids: ["studentB", "studentA"] } });
+  });
+
+  it("rejects a malformed manual order before calling the model", async () => {
+    for (const orderedStudentUids of [undefined, "studentA", [1], [""]]) {
+      const response = await postJson({ _intent: "reorder", orderedStudentUids });
+      expect(response).toMatchObject({ data: { retryable: false }, init: { status: 400 } });
+    }
+    expect(mockReorderStudentGrowths).not.toHaveBeenCalled();
+  });
+
+  it("returns a non-retryable 409 when the order no longer matches the planner", async () => {
+    mockReorderStudentGrowths.mockRejectedValueOnce(new StudentGrowthOrderConflictError());
+
+    const response = await postJson({ _intent: "reorder", orderedStudentUids: ["studentA"] });
+
+    expect(response).toMatchObject({
+      data: { error: "학생 목록이 바뀌어 순서를 저장하지 못했어요", retryable: false },
       init: { status: 409 },
     });
   });

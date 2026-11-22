@@ -4,7 +4,7 @@ import type { PageLinkProps } from "~/components/features/layout/PageLink";
 const resourcePlannerLink: PageLinkProps = {
   title: "재화 플래너",
   shortTitle: "재화 플래너",
-  description: "각 재화의 보유·필요 수량을 관리해요",
+  description: "재화별 보유·필요 수량 관리",
   to: "/utils/resources/inventory",
   Icon: ArchiveBoxIcon,
 };
@@ -12,21 +12,21 @@ const resourcePlannerLink: PageLinkProps = {
 const farmingCalculatorLink: PageLinkProps = {
   title: "파밍 계산기",
   shortTitle: "파밍 계산기",
-  description: "필요 장비를 얻을 스테이지를 계산해요",
+  description: "필요 장비를 얻을 스테이지 계산",
   to: "/utils/resources/farming",
   Icon: MapIcon,
 };
 
 const scannerLink: PageLinkProps = {
   title: "스크린샷 인식기",
-  description: "아이템 화면 스크린샷에서 보유 재화를 인식할 수 있어요",
+  description: "아이템 스크린샷에서 보유 재화 인식",
   to: "/scanner/resource",
   Icon: CameraIcon,
 };
 
 const studentGrowthLink: PageLinkProps = {
   title: "학생 성장 플래너",
-  description: "학생들의 성장 목표를 입력하면 필요한 재화를 계산할 수 있어요",
+  description: "성장 목표에 필요한 재화 계산",
   to: "/utils/growth/students",
   Icon: TableCellsIcon,
 };

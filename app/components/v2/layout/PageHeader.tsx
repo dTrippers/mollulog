@@ -21,6 +21,9 @@ export type PageHeaderProps = {
   // Keeps `trailing` beside the heading at every width instead of stacking it below, for a short action such as a
   // primary button. The heading truncates before the action wraps.
   trailingInline?: boolean;
+  // Classes for the block around `trailing`, such as showing it only at the widths where the Aside that holds the same
+  // links is hidden.
+  trailingClassName?: string;
   // Full-width lines under the heading row, below the media too, such as a profile's introduction and counts.
   details?: ReactNode;
   // Hide the header beside an aside, where the page renders `PageAsideHeader` at the top of the aside instead.
@@ -77,6 +80,7 @@ export function PageHeader({
   media,
   trailing,
   trailingInline = false,
+  trailingClassName,
   stackedOnly = false,
   details,
 }: PageHeaderProps) {
@@ -115,7 +119,13 @@ export function PageHeader({
           <HeaderText title={title} description={description} back={back} meta={meta} titleHidden={titleHidden} />
         ))}
       {trailing ? (
-        <div className={cn("min-w-0", trailingInline ? "shrink-0" : "@min-[60rem]/page-available:shrink-0")}>
+        <div
+          className={cn(
+            "min-w-0",
+            trailingInline ? "shrink-0" : "@min-[60rem]/page-available:shrink-0",
+            trailingClassName,
+          )}
+        >
           {trailing}
         </div>
       ) : null}

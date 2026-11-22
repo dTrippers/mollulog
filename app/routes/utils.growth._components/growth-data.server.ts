@@ -1,5 +1,6 @@
 import type { StudentGearData } from "~/domain/growth-resource";
 import { getStudentGearData, getStudentGrowthResourceRequirements } from "~/models/growth-resource";
+import { getGrowthPlannerSortOrder } from "~/models/planner-state";
 import { getRecruitedStudents, type RecruitedStudent } from "~/models/recruited-student";
 import { getRelationshipLevel, getRelationshipLevels } from "~/models/relationship-level";
 import { getAllStudentsMap, type Student } from "~/models/student";
@@ -8,6 +9,7 @@ import {
   getStudentGrowthWithMetadata,
   type StudentGrowthWithMetadata,
 } from "~/models/student-growth";
+import { listAvailableGrowthStudents } from "./growth-available-students";
 import type {
   DeferredGrowthLayoutLoaderData,
   GrowthLayoutLoaderData,
@@ -45,6 +47,7 @@ function buildStudentRowData(params: BuildStudentRowDataParams): Omit<GrowthStud
     name: student?.name ?? studentUid,
     order: student?.order ?? -1,
     plannerCreatedAt: growth?.createdAt ?? null,
+    plannerPosition: growth?.plannerPosition ?? null,
     isRecruited,
     released: student?.released ?? false,
     hasGear: gearData != null,
@@ -195,10 +198,7 @@ async function loadGrowthPlannerCoreData(env: Env, userId: number): Promise<Grow
 
   return {
     managedStudents: managedStudentsData,
-    availableStudents: Object.values(allStudentsMap)
-      .filter((student) => !managedUids.has(student.uid))
-      .map((student) => ({ uid: student.uid, name: student.name }))
-      .sort((a, b) => (allStudentsMap[b.uid]?.order ?? -1) - (allStudentsMap[a.uid]?.order ?? -1)),
+    availableStudents: listAvailableGrowthStudents(allStudentsMap, managedUids),
     allStudentsMap,
     studentGearDataMap,
   };
@@ -247,11 +247,17 @@ export async function loadDeferredGrowthPlannerData(
   userId: number,
   options: GrowthDataLoadOptions = {},
 ): Promise<DeferredGrowthLayoutLoaderData> {
-  const coreData = await loadGrowthPlannerCoreData(env, userId);
+  // Only the planner screen sorts, so the sort choice is read here and not for the resource pages.
+  const [coreData, sort] = await Promise.all([
+    loadGrowthPlannerCoreData(env, userId),
+    getGrowthPlannerSortOrder(env, userId),
+  ]);
 
   return {
     managedStudents: withResourceRequirements(coreData.managedStudents, null),
     availableStudents: coreData.availableStudents,
+    sortOrder: sort.sortOrder,
+    sortOrderStored: sort.stored,
     resourceRequirements: loadGrowthResourceRequirements(env, coreData, options),
   };
 }
