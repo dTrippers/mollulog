@@ -157,7 +157,7 @@ export default function PickupStudentPicker({
                     disabled={full}
                     onClick={() => setOpen((prev) => !prev)}
                     className={cn(
-                      "flex aspect-[5/6] w-full cursor-pointer items-center justify-center rounded-md bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-v2-inset",
+                      "flex aspect-[5/6] w-full cursor-pointer items-center justify-center rounded-md bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-v2-inset v2-interaction-transition",
                       v2FocusRing,
                     )}
                   >
@@ -195,7 +195,7 @@ export default function PickupStudentPicker({
                           type="button"
                           onClick={() => add(option.uid)}
                           className={cn(
-                            "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-left hover:bg-v2-hover",
+                            "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-left hover:bg-v2-hover v2-interaction-transition",
                             v2FocusRing,
                           )}
                         >
@@ -251,8 +251,8 @@ function PickupChoiceChip({
       className={cn(
         "mt-1 flex min-h-7 w-full cursor-pointer items-center justify-center gap-0.5 rounded-md px-1 text-[0.6875rem] font-semibold tracking-tight whitespace-nowrap active:opacity-80",
         offPickup
-          ? "bg-v2-surface text-v2-fg shadow-xs ring-1 ring-v2-control-border-strong ring-inset hover:bg-v2-hover"
-          : "bg-v2-selected text-v2-on-selected hover:opacity-90",
+          ? "bg-v2-surface text-v2-fg shadow-xs ring-1 ring-v2-control-border-strong ring-inset hover:bg-v2-hover v2-interaction-transition"
+          : "bg-v2-selected text-v2-on-selected hover:opacity-90 v2-interaction-transition",
         v2FocusRing,
       )}
     >

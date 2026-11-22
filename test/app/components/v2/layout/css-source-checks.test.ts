@@ -144,7 +144,7 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     expect(sheetSource).not.toContain("transition-[transform,opacity]");
   });
 
-  it("V2: only sheets, popovers, dropdown chevrons, select icon alignment, and the opt-in student thumbnail hover use translate, scale, or rotate utilities", () => {
+  it("V2: only sheets, popovers, dropdown chevrons, and select icon alignment use translate, scale, or rotate utilities", () => {
     const componentRoot = join(process.cwd(), "app/components/v2");
     const tsxFiles = readdirSync(componentRoot, { recursive: true, encoding: "utf8" }).filter((file) =>
       file.endsWith(".tsx"),
@@ -153,7 +153,6 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     const usingFiles = tsxFiles.filter((file) => motionUtility.test(readFileSync(join(componentRoot, file), "utf8")));
     expect(usingFiles.sort()).toEqual([
       "features/students/FilterGroupDisclosure.tsx",
-      "features/students/StudentThumb.tsx",
       "layout/PanelSheet.tsx",
       "primitives/Popover.tsx",
       "primitives/Select.tsx",
@@ -177,6 +176,21 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     expect(popoverMotionClasses.length).toBeGreaterThan(0);
     expect(popoverMotionClasses.every((className) => className.includes("motion-safe:"))).toBe(true);
     expect(popoverSource).toContain("duration-v2-base ease-v2-enter");
+  });
+
+  it("V2b: hover never moves an element, and a thumbnail fades only under a fine pointer", () => {
+    // Hand-written rules escape the class-string guard, so a :hover rule here must not animate or transform.
+    const hoverRules = [...css.matchAll(/([^{}]*:hover[^{}]*)\{([^{}]*)\}/g)];
+    const moving = hoverRules.filter(([, , body]) => /\b(?:animation|transform|translate|scale|rotate)\s*:/.test(body));
+    expect(moving.map(([, selector]) => selector.trim())).toEqual([]);
+    // A touch leaves :hover on the tapped thumbnail, which would stay dimmed in a selection grid.
+    const thumbSource = readFileSync(
+      join(process.cwd(), "app/components/v2/features/students/StudentThumb.tsx"),
+      "utf8",
+    );
+    expect(thumbSource).toContain(
+      '"[@media(hover:hover)_and_(pointer:fine)]:hover:opacity-80 v2-interaction-transition"',
+    );
   });
 
   it("V3: the panel section uses block padding, and only the collapsible header keeps the row minimum", () => {

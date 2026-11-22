@@ -262,7 +262,7 @@ function ChangedValues({ changes, itemNamesByUid }: { changes: Change[]; itemNam
             aria-controls={detailsId}
             onClick={() => setExpanded(!expanded)}
             className={cn(
-              "mt-1 cursor-pointer rounded-sm text-xs text-v2-fg-secondary underline hover:text-v2-fg",
+              "mt-1 cursor-pointer rounded-sm text-xs text-v2-fg-secondary underline hover:text-v2-fg v2-interaction-transition",
               v2FocusRing,
             )}
           >

@@ -131,7 +131,7 @@ export function FeedPost({
           {post.author ? (
             <Link
               to={`/@${post.author.username}`}
-              className="min-w-0 truncate text-sm font-bold text-v2-fg hover:underline"
+              className="min-w-0 truncate text-sm font-bold text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition"
             >
               {authorName}
             </Link>
@@ -248,7 +248,7 @@ export function FeedPost({
                 aria-expanded={commentsOpen}
                 aria-label={`댓글 ${commentCount}개`}
                 className={cn(
-                  "-ml-1.5 inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-[0.8125rem] tabular-nums hover:bg-v2-hover hover:text-v2-fg",
+                  "-ml-1.5 inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-[0.8125rem] tabular-nums hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
                   commentsOpen ? "text-v2-fg" : "text-v2-fg-tertiary",
                   v2FocusRing,
                 )}

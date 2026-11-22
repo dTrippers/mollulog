@@ -94,7 +94,7 @@ export function EventShopPicker({
               }
             }}
             className={cn(
-              "flex items-center justify-between gap-3 rounded-md px-2.5 py-2 hover:bg-v2-hover",
+              "flex items-center justify-between gap-3 rounded-md px-2.5 py-2 hover:bg-v2-hover v2-interaction-transition",
               current && "bg-v2-inset",
               v2FocusRing,
             )}
@@ -134,7 +134,7 @@ export function EventShopPicker({
         aria-haspopup="dialog"
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          "flex min-h-v2-row-min w-full items-center justify-between gap-3 rounded-md text-left text-v2-fg hover:bg-v2-hover",
+          "flex min-h-v2-row-min w-full items-center justify-between gap-3 rounded-md text-left text-v2-fg hover:bg-v2-hover v2-interaction-transition",
           v2FocusRing,
         )}
       >
@@ -162,7 +162,7 @@ export function EventShopPicker({
         aria-haspopup="dialog"
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          "flex min-h-v2-row-min w-full items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-left text-v2-fg hover:bg-v2-hover",
+          "flex min-h-v2-row-min w-full items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-left text-v2-fg hover:bg-v2-hover v2-interaction-transition",
           v2FocusRing,
         )}
       >

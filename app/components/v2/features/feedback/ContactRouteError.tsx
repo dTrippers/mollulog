@@ -22,7 +22,7 @@ export function ContactRouteError() {
           <div className="mt-v2-group-gap flex flex-wrap items-center gap-2">
             <Link
               to={destination}
-              className={`${v2FocusRing} inline-flex min-h-v2-control-min items-center rounded-md text-sm font-medium text-v2-fg underline underline-offset-4 hover:text-v2-fg-secondary`}
+              className={`${v2FocusRing} inline-flex min-h-v2-control-min items-center rounded-md text-sm font-medium text-v2-fg underline underline-offset-4 hover:text-v2-fg-secondary v2-interaction-transition`}
             >
               {linkLabel}
             </Link>

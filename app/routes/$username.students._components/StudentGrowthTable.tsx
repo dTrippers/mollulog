@@ -327,7 +327,7 @@ export function StudentGrowthTable({
                     aria-label={`${fullStudentName(row.name)} 학생부`}
                     {...getV2LinkTransitionProps("forward")}
                     className={cn(
-                      "inline-flex size-6 items-center justify-center rounded-md text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg",
+                      "inline-flex size-6 items-center justify-center rounded-md text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
                       v2FocusRing,
                     )}
                   >
@@ -363,7 +363,7 @@ export function StudentGrowthTable({
                   "min-h-7 cursor-pointer truncate rounded-md px-1 text-xs font-medium",
                   candidate.key === tab.key
                     ? "bg-v2-surface text-v2-fg shadow-sm"
-                    : "text-v2-fg-secondary hover:bg-v2-hover",
+                    : "text-v2-fg-secondary hover:bg-v2-hover v2-interaction-transition",
                   v2FocusRing,
                 )}
               >

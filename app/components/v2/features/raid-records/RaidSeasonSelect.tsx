@@ -58,7 +58,7 @@ export function RaidSeasonSelect({
         aria-label={value ? `시즌 #${value.seasonIndex} ${value.boss.name}, 바꾸기` : "시즌 선택"}
         onClick={() => setOpen((current) => !current)}
         className={cn(
-          "relative flex min-h-11 w-full max-w-[28.75rem] cursor-pointer items-center gap-2 overflow-hidden rounded-md border border-v2-control-border bg-v2-surface py-1.5 pr-2 pl-3 text-left hover:border-v2-control-border-strong",
+          "relative flex min-h-11 w-full max-w-[28.75rem] cursor-pointer items-center gap-2 overflow-hidden rounded-md border border-v2-control-border bg-v2-surface py-1.5 pr-2 pl-3 text-left hover:border-v2-control-border-strong v2-interaction-transition",
           invalid && "border-v2-danger bg-v2-danger-subtle",
           v2FocusRing,
         )}
@@ -123,7 +123,7 @@ export function RaidSeasonSelect({
                   <span
                     aria-hidden="true"
                     className={cn(
-                      "pointer-events-none absolute inset-0 group-hover:bg-v2-hover",
+                      "pointer-events-none absolute inset-0 group-hover:bg-v2-hover v2-interaction-transition",
                       selected && "bg-v2-hover before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-v2-accent",
                     )}
                   />

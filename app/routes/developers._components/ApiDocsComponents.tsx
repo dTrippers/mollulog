@@ -69,7 +69,7 @@ export function EndpointRow({
 }) {
   return (
     <details open={initiallyOpen} className="group border-b border-v2-divider last:border-b-0">
-      <summary className="grid cursor-pointer list-none grid-cols-[3.25rem_minmax(0,1fr)_1rem] items-center gap-x-3 rounded-md px-2 py-v2-row-y hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus sm:grid-cols-[3.5rem_minmax(0,1fr)_auto_1rem]">
+      <summary className="grid cursor-pointer list-none grid-cols-[3.25rem_minmax(0,1fr)_1rem] items-center gap-x-3 rounded-md px-2 py-v2-row-y hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus sm:grid-cols-[3.5rem_minmax(0,1fr)_auto_1rem] v2-interaction-transition">
         <span className="font-mono text-xs font-bold text-v2-fg-tertiary">{method}</span>
         <code className="min-w-0 overflow-x-auto whitespace-nowrap font-mono text-sm">{path}</code>
         <span className="col-start-2 row-start-2 whitespace-normal text-sm text-v2-fg-secondary sm:col-auto sm:row-auto sm:whitespace-nowrap">

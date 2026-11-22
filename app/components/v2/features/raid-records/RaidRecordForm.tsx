@@ -777,7 +777,7 @@ function DefenseTypeTabs({
             onClick={() => onChange(defenseType)}
             className={cn(
               "flex min-h-v2-row-min shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-3 text-sm whitespace-nowrap",
-              selected ? "border-v2-link font-semibold text-v2-fg" : "border-transparent text-v2-fg-secondary hover:text-v2-fg",
+              selected ? "border-v2-link font-semibold text-v2-fg" : "border-transparent text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
               v2FocusRing,
             )}
           >

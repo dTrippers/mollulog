@@ -55,7 +55,7 @@ export function SearchInput({
             onChange("");
             inputRef.current?.focus();
           }}
-          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg active:bg-v2-filled-hover disabled:cursor-not-allowed disabled:text-v2-fg-disabled"
+          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg active:bg-v2-filled-hover disabled:cursor-not-allowed disabled:text-v2-fg-disabled v2-interaction-transition"
         >
           <XMarkIcon className="size-4" aria-hidden="true" />
         </button>

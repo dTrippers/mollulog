@@ -28,8 +28,8 @@ export function SegmentedControl<T extends string>({
             key={option.value}
             className={cn(
               "relative inline-flex min-h-7 cursor-pointer items-center justify-center gap-1.5 rounded px-2.5 text-sm font-medium whitespace-nowrap has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-v2-focus",
-              selected ? "bg-v2-surface font-semibold text-v2-fg shadow-sm" : "text-v2-fg-secondary hover:text-v2-fg",
-              option.disabled && "cursor-not-allowed text-v2-fg-disabled hover:text-v2-fg-disabled",
+              selected ? "bg-v2-surface font-semibold text-v2-fg shadow-sm" : "text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
+              option.disabled && "cursor-not-allowed text-v2-fg-disabled hover:text-v2-fg-disabled v2-interaction-transition",
             )}
           >
             <input

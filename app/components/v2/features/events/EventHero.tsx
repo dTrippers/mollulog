@@ -187,7 +187,7 @@ export function EventHero({
           <button
             type="button"
             aria-label={playRequested ? (muted ? "동영상 소리 켜기" : "동영상 음소거") : "동영상 재생"}
-            className="absolute top-0 right-0 z-20 m-4 flex size-8 items-center justify-center rounded-full bg-v2-scrim text-v2-on-media backdrop-blur-sm hover:opacity-80"
+            className="absolute top-0 right-0 z-20 m-4 flex size-8 items-center justify-center rounded-full bg-v2-scrim text-v2-on-media backdrop-blur-sm hover:opacity-80 v2-interaction-transition"
             onClick={() => (playRequested ? setMuted((value) => !value) : setPlayRequested(true))}
           >
             {!playRequested ? (
@@ -261,7 +261,7 @@ function EventVideoRail({
             type="button"
             aria-pressed={currentVideo?.youtube === video.youtube}
             className={cn(
-              "-mx-1 shrink-0 rounded-lg px-4 py-2 text-sm text-v2-fg-secondary transition-colors hover:bg-v2-hover",
+              "-mx-1 shrink-0 rounded-lg px-4 py-2 text-sm text-v2-fg-secondary hover:bg-v2-hover v2-interaction-transition",
               currentVideo?.youtube === video.youtube && "bg-v2-hover font-bold text-v2-fg",
             )}
             onClick={() => onSelect(video)}
@@ -275,7 +275,7 @@ function EventVideoRail({
           type="button"
           aria-label="이전 동영상"
           onClick={() => step(-1)}
-          className="rounded-full p-1 text-v2-fg hover:bg-v2-hover"
+          className="rounded-full p-1 text-v2-fg hover:bg-v2-hover v2-interaction-transition"
         >
           <ChevronDoubleLeftIcon className="size-6" />
         </button>
@@ -285,7 +285,7 @@ function EventVideoRail({
           type="button"
           aria-label="다음 동영상"
           onClick={() => step(1)}
-          className="rounded-full p-1 text-v2-fg hover:bg-v2-hover"
+          className="rounded-full p-1 text-v2-fg hover:bg-v2-hover v2-interaction-transition"
         >
           <ChevronDoubleRightIcon className="size-6" />
         </button>

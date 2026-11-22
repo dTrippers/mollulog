@@ -81,7 +81,7 @@ export function CouponCard({ coupon, loadedAt, now, record, highlighted = false 
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
-              "inline-flex items-center gap-1 self-start rounded-sm text-[0.8125rem] text-v2-fg-secondary underline decoration-v2-divider underline-offset-[3px] hover:text-v2-fg",
+              "inline-flex items-center gap-1 self-start rounded-sm text-[0.8125rem] text-v2-fg-secondary underline decoration-v2-divider underline-offset-[3px] hover:text-v2-fg v2-interaction-transition",
               v2FocusRing,
             )}
           >

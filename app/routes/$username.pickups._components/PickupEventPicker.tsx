@@ -153,7 +153,7 @@ export default function PickupEventPicker({
         aria-label={current ? undefined : "이벤트 선택"}
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          "flex min-h-14 w-full items-center gap-3 rounded-md bg-v2-surface px-3 py-2 text-left ring-1 ring-v2-control-border hover:bg-v2-hover",
+          "flex min-h-14 w-full items-center gap-3 rounded-md bg-v2-surface px-3 py-2 text-left ring-1 ring-v2-control-border hover:bg-v2-hover v2-interaction-transition",
           v2FocusRing,
         )}
       >
@@ -203,7 +203,7 @@ export default function PickupEventPicker({
                   setQuery("");
                 }}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left hover:bg-v2-hover",
+                  "flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left hover:bg-v2-hover v2-interaction-transition",
                   event.uid === value && "bg-v2-inset",
                   v2FocusRing,
                 )}

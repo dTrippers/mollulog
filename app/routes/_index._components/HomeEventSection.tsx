@@ -80,7 +80,7 @@ function EntryPoints({ points, className }: { points: HomeEntryPoint[]; classNam
           <li key={point.key} className="flex min-w-0 flex-auto">
             <Link
               to={point.href}
-              className="inline-flex h-8 w-full cursor-pointer md:h-auto md:min-h-v2-row-min items-center justify-center gap-1 rounded-md bg-v2-inset px-1.5 text-[0.8125rem] font-medium whitespace-nowrap text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-filled-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none md:flex-none md:w-auto md:gap-1.5 md:px-3 md:text-sm"
+              className="inline-flex h-8 w-full cursor-pointer md:h-auto md:min-h-v2-row-min items-center justify-center gap-1 rounded-md bg-v2-inset px-1.5 text-[0.8125rem] font-medium whitespace-nowrap text-v2-fg hover:bg-v2-filled-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus md:flex-none md:w-auto md:gap-1.5 md:px-3 md:text-sm v2-interaction-transition"
             >
               <Icon aria-hidden="true" className="size-3.5 shrink-0 md:size-4" />
               <span>{point.label}</span>
@@ -143,7 +143,7 @@ function EventHero({
           <h3 className="text-lg font-semibold break-keep text-v2-on-media md:text-2xl">
             <Link
               to={`/events/${content.uid}`}
-              className="rounded-sm whitespace-pre-line underline decoration-transparent underline-offset-4 transition-colors duration-v2-fast ease-v2-standard hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+              className="rounded-sm whitespace-pre-line underline decoration-transparent underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
             >
               <TrailingIconText text={content.name}>
                 <ChevronRightIcon aria-hidden="true" className="ml-1 inline-block size-4 align-middle" />
@@ -167,7 +167,7 @@ function TogetherTile({ content, now, timeZone }: { content: TimelineContent; no
   return (
     <Link
       to={`/events/${content.uid}`}
-      className="flex min-w-0 gap-v2-media-gap rounded-lg bg-v2-surface p-2 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none md:p-2.5"
+      className="flex min-w-0 gap-v2-media-gap rounded-lg bg-v2-surface p-2 hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus md:p-2.5 v2-interaction-transition"
     >
       <div className="relative aspect-[3/2] w-20 shrink-0 overflow-hidden rounded-md bg-v2-inset md:w-24">
         {content.imageUrl && haloMode ? (

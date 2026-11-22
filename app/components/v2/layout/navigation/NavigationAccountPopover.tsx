@@ -150,7 +150,7 @@ export function NavigationAccountPopover({
         <button
           type="button"
           className={cn(
-            "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
             v2FocusRing,
           )}
           onClick={onShowSignIn}
@@ -163,7 +163,7 @@ export function NavigationAccountPopover({
         <button
           type="button"
           className={cn(
-            "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
             v2FocusRing,
           )}
           onClick={() => toggleDarkMode(!darkMode)}
@@ -178,7 +178,7 @@ export function NavigationAccountPopover({
         <button
           type="button"
           className={cn(
-            "flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            "flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
             v2FocusRing,
           )}
           onClick={onShowSignIn}
@@ -190,7 +190,7 @@ export function NavigationAccountPopover({
         <button
           type="button"
           className={cn(
-            "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
             v2FocusRing,
           )}
           onClick={() => toggleDarkMode(!darkMode)}
@@ -209,7 +209,7 @@ export function NavigationAccountPopover({
         ref={triggerRef}
         type="button"
         className={cn(
-          "relative flex min-h-10 w-full items-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+          "relative flex min-h-10 w-full items-center rounded-md text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
           variant === "expanded"
             ? "gap-2 px-2 py-1.5 text-left text-sm font-medium"
             : "flex-col justify-center gap-0.5 px-1",
@@ -263,7 +263,7 @@ export function NavigationAccountPopover({
               to={profileAction.to}
               aria-current={profileAction.isActive ? "page" : undefined}
               className={cn(
-                "flex items-center gap-2 rounded-md px-2 py-2 text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover",
+                "flex items-center gap-2 rounded-md px-2 py-2 text-v2-fg hover:bg-v2-hover v2-interaction-transition",
                 v2FocusRing,
               )}
             >
@@ -282,7 +282,7 @@ export function NavigationAccountPopover({
                 to={action.to}
                 aria-current={action.isActive ? "page" : undefined}
                 className={cn(
-                  "flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm font-normal text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover",
+                  "flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm font-normal text-v2-fg hover:bg-v2-hover v2-interaction-transition",
                   v2FocusRing,
                 )}
               >
@@ -320,7 +320,7 @@ export function NavigationAccountPopover({
             <Link
               to={signOutAction.to}
               className={cn(
-                "flex min-h-10 items-center rounded-md px-2 py-2 text-sm font-normal text-v2-danger transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover",
+                "flex min-h-10 items-center rounded-md px-2 py-2 text-sm font-normal text-v2-danger hover:bg-v2-hover v2-interaction-transition",
                 v2FocusRing,
               )}
             >
@@ -350,11 +350,11 @@ function HaloModeButton({
         className={
           variant === "rail"
             ? cn(
-                "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+                "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
                 v2FocusRing,
               )
             : cn(
-                "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+                "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
                 v2FocusRing,
               )
         }
