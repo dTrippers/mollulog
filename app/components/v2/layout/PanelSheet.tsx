@@ -38,6 +38,15 @@ export function PanelSheet({
 }: PanelSheetProps) {
   const { stacked, sheetPanelId, closeSheet, onSheetExited, revealRequest } = useV2Page();
   const [phase, setPhase] = useState<PanelPhase>(disabled || (collapsible && !defaultExpanded) ? "collapsed" : "open");
+  // A panel without a toggle cannot be opened by hand, so it opens when it stops being disabled, such as after a
+  // failed list loads on retry.
+  const [wasDisabled, setWasDisabled] = useState(disabled);
+  if (wasDisabled !== disabled) {
+    setWasDisabled(disabled);
+    if (!disabled && !collapsible) {
+      setPhase("open");
+    }
+  }
   const [highlightKey, setHighlightKey] = useState(0);
   const [pendingReveal, setPendingReveal] = useState<number | null>(null);
   // The enter and exit animations run only after a user or program change, so the first paint does not animate.
