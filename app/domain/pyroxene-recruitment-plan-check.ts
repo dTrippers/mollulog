@@ -70,8 +70,8 @@ export type RecruitmentPlanCheckInput = {
   scheduleItems: PyroxeneScheduleItem[];
   options: PyroxeneCalculationOptions;
   collectedSourceKeys: string[];
-  // Null when the owned tiers or held eleph could not be read; every target then starts unowned.
-  ownedSnapshot: RecruitmentOwnedSnapshot | null;
+  // The account's owned tiers and held eleph; events that began before it was read start unowned.
+  ownedSnapshot: RecruitmentOwnedSnapshot;
 };
 
 export type RecruitmentPlanCheckRange = { low: number; high: number };
@@ -82,7 +82,7 @@ export type RecruitmentPlanCheckTarget = {
   targetTier: RecruitmentTargetTier;
   // The owned state the plan starts from, or null when owned states do not apply to this event.
   owned: RecruitmentOwnedState | null;
-  // Eleph still lacking for the target tier, from the owned state (or ★3 with no eleph when unowned).
+  // Eleph still lacking for the target tier, from the owned state (or ★3 when unowned); eleph not entered counts as none.
   // Null for a student that does not start at ★3, whose growth the plan does not count in eleph.
   remainingEleph: number | null;
   // Copies the plan recruits to reach the target tier.
@@ -120,8 +120,6 @@ export type RecruitmentPlanCheck =
   | {
       status: "available";
       resourcesInputAt: UtcIsoString;
-      // False when the owned state could not be read, so every target was counted as unowned.
-      ownedStatesAvailable: boolean;
       events: RecruitmentPlanCheckEvent[];
     };
 
@@ -134,7 +132,7 @@ export function buildRecruitmentPlanCheck(input: RecruitmentPlanCheckInput): Rec
   const { resources } = input;
   if (resources.inputAt === null) return { status: "input_required" };
 
-  const ownedSnapshot = input.ownedSnapshot ?? undefined;
+  const { ownedSnapshot } = input;
   const timeline = buildTimeline(
     { pyroxene: resources.pyroxene, oneTimeTicket: resources.oneTimeTicket, tenTimeTicket: resources.tenTimeTicket },
     new Date(resources.inputAt),
@@ -189,7 +187,7 @@ export function buildRecruitmentPlanCheck(input: RecruitmentPlanCheckInput): Rec
       targets: getEventPickupTargets(event).flatMap((recruitment) => {
         const student = recruitment.student;
         if (!student) return [];
-        const owned = ownedStates ? (ownedStates[student.uid] ?? { tier: null, eleph: 0 }) : null;
+        const owned = ownedStates ? (ownedStates[student.uid] ?? { tier: null, eleph: null }) : null;
         const targetTier = getPickupTargetTier(recruitment, targetTiers);
         return [
           {
@@ -209,7 +207,6 @@ export function buildRecruitmentPlanCheck(input: RecruitmentPlanCheckInput): Rec
   return {
     status: "available",
     resourcesInputAt: toUtcIso(resources.inputAt),
-    ownedStatesAvailable: input.ownedSnapshot !== null,
     events,
   };
 }

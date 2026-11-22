@@ -203,6 +203,7 @@ UI copy uses these terms for these game and product concepts. Add a term here on
 | 픽업 외 모집 가능 | A student also obtainable outside its pickup | 픽업 아님 |
 | 관심 학생 | A student the user marked; removing it is 관심 학생에서 제외 | 목표 해제 |
 | 보유 수량, 현재 성급, 목표 성급 | What the user owns now, and the tier they have and want | 현재, 목표 (alone) |
+| 모집한 학생, 모집하지 않은 학생 (미모집) | Whether the account has recruited a student | 보유 학생, 미보유 |
 
 ### Icons and images
 

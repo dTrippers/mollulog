@@ -1226,6 +1226,11 @@ describe("recruitment target copies from the owned state", () => {
       readAt,
       states: { a: { tier: 4, eleph: 30 }, b: { tier: null, eleph: 120 } },
     });
+    // Eleph without an inventory record is null (not entered); a recorded 0 stays 0.
+    expect(buildRecruitmentOwnedSnapshot(readAt, ["a", "b", "c"], { a: 4 }, { b: 0 })).toEqual({
+      readAt,
+      states: { a: { tier: 4, eleph: null }, b: { tier: null, eleph: 0 } },
+    });
     expect(buildRecruitmentOwnedSnapshot(readAt, ["a"], null, {})).toBeNull();
     expect(buildRecruitmentOwnedSnapshot(readAt, ["a"], { a: 4 }, null)).toBeNull();
   });

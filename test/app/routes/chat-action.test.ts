@@ -106,7 +106,15 @@ function makeDependencies(overrides: Partial<ChatActionDependencies> = {}): Chat
     readConsent: async () => new Date("2026-10-01T00:00:00.000Z"),
     consent: async () => new Date(),
     revokeConsent: async () => undefined,
-    buildSnapshot: async () => ({ version: 1, students: [], favorites: [], formations: [] }),
+    buildSnapshot: async () => ({
+      version: 2 as const,
+      students: [],
+      favorites: [],
+      formations: [],
+      resources: null,
+      accountLevel: null,
+      recruitmentCheck: { status: "input_required" as const },
+    }),
     runQuestion: async () => ({ ok: true, result: answer }),
     renderAnswer: (answer) => answer,
     startMessage: async (input) => started([], input.question),
@@ -384,7 +392,10 @@ describe("AI chatbot page and resource action", () => {
   it("builds a public request from server fields and stored history, ignoring client history", async () => {
     const runQuestion = jest.fn(async (_question: QuestionRequest) => ({ ok: true as const, result: answer }));
     const buildSnapshot = jest.fn(async (_senseiId: number) => ({
-      version: 1 as const,
+      version: 2 as const,
+      resources: null,
+      accountLevel: null,
+      recruitmentCheck: { status: "input_required" as const },
       students: [],
       favorites: [],
       formations: [],
@@ -609,7 +620,10 @@ describe("AI chatbot page and resource action", () => {
 
   it("sends a member profile only after session, stored consent, and client opt-in all pass", async () => {
     const snapshot: MemberSnapshot = {
-      version: 1,
+      version: 2,
+      resources: null,
+      accountLevel: null,
+      recruitmentCheck: { status: "input_required" as const },
       students: [],
       favorites: [{ studentUid: "student-a", contentId: "pickup-a" }],
       formations: [
@@ -658,7 +672,10 @@ describe("AI chatbot page and resource action", () => {
 
   it("requires a session and persisted consent before building member data", async () => {
     const buildSnapshot = jest.fn(async (_senseiId: number) => ({
-      version: 1 as const,
+      version: 2 as const,
+      resources: null,
+      accountLevel: null,
+      recruitmentCheck: { status: "input_required" as const },
       students: [],
       favorites: [],
       formations: [],
@@ -722,12 +739,15 @@ describe("AI chatbot page and resource action", () => {
     expect(runQuestion).not.toHaveBeenCalled();
   });
 
-  it("rejects a snapshot above 64 KiB before the AL1S call", async () => {
+  it("rejects a snapshot above 128 KiB before the AL1S call", async () => {
     const oversized: MemberSnapshot = {
-      version: 1,
+      version: 2,
+      resources: null,
+      accountLevel: null,
+      recruitmentCheck: { status: "input_required" as const },
       students: [
         {
-          studentUid: "x".repeat(65_537),
+          studentUid: "x".repeat(131_073),
           star: 5,
           weaponStar: 0,
           level: null,
@@ -735,6 +755,7 @@ describe("AI chatbot page and resource action", () => {
           equipmentTiers: [null, null, null],
           equipSpecial: null,
           relationshipLevel: null,
+          eleph: null,
         },
       ],
       favorites: [],
