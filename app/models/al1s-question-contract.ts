@@ -52,7 +52,6 @@ export type MemberSnapshotRecruitmentCheck =
   | {
       status: "available";
       resourcesInputAt: string;
-      ownedStatesAvailable: boolean;
       events: Array<{
         plannerEventUid: string;
         eventName: string;

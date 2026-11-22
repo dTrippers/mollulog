@@ -65,7 +65,8 @@ function checkInput(overrides: Partial<RecruitmentPlanCheckInput> = {}): Recruit
     scheduleItems: [eventA, eventB],
     options: toPyroxeneCalculationOptions(plannerOptions),
     collectedSourceKeys: [],
-    ownedSnapshot: null,
+    // Read when the resources were entered, before either event begins, with no owned students.
+    ownedSnapshot: { readAt: INPUT_AT, states: {} },
     ...overrides,
   };
 }
@@ -85,7 +86,7 @@ function timelineFor(input: RecruitmentPlanCheckInput) {
     input.collectedSourceKeys,
     undefined,
     input.resources.recruitmentStacks,
-    input.ownedSnapshot ?? undefined,
+    input.ownedSnapshot,
   );
 }
 
@@ -165,7 +166,6 @@ describe("buildRecruitmentPlanCheck", () => {
       ["event-b", { completed: false, expectedTrials: null, targetTiers: { [`${PICKUP_UID}-event-b`]: 9 } }],
     ]);
     const check = available(checkInput({ eventDataMap, ownedSnapshot }));
-    expect(check.ownedStatesAvailable).toBe(true);
 
     const [before, after] = check.events;
     // event-a began before the owned state was read, so it keeps the unowned start.
@@ -194,12 +194,16 @@ describe("buildRecruitmentPlanCheck", () => {
     ]);
   });
 
-  it("says when the owned state was unavailable and does not count eleph for a ★2 target", () => {
+  it("does not count eleph for a ★2 target", () => {
     const check = available(
       checkInput({ scheduleItems: [eventItem("event-c", "2026-07-02T00:00:00.000Z", "2026-07-09T00:00:00.000Z", 2)] }),
     );
-    expect(check.ownedStatesAvailable).toBe(false);
-    expect(check.events[0]?.targets[0]).toMatchObject({ owned: null, remainingEleph: null, copies: 1 });
+    expect(check.events[0]?.ownedApplied).toBe(true);
+    expect(check.events[0]?.targets[0]).toMatchObject({
+      owned: { tier: null, eleph: 0 },
+      remainingEleph: null,
+      copies: 1,
+    });
   });
 });
 

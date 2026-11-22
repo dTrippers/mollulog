@@ -70,8 +70,8 @@ export type RecruitmentPlanCheckInput = {
   scheduleItems: PyroxeneScheduleItem[];
   options: PyroxeneCalculationOptions;
   collectedSourceKeys: string[];
-  // Null when the owned tiers or held eleph could not be read; every target then starts unowned.
-  ownedSnapshot: RecruitmentOwnedSnapshot | null;
+  // The account's owned tiers and held eleph; events that began before it was read start unowned.
+  ownedSnapshot: RecruitmentOwnedSnapshot;
 };
 
 export type RecruitmentPlanCheckRange = { low: number; high: number };
@@ -120,8 +120,6 @@ export type RecruitmentPlanCheck =
   | {
       status: "available";
       resourcesInputAt: UtcIsoString;
-      // False when the owned state could not be read, so every target was counted as unowned.
-      ownedStatesAvailable: boolean;
       events: RecruitmentPlanCheckEvent[];
     };
 
@@ -134,7 +132,7 @@ export function buildRecruitmentPlanCheck(input: RecruitmentPlanCheckInput): Rec
   const { resources } = input;
   if (resources.inputAt === null) return { status: "input_required" };
 
-  const ownedSnapshot = input.ownedSnapshot ?? undefined;
+  const { ownedSnapshot } = input;
   const timeline = buildTimeline(
     { pyroxene: resources.pyroxene, oneTimeTicket: resources.oneTimeTicket, tenTimeTicket: resources.tenTimeTicket },
     new Date(resources.inputAt),
@@ -209,7 +207,6 @@ export function buildRecruitmentPlanCheck(input: RecruitmentPlanCheckInput): Rec
   return {
     status: "available",
     resourcesInputAt: toUtcIso(resources.inputAt),
-    ownedStatesAvailable: input.ownedSnapshot !== null,
     events,
   };
 }

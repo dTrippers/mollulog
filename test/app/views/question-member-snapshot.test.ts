@@ -39,13 +39,11 @@ describe("mapQuestionSnapshotRecruitmentCheck", () => {
     const mapped = mapQuestionSnapshotRecruitmentCheck({
       status: "available",
       resourcesInputAt: "2026-11-10T00:00:00.000Z",
-      ownedStatesAvailable: true,
       events: [checkEvent],
     });
     expect(mapped).toEqual({
       status: "available",
       resourcesInputAt: "2026-11-10T00:00:00.000Z",
-      ownedStatesAvailable: true,
       events: [
         {
           plannerEventUid: "5th-fes",

@@ -43,7 +43,6 @@ export function mapQuestionSnapshotRecruitmentCheck(
   return {
     status: "available",
     resourcesInputAt: result.resourcesInputAt,
-    ownedStatesAvailable: result.ownedStatesAvailable,
     events: result.events.map(mapCheckEvent),
   };
 }
