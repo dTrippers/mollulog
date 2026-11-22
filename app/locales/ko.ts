@@ -501,6 +501,21 @@ export function getCardFlipRarity(rarity: number | null): (typeof cardFlipLocale
   return null;
 }
 
+export const boxGachaLocale = {
+  costLabel: "소비 재화",
+  rewardLabel: "획득 보상",
+  compositionTitle: "상자 구성",
+  roundTabsLabel: "회차",
+  roundsLabel: (rounds: number[]) => `${rounds.join("·")}회차`,
+  repeatsFromLabel: (round: number) => `${round}회차부터`,
+  drawCostLabel: "1회 비용",
+  drawCountLabel: "상자당 뽑기",
+  drawCountValue: (count: number) => `${count.toLocaleString("ko-KR")}회`,
+  boxCostLabel: "상자당 비용",
+  prizeTag: "당첨",
+  compositionInvalid: "정보를 불러오지 못했어요",
+};
+
 export function minigameDescription(minigameType: string): string | null {
   if (minigameType === "card_flip") {
     return cardFlipLocale.minigameDescription;

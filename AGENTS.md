@@ -48,6 +48,8 @@ activities, and plan events.
 - Never drop a table or column unless a preceding step has kept all of its data
   intact elsewhere. Retire an unused table with a `zzz_` rename, as described in
   [database](docs/data/database.md).
+- `docs/` records durable rules and structure only. Put runbooks, one-time
+  rollout or operator steps, and dated snapshots in the PR description or issue.
 - For local DB or runtime-environment troubleshooting, start with
   `mise exec -- pnpm dev:doctor`. A sandbox denial or timeout is not proof that
   PostgreSQL is unavailable: retry the same read-only check with the execution

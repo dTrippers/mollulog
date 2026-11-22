@@ -105,6 +105,27 @@ export type TreasureHuntConfig = {
   rounds: TreasureHuntRoundConfig[];
 };
 
+// One slot group of a box: `count` draws in the box pay `rewards` each. `isPrize` is the source flag, uninterpreted.
+export type BoxGachaItem = {
+  groupId: number;
+  displayOrder: number;
+  count: number;
+  isPrize: boolean;
+  rewards: RewardItem[];
+};
+
+export type BoxGachaRound = {
+  round: number;
+  drawCost: MinigamePayment;
+  drawCount: number;
+  items: BoxGachaItem[];
+};
+
+export type BoxGachaData =
+  | { status: "available"; loopRound: number | null; rounds: BoxGachaRound[] }
+  | { status: "unavailable" }
+  | { status: "invalid" };
+
 export type MinigameConfig = {
   minigameType:
     | "roguelike"
@@ -132,6 +153,7 @@ export type MinigameConfig = {
   cardFlip?: CardFlipData;
   roadPuzzle?: RoadPuzzleConfig | null;
   janken?: JankenConfig;
+  boxGacha?: BoxGachaData;
 };
 
 export type RoadPuzzleCoordinate = { x: number; y: number; z: number };

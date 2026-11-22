@@ -1,6 +1,6 @@
 # Database
 
-MolluLog의 runtime persistence는 PostgreSQL을 canonical store로 사용하며 Workers SSR/BFF에서 Hyperdrive를 거쳐 operation-scoped client로 접근합니다. D1은 final runtime binding이나 fallback store가 아니며, 기존 source table은 승인된 cutover 뒤 `zzz_` archive로만 보존합니다.
+MolluLog의 runtime persistence는 PostgreSQL을 canonical store로 사용하며 Workers SSR/BFF에서 Hyperdrive를 거쳐 operation-scoped client로 접근합니다.
 
 ## Stack
 
@@ -9,7 +9,7 @@ MolluLog의 runtime persistence는 PostgreSQL을 canonical store로 사용하며
 - ORM: Drizzle ORM with `drizzle-orm/node-postgres`
 - PostgreSQL schemas: `app/db/postgres/schema.ts`
 - PostgreSQL schema migrations: `db/postgres/migrations/*.sql`
-- Historical source/archive migrations: `db/migrations/*.sql`
+- Retired migrations from a former store: `db/migrations/*.sql` (do not add to or apply them)
 
 ## Where models are defined
 
@@ -41,7 +41,11 @@ This local command is separate from the production procedure below.
 
 Migration files use `yyyymmddhhmmss_{name}.sql` and are applied through the repository's approved PostgreSQL migration process. Apply and verify every required migration before deploying code that depends on the new schema. Runtime deploy commands never apply schema migrations automatically.
 
-The runtime does not provide D1 migration commands, D1 bindings, or a live D1 fallback. `db/migrations` remains historical source/archive material and must not be used for new runtime persistence.
+## Student state tables
+
+- The `nullable_semantics_enabled` value of the `default` row in `student_state_migration_control` selects how a student's current state and targets are written. Every writer runs inside `withStudentStateProjection` and branches on its `mode`.
+- On (`nullable`): writers use only the canonical tables `student_states` and `student_targets`, and each change adds a `student_state_audits` row. Production runs in this mode, and turning it on cannot be undone: fix a problem with a compatible forward change, never by switching it off. The legacy tables `recruited_students`, `student_growth`, and `relationship_levels` no longer receive production writes, so new student state belongs in the canonical tables.
+- Off (`legacy`): writers update the legacy tables and project them into the canonical tables. The shared local database runs in this mode.
 
 ## Retiring tables and columns
 
