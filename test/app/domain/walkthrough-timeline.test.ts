@@ -3,9 +3,12 @@ import {
   InvalidWalkthroughTimelineDocumentError,
   isWalkthroughTimelineVisibility,
   parseWalkthroughTimelineDocument,
+  toggleStartingSkillStudentUid,
   WALKTHROUGH_TIMELINE_DIFFICULTIES,
   WALKTHROUGH_TIMELINE_SCHEMA_VERSION,
   type WalkthroughTimelineDocument,
+  walkthroughSaveProblemMessage,
+  walkthroughSaveProblems,
 } from "~/domain/walkthrough-timeline";
 
 describe("walkthrough timeline visibility", () => {
@@ -184,5 +187,78 @@ describe("parseWalkthroughTimelineDocument", () => {
     const invalidSlot = validDocument();
     invalidSlot.parties[0].units = [{ slot: 6, studentUid: "student-1" }];
     expect(() => parseWalkthroughTimelineDocument(invalidSlot)).toThrow("올바르지 않아요");
+  });
+});
+
+describe("walkthroughSaveProblems", () => {
+  const context = { bossUid: "binah", terrain: "street", defenseType: "heavy", maxDifficulty: "torment" } as const;
+  const party = (units: { slot: number; studentUid: string | null }[], steps: WalkthroughTimelineDocument["parties"][number]["steps"] = []) => ({
+    uid: `party-${units.length}`,
+    order: 0,
+    startingSkillStudentUids: [],
+    units,
+    steps,
+  });
+  const messages = (title: string, document: Pick<WalkthroughTimelineDocument, "partySize" | "context" | "parties">) =>
+    walkthroughSaveProblems({ title, document }).map(walkthroughSaveProblemMessage);
+
+  it("accepts a titled guide whose every party has a striker", () => {
+    expect(messages("공략", { partySize: 6, context, parties: [party([{ slot: 0, studentUid: "a" }])] })).toEqual([]);
+  });
+
+  it("asks for a title, a boss, and a party", () => {
+    expect(messages("  ", { partySize: 6, context: { ...context, bossUid: "" }, parties: [] })).toEqual([
+      "제목을 입력해 주세요.",
+      "보스를 선택해 주세요.",
+      "파티를 추가해 주세요.",
+    ]);
+  });
+
+  it("asks for students in an empty party and a striker in a party of specials only", () => {
+    expect(
+      messages("공략", {
+        partySize: 6,
+        context,
+        parties: [party([]), party([{ slot: 4, studentUid: "special" }]), party([{ slot: 3, studentUid: "striker" }])],
+      }),
+    ).toEqual(["파티 1에 학생을 편성해 주세요.", "파티 2에 스트라이커를 1명 이상 편성해 주세요."]);
+  });
+
+  it("counts strikers by the party size of the boss", () => {
+    expect(messages("공략", { partySize: 10, context, parties: [party([{ slot: 5, studentUid: "a" }])] })).toEqual([]);
+    expect(messages("공략", { partySize: 10, context, parties: [party([{ slot: 6, studentUid: "a" }])] })).toEqual([
+      "파티 1에 스트라이커를 1명 이상 편성해 주세요.",
+    ]);
+  });
+
+  it("asks for a skill in an empty step and text in a blank free-text skill", () => {
+    expect(
+      messages("공략", {
+        partySize: 6,
+        context,
+        parties: [
+          party(
+            [{ slot: 0, studentUid: "a" }],
+            [
+              { uid: "s1", order: 0, kind: "actions", marker: { kind: "manual", value: "3:50" }, actions: [] },
+              { uid: "s2", order: 1, kind: "actions", actions: [{ kind: "free_text", text: "  " }] },
+              { uid: "s3", order: 2, kind: "actions", actions: [{ kind: "student_ex", studentUid: "a" }] },
+              { uid: "s4", order: 3, kind: "divider", actions: [], note: "2페이즈" },
+            ],
+          ),
+        ],
+      }),
+    ).toEqual([
+      "파티 1 타임라인 1단계에 스킬을 추가해 주세요.",
+      "파티 1 타임라인 2단계의 빈 내용을 채우거나 지워 주세요.",
+    ]);
+  });
+});
+
+describe("toggleStartingSkillStudentUid", () => {
+  it("adds to the end, removes a chosen student, and stops at the limit", () => {
+    expect(toggleStartingSkillStudentUid(["a"], "b", 3)).toEqual(["a", "b"]);
+    expect(toggleStartingSkillStudentUid(["a", "b", "c"], "b", 3)).toEqual(["a", "c"]);
+    expect(toggleStartingSkillStudentUid(["a", "b", "c"], "d", 3)).toEqual(["a", "b", "c"]);
   });
 });

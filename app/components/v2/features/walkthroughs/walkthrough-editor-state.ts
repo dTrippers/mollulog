@@ -99,13 +99,3 @@ export function isActionOutsideParty(action: TimelineAction, partyStudentUids: R
     (action.targetStudentUid ? !partyStudentUids.has(action.targetStudentUid) : false)
   );
 }
-
-// A step that has nothing in it yet: no timing, no note, and no skill.
-export function isBlankStep(step: TimelineStep): boolean {
-  return (
-    step.kind === "actions" &&
-    step.actions.length === 0 &&
-    !step.marker?.value?.trim() &&
-    !step.note?.trim()
-  );
-}
