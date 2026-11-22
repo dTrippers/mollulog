@@ -48,21 +48,29 @@ export async function loadPyroxenePlannerAccount(
     content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
   );
 
+  // The owned state covers every pickup student on the schedule, not only the current favorites, so a student the
+  // user adds as a target on the screen is planned from its real tier before the account data is read again.
+  const pickupStudentUids = contents.flatMap((content) =>
+    content.kind === "event"
+      ? content.recruitments.flatMap((recruitment) =>
+          recruitment.pickup && recruitment.student ? [recruitment.student.uid] : [],
+        )
+      : [],
+  );
+
   const ownedReadAt = new Date().toISOString();
   const favoritedStudentsPromise = getUserFavoritedStudents(env, userId, undefined, { ctx });
-  const [favoritedStudents, pyroxeneState, recruitmentResults, recruitedStudents, favoriteHeldEleph] =
+  const ownedStudentUidsPromise = favoritedStudentsPromise.then((items) => [
+    ...new Set([...pickupStudentUids, ...items.map(({ studentId }) => studentId)]),
+  ]);
+  const [favoritedStudents, pyroxeneState, recruitmentResults, recruitedStudents, ownedStudentUids, heldEleph] =
     await Promise.all([
       favoritedStudentsPromise,
       getPyroxeneUserState(env, userId, { ctx }),
       getRecruitmentResultsByRecruitmentGroupUids(env, userId, recruitmentGroupUids),
       getRecruitedStudents(env, userId),
-      favoritedStudentsPromise.then((items) =>
-        getUserResourceInventoryMapByItemUids(
-          env,
-          userId,
-          items.map(({ studentId }) => studentId),
-        ),
-      ),
+      ownedStudentUidsPromise,
+      ownedStudentUidsPromise.then((uids) => getUserResourceInventoryMapByItemUids(env, userId, uids)),
     ]);
 
   return {
@@ -101,9 +109,9 @@ export async function loadPyroxenePlannerAccount(
     recruitedStudentUids: recruitedStudents.map(({ studentUid }) => studentUid),
     recruitmentOwnedSnapshot: buildRecruitmentOwnedSnapshot(
       ownedReadAt,
-      favoritedStudents.map(({ studentId }) => studentId),
+      ownedStudentUids,
       Object.fromEntries(recruitedStudents.map(({ studentUid, tier }) => [studentUid, tier])),
-      favoriteHeldEleph,
+      heldEleph,
     ),
     collectedSourceKeys: [...pyroxeneState.collectedSourceKeys],
   };
