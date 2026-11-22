@@ -90,4 +90,13 @@ describe("getQuestionMemberSnapshot", () => {
     expect(mockedBuildSnapshot).toHaveBeenCalledWith(env, 7);
     expect(mockedGetCheck).toHaveBeenCalledWith(env, 7, now, undefined);
   });
+
+  it("asks for resources when the account has none, even if the check could not read the planner data", async () => {
+    const base = { schemaVersion: 2, resources: null } as unknown as QuestionMemberSnapshotBase;
+    mockedBuildSnapshot.mockResolvedValue(base);
+    mockedGetCheck.mockResolvedValue({ status: "failed", stage: "load" });
+
+    const snapshot = await getQuestionMemberSnapshot({} as Env, 7, new Date("2026-11-12T00:00:00.000Z"));
+    expect(snapshot.recruitmentCheck).toEqual({ status: "input_required" });
+  });
 });

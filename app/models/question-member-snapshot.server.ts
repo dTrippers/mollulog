@@ -63,25 +63,8 @@ export function mapQuestionSnapshotResources(
   };
 }
 
-// Planner event data is keyed by the planner event uid (a timeline content uid, or `group:<uid>` for a
-// recruitment shared by several events); targetTiers holds only targets above ★3.
-export function mapQuestionSnapshotRecruitmentPlans(
-  eventData: PlannerStateDocumentV1["pyroxene"]["eventData"],
-): MemberSnapshot["recruitmentPlans"] {
-  return Object.entries(eventData)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([plannerEventUid, data]) => ({
-      plannerEventUid,
-      completed: data.completed,
-      expectedTrials: data.expectedTrials,
-      targetTiers: Object.entries(data.targetTiers ?? {})
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([studentUid, targetTier]) => ({ studentUid, targetTier })),
-    }));
-}
-
 type SnapshotPlannerState = {
-  pyroxene: Pick<PlannerStateDocumentV1["pyroxene"], "resources" | "eventData">;
+  pyroxene: Pick<PlannerStateDocumentV1["pyroxene"], "resources">;
   ap: { accountLevel: number | null } | null;
 };
 
@@ -130,7 +113,6 @@ export async function buildQuestionMemberSnapshot(
     favorites: mapQuestionSnapshotFavorites(favorites),
     formations: mapQuestionSnapshotFormations(parties),
     resources: mapQuestionSnapshotResources(plannerState.pyroxene.resources),
-    recruitmentPlans: mapQuestionSnapshotRecruitmentPlans(plannerState.pyroxene.eventData),
     accountLevel: plannerState.ap?.accountLevel ?? null,
   };
 }

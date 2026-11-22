@@ -82,7 +82,7 @@ export type RecruitmentPlanCheckTarget = {
   targetTier: RecruitmentTargetTier;
   // The owned state the plan starts from, or null when owned states do not apply to this event.
   owned: RecruitmentOwnedState | null;
-  // Eleph still lacking for the target tier, from the owned state (or ★3 with no eleph when unowned).
+  // Eleph still lacking for the target tier, from the owned state (or ★3 when unowned); eleph not entered counts as none.
   // Null for a student that does not start at ★3, whose growth the plan does not count in eleph.
   remainingEleph: number | null;
   // Copies the plan recruits to reach the target tier.
@@ -187,7 +187,7 @@ export function buildRecruitmentPlanCheck(input: RecruitmentPlanCheckInput): Rec
       targets: getEventPickupTargets(event).flatMap((recruitment) => {
         const student = recruitment.student;
         if (!student) return [];
-        const owned = ownedStates ? (ownedStates[student.uid] ?? { tier: null, eleph: 0 }) : null;
+        const owned = ownedStates ? (ownedStates[student.uid] ?? { tier: null, eleph: null }) : null;
         const targetTier = getPickupTargetTier(recruitment, targetTiers);
         return [
           {

@@ -58,5 +58,7 @@ export async function getQuestionMemberSnapshot(
     buildQuestionMemberSnapshot(env, senseiId),
     getRecruitmentPlanCheck(env, senseiId, now, ctx),
   ]);
+  // An account without entered resources needs input whatever else the check could not read.
+  if (snapshot.resources === null) return { ...snapshot, recruitmentCheck: { status: "input_required" } };
   return { ...snapshot, recruitmentCheck: mapQuestionSnapshotRecruitmentCheck(recruitmentCheck) };
 }

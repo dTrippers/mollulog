@@ -69,7 +69,7 @@ describe("loadPyroxenePlannerAccount", () => {
 
     expect(mockGetUserResourceInventory).toHaveBeenCalledWith(env, 1, ["favorited", "addable"]);
     expect(account.recruitmentOwnedSnapshot.states).toEqual({
-      favorited: { tier: 4, eleph: 0 },
+      favorited: { tier: 4, eleph: null },
       addable: { tier: 4, eleph: 30 },
     });
   });

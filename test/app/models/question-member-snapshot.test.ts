@@ -4,7 +4,6 @@ import {
   buildQuestionMemberSnapshot,
   mapQuestionSnapshotFavorites,
   mapQuestionSnapshotFormations,
-  mapQuestionSnapshotRecruitmentPlans,
   mapQuestionSnapshotResources,
   mapQuestionSnapshotStudents,
 } from "~/models/question-member-snapshot.server";
@@ -178,14 +177,12 @@ describe("question member snapshot student and favorite mapping", () => {
         },
       ],
       resources: null,
-      recruitmentPlans: [],
       accountLevel: null,
     });
     expect(Object.keys(snapshot).sort()).toEqual([
       "accountLevel",
       "favorites",
       "formations",
-      "recruitmentPlans",
       "resources",
       "students",
       "version",
@@ -288,15 +285,6 @@ describe("question member snapshot student and favorite mapping", () => {
       tenTimeTicket: 0,
       recruitmentStacks: { regular: 40, limited: 0 },
     });
-    expect(snapshot.recruitmentPlans).toEqual([
-      {
-        plannerEventUid: "5-5th-fes",
-        completed: false,
-        expectedTrials: 200,
-        targetTiers: [{ studentUid: "owned-b", targetTier: 7 }],
-      },
-      { plannerEventUid: "dive-into-ocean", completed: false, expectedTrials: null, targetTiers: [] },
-    ]);
     expect(snapshot.accountLevel).toBe(90);
   });
 
@@ -316,6 +304,5 @@ describe("question member snapshot student and favorite mapping", () => {
       tenTimeTicket: 0,
       recruitmentStacks: null,
     });
-    expect(mapQuestionSnapshotRecruitmentPlans({})).toEqual([]);
   });
 });

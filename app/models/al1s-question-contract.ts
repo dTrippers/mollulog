@@ -33,12 +33,6 @@ export type MemberSnapshot = {
     tenTimeTicket: number;
     recruitmentStacks: { regular: number; limited: number } | null;
   } | null;
-  recruitmentPlans: Array<{
-    plannerEventUid: string;
-    completed: boolean;
-    expectedTrials: number | null;
-    targetTiers: Array<{ studentUid: string; targetTier: number }>;
-  }>;
   accountLevel: number | null;
   recruitmentCheck: MemberSnapshotRecruitmentCheck;
 };
@@ -73,7 +67,7 @@ export type MemberSnapshotRecruitmentCheck =
         targets: Array<{
           studentUid: string;
           targetTier: number;
-          owned: { tier: number | null; eleph: number } | null;
+          owned: { tier: number | null; eleph: number | null } | null;
           remainingEleph: number | null;
           copies: number;
         }>;

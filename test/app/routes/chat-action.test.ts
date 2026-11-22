@@ -112,7 +112,6 @@ function makeDependencies(overrides: Partial<ChatActionDependencies> = {}): Chat
       favorites: [],
       formations: [],
       resources: null,
-      recruitmentPlans: [],
       accountLevel: null,
       recruitmentCheck: { status: "input_required" as const },
     }),
@@ -395,7 +394,6 @@ describe("AI chatbot page and resource action", () => {
     const buildSnapshot = jest.fn(async (_senseiId: number) => ({
       version: 2 as const,
       resources: null,
-      recruitmentPlans: [],
       accountLevel: null,
       recruitmentCheck: { status: "input_required" as const },
       students: [],
@@ -624,7 +622,6 @@ describe("AI chatbot page and resource action", () => {
     const snapshot: MemberSnapshot = {
       version: 2,
       resources: null,
-      recruitmentPlans: [],
       accountLevel: null,
       recruitmentCheck: { status: "input_required" as const },
       students: [],
@@ -677,7 +674,6 @@ describe("AI chatbot page and resource action", () => {
     const buildSnapshot = jest.fn(async (_senseiId: number) => ({
       version: 2 as const,
       resources: null,
-      recruitmentPlans: [],
       accountLevel: null,
       recruitmentCheck: { status: "input_required" as const },
       students: [],
@@ -747,7 +743,6 @@ describe("AI chatbot page and resource action", () => {
     const oversized: MemberSnapshot = {
       version: 2,
       resources: null,
-      recruitmentPlans: [],
       accountLevel: null,
       recruitmentCheck: { status: "input_required" as const },
       students: [
