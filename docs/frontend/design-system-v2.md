@@ -166,8 +166,11 @@ These rules come from the product owner's reviews of design proposals and implem
 
 - Show a fact, notice, or label in one place. Do not repeat it inside and outside a card, in a tab and in the Aside beside it, or in a badge and the banner below it.
 - Information that stays on screen must help a decision. Remove constants, values that are always zero, and rules that apply to every user, or move them behind an action (a tooltip, popover, or bottom sheet).
-- Add a description under a title, section, or link only when it carries something the user cannot otherwise tell. Keep text short; a concise screen beats an explanatory one.
-- Do explain what the user cannot infer: a control or value that is not intuitive, a new feature, or an interaction that exists only on this screen. Say briefly what it is, where it is needed; put a long or rarely needed explanation behind a tooltip or help action.
+- A screen shows labels, values, controls, and real errors. A description, caption, hint, note, tag, or placeholder is an exception, not a default part of a title, section, link, field, or row. A concise screen beats an explanatory one.
+- Do not add text that restates what the screen already shows: the title, a label, a value, the current state, where a value came from, or what a control obviously does. A total score shown alone already says that only the total was recorded, so a "합산만 기록" tag or a note saying so repeats it. A placeholder does not repeat its field's label.
+- Explain only what the user cannot infer and would otherwise get wrong: a control or value that is not intuitive, or an interaction that exists only on this screen. Use one short phrase where it is needed, and put anything longer behind a tooltip, `HintChip`, or help action.
+- Explain a type or category once, not on every item that has it: a type explained in a chip popover is not repeated on each card.
+- An error message is one short sentence that names the field and the problem ("최대 점수(N)보다 높아요.", "점수를 확인해 주세요."). Do not tell the user how to fix it or add context the screen already shows.
 - Do not show internal or system labels the user cannot interpret, such as IDs, code names, or internal cost terms.
 - Secondary content, such as a video list, does not take a large share of the screen.
 - A step in the user's plan belongs in Main, not in an Aside.
@@ -213,7 +216,9 @@ UI copy uses these terms for these game and product concepts. Add a term here on
 - Density is two separate judgments. Controls stay compact (see `min-h-v2-control-min` and `min-h-v2-input-min`); do not enlarge them. Space between elements is generous enough that a block with many elements does not look cramped; when it does, add space between elements or quiet secondary ones, not larger controls.
 - UI that appears and disappears, such as a save status, never sits in the layout flow, where it pushes the content below it. Use an overlay: autosave status uses `primitives/SaveToast`.
 - An element that floats over content, such as a floating action bar, toolbar, toast, menu, popover, or tooltip, uses a translucent surface with a backdrop blur, so it reads as a layer above the content without hiding it. Use the floating surface tokens with `backdrop-blur-md`; do not make a new opaque floating surface. A dialog panel is excluded: its backdrop already separates it from the page.
-- Group with spacing and surfaces, not borders. Items in a list have no borders between them; keep a divider only where it separates a different kind of row, such as the row that adds a goal. The bordered field for values of one domain, below, is the exception.
+- Group with spacing and surfaces, not borders. Borders, outlines, rings, and dividers are not used by default; separate things with spacing, surface fills, lightness steps, and shadow. Do not add a border to a card, section, button, chip, badge, list item, or floating surface, and do not add one to raise contrast.
+- Items in a list have no borders between them; keep a divider only where it separates a different kind of row, such as the row that adds a goal.
+- A border, outline, ring, or divider appears only where this guide names it: the input boundary (`border-v2-control-border`, and `-strong` on focus or hover), the bordered field for values of one domain (below), the focus ring, the popover ring, the quick-view outline and its action divider, the upload drop zone, the recognized-cell marker over a screenshot, the 내 학생 row's hairline ring, the `SectionTabs` underline, timeline lines, the divider before a different kind of row, and the scanner review's compact row actions. Any other one is a departure the owner approves first. A border in existing code is not a precedent.
 - One page uses one content width. Sections, banners, and notices in Main share the same maximum width, so their edges line up.
 - Elements of the same kind keep one width and even spacing whatever their number: three tier targets do not stretch to fill a row, and a column of owned currencies is evenly spaced.
 - Text from game data, such as an event title, keeps its own line breaks. Do not split a short title onto two lines to fill a layout.
@@ -428,7 +433,7 @@ Each recipe shows the parts that matter. Omit `PageAside` for a recipe with no A
   </PageToolbar>
   <PageMain>{/* detail sections */}</PageMain>
   <PageAside>
-    <AsideLinks items={[{ key: "notice", title: "이벤트 공지", description: "공지 원문 보기", Icon: BellIcon, to: "https://example.com/event" }]} />
+    <AsideLinks items={[{ key: "notice", title: "이벤트 공지", Icon: BellIcon, to: "https://example.com/event" }]} />
   </PageAside>
 </V2Page>
 ```
@@ -450,7 +455,7 @@ Every event detail tab uses `width="wide"` with `toolbarSpan="full"`, so the tab
 
 ```tsx
 <V2Page width="reading">
-  <PageHeader back={{ title: "뒤로", onClick: () => navigate(-1) }} title="계산기" description="입력 값을 바탕으로 계산합니다" />
+  <PageHeader back={{ title: "뒤로", onClick: () => navigate(-1) }} title="계산기" />
   <PageMain>
     <form className="flex flex-col gap-v2-block-gap rounded-lg bg-v2-surface p-v2-block-p">{/* fields */}</form>
   </PageMain>
@@ -461,7 +466,7 @@ Every event detail tab uses `width="wide"` with `toolbarSpan="full"`, so the tab
 
 ```tsx
 <V2Page width="wide">
-  <PageHeader title="역대 추이" description="시즌별 통계" />
+  <PageHeader title="역대 추이" />
   <PageToolbar stickyOnDesktop>
     <ScreenTabs items={[{ key: "table", text: "표", Icon: TableCellsIcon, active: true, onClick: () => {} }]} />
   </PageToolbar>
