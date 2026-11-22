@@ -1231,6 +1231,43 @@ export const pgSyncDraftEntriesTable = pgTable(
   ],
 );
 
+// No code reads the resource inventory draft tables. They stay until a later change renames them with the `zzz_`
+// prefix (docs/data/database.md).
+export const pgUserResourceInventoryDraftsTable = pgTable(
+  "user_resource_inventory_drafts",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    status: text().notNull().default("pending"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    appliedAt: timestamptz("applied_at"),
+  },
+  (table) => [
+    uniqueIndex("user_resource_inventory_drafts_uid_uidx").on(table.uid),
+    index("user_resource_inventory_drafts_user_status_idx").on(table.userId, table.status),
+  ],
+);
+
+export const pgUserResourceInventoryDraftItemsTable = pgTable(
+  "user_resource_inventory_draft_items",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    draftUid: text("draft_uid").notNull(),
+    itemUid: text("item_uid").notNull(),
+    quantity: integer().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("user_resource_inventory_draft_items_uid_uidx").on(table.uid),
+    uniqueIndex("user_resource_inventory_draft_items_draft_item_uidx").on(table.draftUid, table.itemUid),
+    index("user_resource_inventory_draft_items_draft_uid_idx").on(table.draftUid),
+  ],
+);
+
 export const pgOcrJobsTable = pgTable(
   "ocr_jobs",
   {
