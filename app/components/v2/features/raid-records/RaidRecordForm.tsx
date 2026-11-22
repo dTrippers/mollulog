@@ -209,7 +209,8 @@ export function RaidRecordForm({
   for (const { defenseType, score } of enteredScores) {
     const maxDifficulty = season?.scoreDefenseTypes.find((entry) => entry.defenseType === defenseType)?.maxDifficulty;
     const maxScore = season ? getRaidMaxScore(season.boss.uid, maxDifficulty ?? null) : null;
-    if (score > RAID_RECORD_LIMITS.maxScore) scoreErrors[defenseType] = "점수를 확인해 주세요.";
+    // The same range the save checks, such as a score of 0.
+    if (score <= 0 || score > RAID_RECORD_LIMITS.maxScore) scoreErrors[defenseType] = "점수를 확인해 주세요.";
     else if (maxScore !== null && score > maxScore) {
       scoreErrors[defenseType] = `최대 점수(${formatRaidScore(maxScore)})보다 높아요.`;
     }
@@ -219,7 +220,7 @@ export function RaidRecordForm({
   const totalScoreError =
     totalScore === null
       ? null
-      : totalScore > RAID_RECORD_LIMITS.maxScore
+      : totalScore <= 0 || totalScore > RAID_RECORD_LIMITS.maxScore
         ? "합산 점수를 확인해 주세요."
         : maxTotalScore !== null && totalScore > maxTotalScore
           ? `최대 합산 점수(${formatRaidScore(maxTotalScore)})보다 높아요.`
