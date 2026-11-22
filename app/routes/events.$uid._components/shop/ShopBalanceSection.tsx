@@ -20,11 +20,7 @@ export function ShopBalanceSection({ plan }: { plan: EventShopPlanContext }) {
   if (plan.collectableResources.length === 0) return null;
   return (
     <ShopSection id="currency-balance-title" region="currency-balance">
-      <ShopSectionHeader
-        id="currency-balance-title"
-        title="재화 계산 결과"
-        description="선택한 아이템을 모두 얻기 위해 필요한 재화 계산 결과예요. 목표 개수를 직접 입력해 추가 소탕 필요량을 계산할 수 있어요."
-      />
+      <ShopSectionHeader id="currency-balance-title" title="재화 계산 결과" />
       <div className="@container">
         <div className="grid grid-cols-1 gap-2 @min-[40rem]:grid-cols-2">
           {plan.collectableResources.map((resource) => (

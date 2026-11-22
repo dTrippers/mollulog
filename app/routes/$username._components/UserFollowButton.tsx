@@ -10,6 +10,7 @@ import { useFetcher } from "react-router";
 import { Button } from "~/components/v2/primitives/Button";
 import { Popover } from "~/components/v2/primitives/Popover";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { cn } from "~/lib/utils";
 import type { ActionData } from "../api.followerships";
 import { FOLLOW_FAILURE_MESSAGE, UNFOLLOW_FAILURE_MESSAGE } from "./user-layout";
 
@@ -58,16 +59,18 @@ export function UserFollowButton({
       </>
     );
   } else if (following) {
-    content = hovered ? (
-      <>
-        <UserMinusIcon className="size-4" aria-hidden="true" />
-        팔로우 해제
-      </>
-    ) : (
-      <>
-        <CheckIcon className="size-4" aria-hidden="true" />
-        팔로우 중
-      </>
+    // Both labels share one grid cell, so the button keeps the wider label's width and hover never resizes it.
+    content = (
+      <span className="grid">
+        <span className={cn("col-start-1 row-start-1 inline-flex items-center justify-center gap-1.5", hovered && "invisible")}>
+          <CheckIcon className="size-4" aria-hidden="true" />
+          팔로우 중
+        </span>
+        <span className={cn("col-start-1 row-start-1 inline-flex items-center justify-center gap-1.5", !hovered && "invisible")}>
+          <UserMinusIcon className="size-4" aria-hidden="true" />
+          팔로우 해제
+        </span>
+      </span>
     );
   }
 
@@ -106,7 +109,6 @@ export function UserFollowButton({
         returnFocusRef={buttonRef}
       >
         <p className="text-sm font-semibold text-v2-fg">로그인이 필요해요</p>
-        <p className="mt-1 text-sm text-v2-fg-secondary">로그인하면 이 선생님을 팔로우할 수 있어요.</p>
         <Button
           variant="primary"
           size="sm"

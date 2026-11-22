@@ -440,13 +440,13 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
 const SCANNER_LINK = {
   title: "게임 화면 인식기",
-  description: "게임 내 학생 리스트 화면을 녹화하여 학생 정보를 가져올 수 있어요",
+  description: "게임 내 학생 목록 녹화로 정보 가져오기",
   to: "/scanner/student",
 } as const;
 
 const DIRECTORY_LINK = {
   title: "학생부",
-  description: "모든 학생의 프로필과 통계를 확인해요",
+  description: "모든 학생의 프로필과 통계 확인",
   to: "/students",
 } as const;
 
@@ -721,7 +721,7 @@ export default function UserPage() {
     savingRef.current = false;
     const result = saveFetcher.data;
     if (!result) {
-      setSaveFailure("저장하지 못했어요. 입력한 값은 그대로 있어요. 다시 시도해주세요.");
+      setSaveFailure("저장하지 못했어요.");
       return;
     }
     if ("ok" in result && result.ok) {
@@ -753,11 +753,7 @@ export default function UserPage() {
       revealGrowthRow(Object.keys(next)[0]);
       return;
     }
-    setSaveFailure(
-      "code" in result && result.code === STUDENT_STATE_STALE_CODE
-        ? result.error
-        : "저장하지 못했어요. 입력한 값은 그대로 있어요. 다시 시도해주세요.",
-    );
+    setSaveFailure("code" in result && result.code === STUDENT_STATE_STALE_CODE ? result.error : "저장하지 못했어요.");
   }, [saveFetcher.data, saveFetcher.state, exitEditing, showToast]);
 
   // Desktop edits the table at the full content width, so the Aside folds away while editing.
@@ -917,7 +913,7 @@ export default function UserPage() {
                 label="필터 및 정렬"
                 onClose={() => setFilterPopoverOpen(false)}
                 returnFocusRef={filterTriggerRef}
-                className="max-h-[70dvh] w-80 overflow-y-auto"
+                className="max-h-[min(70dvh,var(--v2-popover-room,100dvh))] w-80 overflow-y-auto"
               >
                 <StudentsFilterBody state={filter} onChange={setFilter} />
               </Popover>
@@ -984,11 +980,6 @@ export default function UserPage() {
               onValueChange={handleValueChange}
               getDetailHref={(uid) => (me ? `/students/${uid}#student-basic-info` : `/students/${uid}`)}
             />
-            {editing && !stacked ? (
-              <p className="text-xs text-v2-fg-tertiary">
-                표를 가로로 스크롤하면 나머지 열을 볼 수 있어요. 학생 열은 고정돼요.
-              </p>
-            ) : null}
           </>
         )
       ) : (
@@ -999,9 +990,6 @@ export default function UserPage() {
                 모집한 학생{" "}
                 <span className="font-normal text-v2-fg-tertiary tabular-nums">{recruitedStudents.length}</span>
               </h2>
-              {me && !noRecruited ? (
-                <p className="mt-0.5 text-sm text-v2-fg-secondary">학생을 선택해 현재 성급을 수정할 수 있어요.</p>
-              ) : null}
             </div>
             {noRecruited ? (
               <EmptySection
@@ -1232,8 +1220,8 @@ function ViewSwitch({
           onClick={() => onChange(key)}
           className={cn(
             "inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-md px-3 text-xs font-medium",
-            view === key ? "bg-v2-surface text-v2-fg shadow-sm" : "text-v2-fg-secondary hover:bg-v2-hover",
-            "disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-transparent",
+            view === key ? "bg-v2-surface text-v2-fg shadow-sm" : "text-v2-fg-secondary hover:bg-v2-hover v2-interaction-transition",
+            "disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-transparent v2-interaction-transition",
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
           )}
         >
@@ -1258,7 +1246,6 @@ function NoMatchesState({ onReset }: { onReset: () => void }) {
   return (
     <div className="rounded-lg bg-v2-surface px-4 py-10 text-center">
       <p className="text-sm font-semibold text-v2-fg">조건에 맞는 학생이 없어요</p>
-      <p className="mt-1 text-xs text-v2-fg-tertiary">필터를 바꾸거나 초기화해주세요.</p>
       <Button variant="danger-subtle" size="sm" className="mt-3" onClick={onReset}>
         필터 초기화
       </Button>

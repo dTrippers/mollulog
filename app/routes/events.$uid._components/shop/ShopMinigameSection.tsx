@@ -53,7 +53,7 @@ export function ShopMinigameSection({ plan }: { plan: EventShopPlanContext }) {
           tabLink ? (
             <Link
               to={tabLink.to}
-              className="inline-flex items-center gap-1 text-xs font-medium text-v2-link hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-v2-link underline decoration-transparent hover:decoration-current v2-interaction-transition"
             >
               {tabLink.label}
               <ArrowRightIcon className="size-3.5" aria-hidden="true" />

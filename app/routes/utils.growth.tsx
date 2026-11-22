@@ -1,16 +1,20 @@
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { Await, Outlet, redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { Page } from "~/components/features/layout";
+import { AsideLinks, LinkTarget, MobileActionBar, PageAside, PageHeader, V2Page } from "~/components/v2/layout";
+import { v2ButtonClassName } from "~/components/v2/primitives/Button";
 import { getLogger } from "~/lib/observability.server";
 import { socialMeta } from "~/lib/seo";
 import { loadDeferredGrowthPlannerData } from "./utils.growth._components/growth-data.server";
+import { mergeGrowthStudentUpdate } from "./utils.growth._components/growth-student-update";
 import type {
   GrowthLayoutContext,
   GrowthResourceRequirementsByStudent,
   GrowthStudent,
 } from "./utils.growth._components/types";
+import { getGrowthPlannerPageLinks } from "./utils.resources._components/resource-page-links";
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "학생 성장 플래너 | 몰루로그";
@@ -33,6 +37,8 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
   if (actionResult && typeof actionResult === "object") {
     if ("kind" in actionResult && actionResult.kind === "listChange") return true;
     if ("kind" in actionResult && actionResult.kind === "studentUpdate") return false;
+    // The screen already shows a saved sort choice or order.
+    if ("kind" in actionResult && (actionResult.kind === "sortOrder" || actionResult.kind === "order")) return false;
     if ("error" in actionResult) return false;
   }
 
@@ -70,11 +76,25 @@ export default function GrowthLayout() {
   const [managedStudents, setManagedStudents] = useState(loaderData.managedStudents);
   const managedStudentListKey = loaderData.managedStudents.map((student) => student.uid).join(":");
   const syncedManagedStudentListKeyRef = useRef(managedStudentListKey);
+  const managedStudentPositionsKey = loaderData.managedStudents
+    .map((student) => `${student.uid}=${student.plannerPosition ?? ""}`)
+    .join(":");
+  const syncedManagedStudentPositionsKeyRef = useRef(managedStudentPositionsKey);
   const latestResourceRequirementsRef = useRef<GrowthResourceRequirementsByStudent>({});
 
   useEffect(() => {
-    if (syncedManagedStudentListKeyRef.current === managedStudentListKey) return;
+    if (syncedManagedStudentListKeyRef.current === managedStudentListKey) {
+      // The same students in another stored order, such as after a rejected order save: show the stored order.
+      if (syncedManagedStudentPositionsKeyRef.current === managedStudentPositionsKey) return;
+      syncedManagedStudentPositionsKeyRef.current = managedStudentPositionsKey;
+      const positions = new Map(loaderData.managedStudents.map((student) => [student.uid, student.plannerPosition]));
+      setManagedStudents((prev) =>
+        prev.map((student) => ({ ...student, plannerPosition: positions.get(student.uid) ?? null })),
+      );
+      return;
+    }
     syncedManagedStudentListKeyRef.current = managedStudentListKey;
+    syncedManagedStudentPositionsKeyRef.current = managedStudentPositionsKey;
     // Preserve per-row optimistic updates and resource results that may have resolved before this list sync.
     setManagedStudents(
       loaderData.managedStudents.map((student) => ({
@@ -82,17 +102,14 @@ export default function GrowthLayout() {
         resourceRequirements: latestResourceRequirementsRef.current[student.uid] ?? student.resourceRequirements,
       })),
     );
-  }, [loaderData.managedStudents, managedStudentListKey]);
+  }, [loaderData.managedStudents, managedStudentListKey, managedStudentPositionsKey]);
 
   const updateStudent = useCallback((next: GrowthStudent) => {
     setManagedStudents((prev) => {
       const idx = prev.findIndex((s) => s.uid === next.uid);
       if (idx === -1) return prev;
       const copy = prev.slice();
-      copy[idx] = {
-        ...next,
-        resourceRequirements: next.resourceRequirements ?? prev[idx].resourceRequirements,
-      };
+      copy[idx] = mergeGrowthStudentUpdate(prev[idx], next);
       return copy;
     });
   }, []);
@@ -107,20 +124,49 @@ export default function GrowthLayout() {
     );
   }, []);
 
+  const setStudentPositions = useCallback((positions: Record<string, number | null>) => {
+    setManagedStudents((prev) =>
+      prev.map((student) =>
+        Object.hasOwn(positions, student.uid)
+          ? { ...student, plannerPosition: positions[student.uid] ?? null }
+          : student,
+      ),
+    );
+  }, []);
+
+  const [stacked, setStacked] = useState(true);
+  const links = getGrowthPlannerPageLinks();
+
   const contextValue: GrowthLayoutContext = {
     managedStudents,
     availableStudents: loaderData.availableStudents,
+    sortOrder: loaderData.sortOrder,
+    sortOrderStored: loaderData.sortOrderStored,
     updateStudent,
+    setStudentPositions,
+    stacked,
   };
 
   return (
-    <Page
-      title="학생 성장 플래너"
-      description="학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요."
-      contentWidth="full"
-      maxWidth="full"
-      layout="vertical"
-    >
+    <V2Page width="full" onStackedChange={setStacked}>
+      <PageHeader
+        title="학생 성장 플래너"
+        description="학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요."
+        trailing={
+          <div className="flex flex-wrap gap-2">
+            {links.map(({ to, title, Icon }) => (
+              <LinkTarget key={to} to={to} className={v2ButtonClassName({ variant: "secondary" })}>
+                <Icon className="size-4" aria-hidden="true" />
+                {title}
+                <ChevronRightIcon className="-ml-0.5 size-3.5 text-v2-fg-tertiary" aria-hidden="true" />
+              </LinkTarget>
+            ))}
+          </div>
+        }
+        // The Aside holds these links from 96rem; the stacked layout has them in the action bar.
+        trailingInline
+        trailingClassName="hidden @min-[48rem]/page-available:block @min-[96rem]/page-available:hidden"
+      />
       <Suspense fallback={null}>
         <Await resolve={loaderData.resourceRequirements}>
           {(resourceRequirements) => (
@@ -132,6 +178,14 @@ export default function GrowthLayout() {
         </Await>
       </Suspense>
       <Outlet context={contextValue satisfies GrowthLayoutContext} />
-    </Page>
+      <PageAside revealAt="extra-wide">
+        <AsideLinks
+          items={links.map(({ to, title, description, Icon }) => ({ key: to, title, description, Icon, to }))}
+        />
+      </PageAside>
+      <MobileActionBar
+        links={links.map(({ to, title, shortTitle, Icon }) => ({ key: to, title, shortTitle, Icon, to }))}
+      />
+    </V2Page>
   );
 }

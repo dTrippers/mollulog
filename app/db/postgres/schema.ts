@@ -938,6 +938,8 @@ export const pgStudentTargetsTable = pgTable(
     relationshipTargetLevel: integer("relationship_target_level"),
     giftPlan: jsonb("gift_plan").$type<Record<string, number>>().notNull().default({}),
     plannerAddedAt: exactTimestamptz("planner_added_at"),
+    // The student growth planner's manual order, ascending from the top. Null sits above every positioned row.
+    plannerPosition: integer("planner_position"),
     deletedAt: timestamptz("deleted_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),

@@ -9,7 +9,10 @@ import {
   DEFAULT_RECRUITMENT_TARGET_TIER,
   EMPTY_RECRUITMENT_STACKS,
   getRecruitmentTargetCopies,
+  type RecruitmentOwnedSnapshot,
+  type RecruitmentOwnedStates,
   type RecruitmentStacks,
+  type RecruitmentTargetTier,
   type RecruitmentTargetTiers,
 } from "~/domain/pyroxene-recruitment-goal";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
@@ -933,17 +936,57 @@ function getScheduleItemEventStartTime(item: PyroxeneScheduleItem): number {
   return item.event ? dayjs(item.event.since).valueOf() : Number.NEGATIVE_INFINITY;
 }
 
-/** Repeats each pickup recruitment once per copy its target tier needs; ★2 students always need one copy. */
+/** The pickup students an event's plan targets: favorited, pickup, and not given by the event. */
+export function getEventPickupTargets(event: PickupEvent): PickupRecruitment[] {
+  return event.recruitments.filter(
+    ({ pickup, favorited, recruitmentType }) => pickup && favorited && recruitmentType !== "given",
+  );
+}
+
+/** Owned states that apply to an event: an event that started before they were read keeps the unowned start. */
+export function getEventOwnedStates(
+  event: Pick<PickupEvent, "since">,
+  ownedSnapshot: RecruitmentOwnedSnapshot | undefined,
+): RecruitmentOwnedStates | undefined {
+  if (!ownedSnapshot) return undefined;
+  return dayjs(event.since).isBefore(dayjs(ownedSnapshot.readAt)) ? undefined : ownedSnapshot.states;
+}
+
+/** The target tier the plan aims for with a pickup student. */
+export function getPickupTargetTier(
+  recruitment: PickupRecruitment,
+  targetTiers: RecruitmentTargetTiers | undefined,
+): RecruitmentTargetTier {
+  const studentUid = recruitment.student?.uid;
+  return (studentUid && targetTiers?.[studentUid]) || DEFAULT_RECRUITMENT_TARGET_TIER;
+}
+
+/**
+ * Copies of a pickup student the plan recruits. ★2 students always need one copy. With owned states, a ★3
+ * student starts from its owned tier and held eleph, and a student that already reaches its target needs none.
+ */
+export function getPickupTargetCopyCount(
+  recruitment: PickupRecruitment,
+  targetTiers: RecruitmentTargetTiers | undefined,
+  ownedStates?: RecruitmentOwnedStates,
+): number {
+  if (getRecruitmentStudentTier(recruitment) !== 3) return 1;
+  const studentUid = recruitment.student?.uid;
+  return getRecruitmentTargetCopies(
+    getPickupTargetTier(recruitment, targetTiers),
+    studentUid ? ownedStates?.[studentUid] : undefined,
+  );
+}
+
+/** Repeats each pickup recruitment once per copy its target tier needs. */
 export function expandPickupTargetCopies(
   pickupRecruitments: PickupRecruitment[],
   targetTiers: RecruitmentTargetTiers | undefined,
+  ownedStates?: RecruitmentOwnedStates,
 ): PickupRecruitment[] {
-  return pickupRecruitments.flatMap((recruitment) => {
-    const studentUid = recruitment.student?.uid;
-    const targetTier = (studentUid && targetTiers?.[studentUid]) || DEFAULT_RECRUITMENT_TARGET_TIER;
-    const copies = getRecruitmentStudentTier(recruitment) === 3 ? getRecruitmentTargetCopies(targetTier) : 1;
-    return Array.from({ length: copies }, () => recruitment);
-  });
+  return pickupRecruitments.flatMap((recruitment) =>
+    Array.from({ length: getPickupTargetCopyCount(recruitment, targetTiers, ownedStates) }, () => recruitment),
+  );
 }
 
 export type TimelinePickupBasis = PyroxenePickupChance | "manual";
@@ -1130,6 +1173,8 @@ export function buildTimeline(
   collectedSourceKeys: string[] = [],
   endDate?: Date,
   initialRecruitmentStacks: RecruitmentStacks = EMPTY_RECRUITMENT_STACKS,
+  // Signed-in accounts pass their owned tiers and eleph; without them every target starts unowned.
+  ownedSnapshot?: RecruitmentOwnedSnapshot,
 ): Timeline {
   const collectedSources = new Set(collectedSourceKeys);
   // Call charge stacks carried between events of the same scope, in event start order.
@@ -1167,9 +1212,7 @@ export function buildTimeline(
         });
       }
 
-      const pickupRecruitments = event.recruitments.filter(
-        ({ pickup, favorited, recruitmentType }) => pickup && favorited && recruitmentType !== "given",
-      );
+      const pickupRecruitments = getEventPickupTargets(event);
       if (pickupRecruitments.length === 0) {
         continue;
       }
@@ -1185,9 +1228,31 @@ export function buildTimeline(
         continue;
       }
 
+      const ownedStates = getEventOwnedStates(event, ownedSnapshot);
+      const targetCopies = expandPickupTargetCopies(pickupRecruitments, eventData?.targetTiers, ownedStates);
+      if (targetCopies.length === 0 && (eventData?.expectedTrials ?? null) === null) {
+        // Every target already reaches its goal: the event stays a target event but plans no pulls and
+        // leaves the stacks as they are.
+        const basis = eventData?.pickupChance ?? options.event.pickupChance;
+        timelineDeltas.push({
+          date: dayjs(event.since),
+          source: { type: "event", event },
+          pickupTrial: 0,
+          pickupPlan: {
+            basis,
+            basisOverridden: basis !== options.event.pickupChance,
+            pulls: 0,
+            freePulls: 0,
+            stacks: [],
+          },
+        });
+        continue;
+      }
+
       const pickup = resolveEventPickupTrial(
         event,
-        expandPickupTargetCopies(pickupRecruitments, eventData?.targetTiers),
+        // A manual pull count still needs the targets to split the pulls across stack scopes.
+        targetCopies.length > 0 ? targetCopies : pickupRecruitments,
         eventData,
         options.event.pickupChance,
         // Events that already ended before the start date neither consume nor move the stacks.

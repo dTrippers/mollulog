@@ -82,7 +82,7 @@ export function ShopItemsSection({ plan }: { plan: EventShopPlanContext }) {
                     "flex shrink-0 cursor-pointer items-center gap-2 pt-2 pb-2.5 whitespace-nowrap",
                     selected
                       ? "text-v2-fg shadow-[inset_0_-2px_0_var(--color-v2-fg)]"
-                      : "text-v2-fg-tertiary hover:text-v2-fg",
+                      : "text-v2-fg-tertiary hover:text-v2-fg v2-interaction-transition",
                     v2FocusRing,
                   )}
                 >

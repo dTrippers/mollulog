@@ -832,10 +832,14 @@ export default function IntegratedPlannerRoute() {
     collectedSourceKeys,
     endDate: timelineEndDate,
     recruitmentStacks: currentResources?.recruitmentStacks ?? EMPTY_RECRUITMENT_STACKS,
+    ownedSnapshot: isSignedIn ? (accountState?.recruitmentOwnedSnapshot ?? undefined) : undefined,
   });
 
+  // A signed-in plan counts recruitment targets from the account's students, so it cannot be calculated without them.
   const pyroxeneInputAvailable = isSignedIn
-    ? loaderData.accountStateStatus === "available" && accountState !== null
+    ? loaderData.accountStateStatus === "available" &&
+      accountState !== null &&
+      accountState.recruitmentOwnedSnapshot !== null
     : pyroxeneGuestPlanner.status === "ready" || pyroxeneGuestPlanner.status === "memory";
   const pyroxeneForecastStatus = useMemo(() => {
     if (loaderData.pyroxeneSchedulesStatus !== "available") return "unavailable" as const;

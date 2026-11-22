@@ -116,7 +116,7 @@ function RowAction({
       onClick={onClick}
       className={cn(
         ROW_ACTION_CLASS_NAME,
-        "w-8 bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover hover:text-v2-fg",
+        "w-8 bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover hover:text-v2-fg v2-interaction-transition",
         v2FocusRing,
       )}
     >
@@ -150,8 +150,8 @@ function VisibilityToggle({
         ROW_ACTION_CLASS_NAME,
         "px-2",
         visible
-          ? "bg-v2-accent-subtle text-v2-accent hover:bg-v2-accent-subtle/80"
-          : "bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover hover:text-v2-fg",
+          ? "bg-v2-accent-subtle text-v2-accent hover:bg-v2-accent-subtle/80 v2-interaction-transition"
+          : "bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover hover:text-v2-fg v2-interaction-transition",
         v2FocusRing,
       )}
     >
@@ -561,7 +561,6 @@ function ApChargeDialog({
         </>
       }
     >
-      <p className="text-sm text-v2-fg-secondary">매일 청휘석으로 AP를 충전하는 횟수예요. 0회면 소비하지 않아요.</p>
       <div className="flex items-center gap-3">
         <FieldLabel htmlFor={inputId}>하루 충전 횟수</FieldLabel>
         <div className="ml-auto w-40">
@@ -655,7 +654,7 @@ function AttendanceDialog({
       }
     >
       <p className="text-sm text-v2-fg-secondary">
-        출석 1일차 날짜를 입력해주세요. 5일차에 50개, 10일차에 100개를 받아요. 저장하면 기존 출석 계획을 바꿔요.
+        5일차에 청휘석 50개, 10일차에 100개를 받아요. 저장하면 기존 출석 계획을 덮어써요.
       </p>
       <DateField label="출석 1일차" value={date} onChange={setDate} />
     </PlannerDialog>
@@ -894,7 +893,7 @@ function BuyPresetPicker({ value, onChange }: { value: number; onChange: (quanti
               onClick={() => onChange(preset.quantity)}
               className={cn(
                 "flex cursor-pointer flex-col items-start rounded-md px-2.5 py-1.5 text-left",
-                selected ? "bg-v2-selected text-v2-on-selected" : "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover",
+                selected ? "bg-v2-selected text-v2-on-selected" : "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover v2-interaction-transition",
                 v2FocusRing,
               )}
             >

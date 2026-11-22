@@ -30,7 +30,7 @@ function PickupAvatars({
 }
 
 const subjectLinkClassName =
-  "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md hover:text-v2-fg hover:underline";
+  "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md hover:text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition";
 
 // The content an event opinion or a recruitment result is about, as a muted line above the text: the event name (one
 // line, the whole name in the tooltip), then the pickup students. It stays secondary to the post text.
@@ -77,7 +77,7 @@ export function WalkthroughAttachment({ block }: { block: WalkthroughTimelineCom
   return (
     <Link
       to={`/timelines/${block.timelineUid}`}
-      className="mt-2 flex min-w-0 flex-col gap-1.5 rounded-lg border border-v2-divider px-2.5 py-2 hover:bg-v2-hover"
+      className="mt-2 flex min-w-0 flex-col gap-1.5 rounded-lg border border-v2-divider px-2.5 py-2 hover:bg-v2-hover v2-interaction-transition"
     >
       <span className="flex flex-wrap items-center gap-1.5">
         {[
@@ -117,7 +117,7 @@ export function WalkthroughAttachment({ block }: { block: WalkthroughTimelineCom
 // An external video: the title is the link, since the feed shows no thumbnail.
 export function VideoAttachment({ href, title }: { href: string; title: string }) {
   return (
-    <a href={href} target="_blank" rel="noreferrer" className={`${attachmentClassName} hover:bg-v2-hover`}>
+    <a href={href} target="_blank" rel="noreferrer" className={`${attachmentClassName} hover:bg-v2-hover v2-interaction-transition`}>
       <PlayCircleIcon className="size-5 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
       <span className="line-clamp-2 min-w-0 text-[0.8125rem] font-semibold text-v2-fg">{title}</span>
     </a>

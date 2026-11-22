@@ -258,9 +258,6 @@ export default function UserRaidRecords() {
               <p className="text-sm font-semibold text-v2-fg">
                 {RAID_RECORD_SERVER_LABEL[server]} {raidLabel ? `${raidLabel} ` : ""}기록이 없어요
               </p>
-              <p className="mt-1 text-sm text-v2-fg-tertiary">
-                기록을 하나씩 추가하거나, 여러 시즌을 표로 한 번에 입력할 수 있어요.
-              </p>
               <div className="mt-3 flex justify-center gap-2">
                 <Link to={tableLink} className={v2ButtonClassName({ variant: "secondary" })}>
                   표로 입력
@@ -355,7 +352,7 @@ function RaidRecordRow({
       <Link
         to={to}
         aria-labelledby={titleId}
-        className={cn("absolute inset-0 z-[1] rounded-lg hover:bg-v2-hover", v2FocusRing)}
+        className={cn("absolute inset-0 z-[1] rounded-lg hover:bg-v2-hover v2-interaction-transition", v2FocusRing)}
       />
       <div className="pointer-events-none relative z-[2] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3.5 @min-[40rem]:grid-cols-[minmax(0,1fr)_10rem_11rem_1.25rem]">
         <div className="col-span-2 flex min-w-0 flex-col gap-0.5 @min-[40rem]:col-span-1">

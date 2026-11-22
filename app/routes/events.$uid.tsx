@@ -161,7 +161,6 @@ export default function EventPage() {
         <div role="alert" className="flex flex-col items-center gap-2.5 px-6 py-16 text-center">
           <CloudSlashIcon className="size-7 text-v2-fg-tertiary" />
           <p className="text-base font-semibold text-v2-fg">이벤트 정보를 불러오지 못했어요</p>
-          <p className="text-sm text-v2-fg-tertiary">잠시 뒤 다시 시도해 주세요</p>
           <Button className="mt-1" onClick={() => revalidator.revalidate()}>
             <ArrowPathIcon className="size-4" aria-hidden="true" />
             다시 시도

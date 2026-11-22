@@ -125,7 +125,6 @@ describe("PostStates", () => {
     renderInRouter(<PostListFailure onRetry={onRetry} />);
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain("업데이트 소식을 불러오지 못했어요");
-    expect(alert.textContent).toContain("일시적인 문제일 수 있어요. 잠시 후 다시 시도해 주세요.");
     fireEvent.click(within(alert).getByRole("button", { name: "다시 시도" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });

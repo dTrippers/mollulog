@@ -399,13 +399,12 @@ export default function DevelopersKeys() {
             <div className="mt-v2-group-gap space-y-v2-group-gap">
               <StatusNotice tone="warning">
                 <span className="block font-semibold">키는 지금만 확인할 수 있어요.</span>
-                <span className="block">이 화면을 벗어나면 다시 확인할 수 없어요. 안전한 곳에 복사해 두세요.</span>
               </StatusNotice>
               <RevealedTokenField key={reveal.token} token={reveal.token} />
               <footer className="flex flex-wrap items-center justify-end gap-4">
                 <Link
                   to="/developers/docs"
-                  className="text-sm font-medium text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+                  className="text-sm font-medium text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
                   {...getV2LinkTransitionProps("crossfade")}
                 >
                   API 문서 보기
@@ -437,7 +436,6 @@ export default function DevelopersKeys() {
           <section className="space-y-v2-group-gap rounded-lg bg-v2-surface p-v2-block-p">
             <StatusNotice tone="danger">
               <span className="font-semibold">API 키 목록을 불러오지 못했어요.</span>
-              <span className="block">다시 시도하거나 잠시 후 이 화면을 새로고침해주세요.</span>
             </StatusNotice>
             <Button
               type="button"
@@ -474,7 +472,7 @@ export default function DevelopersKeys() {
 
             {inactiveKeys.length > 0 ? (
               <details className="group rounded-lg bg-v2-surface">
-                <summary className="flex min-h-v2-row-min cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-v2-block-p py-v2-row-y font-semibold hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus">
+                <summary className="flex min-h-v2-row-min cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-v2-block-p py-v2-row-y font-semibold hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition">
                   <span>만료·삭제된 키 {inactiveKeys.length}개</span>
                   <ChevronDownIcon
                     className="size-4 shrink-0 text-v2-fg-tertiary motion-safe:transition-transform motion-safe:duration-v2-base motion-safe:ease-v2-standard group-open:rotate-180"
@@ -599,7 +597,7 @@ function KeyRow({
         <footer className="flex flex-wrap items-center justify-end gap-4">
           <Link
             to="/data-history?filter=api"
-            className="whitespace-nowrap text-sm font-medium text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+            className="whitespace-nowrap text-sm font-medium text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
             {...getV2LinkTransitionProps("crossfade")}
           >
             데이터 변경 이력

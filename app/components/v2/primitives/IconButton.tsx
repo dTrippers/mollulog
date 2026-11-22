@@ -32,8 +32,8 @@ export function IconButton({
       aria-pressed={pressed}
       className={cn(
         "inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-v2-fg-tertiary",
-        "hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-transparent",
-        danger && "hover:text-v2-danger",
+        "hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-transparent v2-interaction-transition",
+        danger && "hover:text-v2-danger v2-interaction-transition",
         pressed && "text-v2-fg",
         v2FocusRing,
         className,

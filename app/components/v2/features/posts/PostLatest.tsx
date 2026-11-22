@@ -32,7 +32,7 @@ export function PostLatest({ post, contentHtml, timeZone, linkState }: PostLates
           to={`/posts/${post.uid}`}
           state={linkState}
           prefetch="intent"
-          className={`rounded-sm hover:underline hover:underline-offset-4 ${v2FocusRing}`}
+          className={`rounded-sm underline decoration-transparent hover:decoration-current underline-offset-4 ${v2FocusRing} v2-interaction-transition`}
           {...getV2LinkTransitionProps("forward")}
         >
           {titleHead}

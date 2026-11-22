@@ -318,7 +318,7 @@ describe("student basic info equipment-level action", () => {
     expect(response).toMatchObject({
       data: {
         ok: false,
-        error: "육성 상태를 저장하지 못했어요. 잠시 후 다시 시도해주세요",
+        error: "육성 상태를 프로필에 반영하지 못했어요.",
         retryable: true,
       },
       init: { status: 500 },

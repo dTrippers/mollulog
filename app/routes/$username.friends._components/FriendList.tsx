@@ -48,7 +48,7 @@ export function FriendList({ tab, senseis }: { tab: FriendTab; senseis: FriendLi
             <Link
               to={`/@${sensei.username}`}
               className={cn(
-                "flex items-center gap-v2-media-gap px-v2-block-p py-3 transition-colors hover:bg-v2-hover",
+                "flex items-center gap-v2-media-gap px-v2-block-p py-3 hover:bg-v2-hover v2-interaction-transition",
                 v2FocusRing,
               )}
             >

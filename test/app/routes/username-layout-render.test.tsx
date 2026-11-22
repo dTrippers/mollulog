@@ -245,7 +245,7 @@ describe("@username layout menu", () => {
 
     const asideLink = within(aside).getByRole("link", { name: /화면 인식·데이터 연동/ });
     expect(asideLink.getAttribute("href")).toBe("/scanner");
-    expect(within(asideLink).getByText("게임 스크린샷, 녹화 영상이나 외부 사이트 데이터를 반영할 수 있어요")).toBeTruthy();
+    expect(within(asideLink).getByText("스크린샷·녹화 인식과 외부 데이터 가져오기·내보내기")).toBeTruthy();
     const actionBar = document.querySelector(".v2-action-bar") as HTMLElement;
     expect(within(actionBar).getByRole("link", { name: "데이터 연동" }).getAttribute("href")).toBe("/scanner");
     unmount();
@@ -341,7 +341,7 @@ describe("@username follow button", () => {
     fireEvent.click(button);
 
     expect(await screen.findByRole("alert")).toBeTruthy();
-    expect(screen.getByRole("alert").textContent).toBe("팔로우하지 못했어요. 다시 시도해주세요.");
+    expect(screen.getByRole("alert").textContent).toBe("팔로우하지 못했어요.");
     expect(screen.queryByText("error")).toBeNull();
     expect(methods).toEqual(["POST"]);
   });
@@ -371,7 +371,6 @@ describe("@username follow button", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "팔로우" }));
     const dialog = await screen.findByRole("dialog", { name: "로그인이 필요해요" });
-    expect(within(dialog).getByText("로그인하면 이 선생님을 팔로우할 수 있어요.")).toBeTruthy();
     expect(followAction).not.toHaveBeenCalled();
     expect(screen.getByTestId("sign-in").textContent).toBe("false");
 

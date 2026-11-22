@@ -44,7 +44,7 @@ import { buildUserScreenItems, type UserLayoutContext } from "./$username._compo
 
 const SCANNER_LINK = {
   title: "화면 인식·데이터 연동",
-  description: "게임 스크린샷, 녹화 영상이나 외부 사이트 데이터를 반영할 수 있어요",
+  description: "스크린샷·녹화 인식과 외부 데이터 가져오기·내보내기",
   to: "/scanner",
 } as const;
 

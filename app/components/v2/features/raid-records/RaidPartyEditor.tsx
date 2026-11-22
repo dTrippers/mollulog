@@ -7,9 +7,9 @@ import {
   TrashIcon,
   UserMinusIcon,
 } from "@heroicons/react/16/solid";
-import hangul from "hangul-js";
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { RaidRecordSnapshotField } from "~/domain/raid-record";
+import { filterStudentByName } from "~/filters/student";
 import { STUDENT_GROWTH_EDIT_RANGES } from "~/domain/student-growth-edit";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../../layout/styles";
@@ -39,6 +39,8 @@ import {
 export type RaidPartyStudent = {
   uid: string;
   name: string;
+  // Other names the student goes by, which the search also matches.
+  altNames: string[];
   role: "striker" | "special";
   initialTier: number;
   equipmentSlots: number;
@@ -99,7 +101,7 @@ export function RaidPartyCard({
         onClick={onExpand}
         aria-label={`${title} 펼치기`}
         className={cn(
-          "flex w-full cursor-pointer items-center gap-3 rounded-lg border border-v2-divider px-3.5 py-2.5 text-left hover:bg-v2-hover",
+          "flex w-full cursor-pointer items-center gap-3 rounded-lg border border-v2-divider px-3.5 py-2.5 text-left hover:bg-v2-hover v2-interaction-transition",
           v2FocusRing,
         )}
       >
@@ -194,8 +196,17 @@ function nextEmptySlot(slots: readonly (RaidFormUnit | null)[], slot: number): n
   return null;
 }
 
+// The number of results in one row of the result grid, read from the laid-out options.
+function gridColumnCount(list: HTMLElement | null): number {
+  const options = list ? [...list.querySelectorAll<HTMLElement>('[role="option"]')] : [];
+  if (options.length === 0) return 1;
+  const firstRowTop = options[0].offsetTop;
+  return Math.max(options.filter((option) => option.offsetTop === firstRowTop).length, 1);
+}
+
 // The slots and one search field under them. Typing a name and pressing Enter fills the selected slot and selects the
-// next empty one, so a party is six names and six Enters. Once every slot is filled, focus moves to the growth table.
+// next empty one, so a party is six names and six Enters. The arrow keys move through the result grid while the focus
+// stays in the field. Once every slot is filled, focus moves to the growth table.
 function PartySlots({
   party,
   title,
@@ -215,11 +226,10 @@ function PartySlots({
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const slotRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const listRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<number | null>(() => party.slots.indexOf(null));
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
-  // Chrome sends Enter with the last syllable still composing and commits it afterwards; the pick waits for that commit.
-  const pendingPickRef = useRef(false);
 
   const selectedSlot = selected !== null && selected >= 0 ? selected : null;
   const selectedUnit = selectedSlot === null ? null : party.slots[selectedSlot];
@@ -228,13 +238,13 @@ function PartySlots({
   const matches = useMemo(() => {
     if (!trimmed) return [];
     const usedUids = new Set(party.slots.flatMap((unit) => (unit ? [unit.studentUid] : [])));
-    return context.pickableStudents
-      .filter(
-        (student) => student.role === role && !usedUids.has(student.uid) && hangul.search(student.name, trimmed) >= 0,
-      )
-      .slice(0, MAX_LISTED_STUDENTS);
+    const candidates = context.pickableStudents.filter(
+      (student) => student.role === role && !usedUids.has(student.uid),
+    );
+    return filterStudentByName(trimmed, candidates, MAX_LISTED_STUDENTS);
   }, [context.pickableStudents, role, party.slots, trimmed]);
-  const active = matches[Math.min(activeIndex, matches.length - 1)] ?? null;
+  const activePosition = Math.min(activeIndex, matches.length - 1);
+  const active = matches[activePosition] ?? null;
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -261,11 +271,6 @@ function PartySlots({
     }
   };
 
-  const pickActiveRef = useRef(() => {});
-  pickActiveRef.current = () => {
-    if (active) pick(active.uid);
-  };
-
   const clearSlot = (slot: number) => {
     onChange({ ...party, slots: setSlot(slot, null) });
     setSelected(slot);
@@ -278,19 +283,36 @@ function PartySlots({
   };
 
   const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    // While a Korean syllable is composing, the IME takes the key to commit it and the browser sends the key again
+    // after the commit. Acting only on that second key picks once, with the committed name.
+    if (event.nativeEvent.isComposing) return;
+    // With a modifier, an arrow key keeps its text editing meaning, such as Shift+← selecting a syllable.
+    const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
+    if (
+      !modified &&
+      (event.key === "ArrowLeft" ||
+        event.key === "ArrowRight" ||
+        event.key === "ArrowUp" ||
+        event.key === "ArrowDown")
+    ) {
       if (matches.length === 0) return;
       event.preventDefault();
-      const step = event.key === "ArrowDown" ? 1 : -1;
-      setActiveIndex((current) => (Math.min(current, matches.length - 1) + step + matches.length) % matches.length);
+      const columns = gridColumnCount(listRef.current);
+      const last = matches.length - 1;
+      const current = Math.max(activePosition, 0);
+      let next = current;
+      if (event.key === "ArrowLeft") next = Math.max(current - 1, 0);
+      else if (event.key === "ArrowRight") next = Math.min(current + 1, last);
+      else if (event.key === "ArrowUp") next = current - columns >= 0 ? current - columns : current;
+      // Down from the row above a shorter last row lands on the last result.
+      else if (Math.floor(current / columns) < Math.floor(last / columns)) next = Math.min(current + columns, last);
+      setActiveIndex(next);
+      // Keep the card Enter would pick on screen; the focus stays in the search field.
+      listRef.current?.querySelectorAll<HTMLElement>('[role="option"]')[next]?.scrollIntoView?.({ block: "nearest" });
       return;
     }
     if (event.key === "Enter") {
       event.preventDefault();
-      if (event.nativeEvent.isComposing) {
-        pendingPickRef.current = true;
-        return;
-      }
       if (active) pick(active.uid);
       return;
     }
@@ -354,7 +376,7 @@ function PartySlots({
             <>
               <span
                 className={cn(
-                  "flex aspect-[5/6] w-full items-center justify-center rounded-md border border-dashed border-v2-control-border-strong text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg",
+                  "flex aspect-[5/6] w-full items-center justify-center rounded-md border border-dashed border-v2-control-border-strong text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
                   isSelected && "border-solid border-v2-accent bg-v2-accent-subtle text-v2-accent",
                 )}
               >
@@ -414,12 +436,6 @@ function PartySlots({
               setActiveIndex(0);
             }}
             onKeyDown={onSearchKeyDown}
-            onCompositionEnd={() => {
-              if (!pendingPickRef.current) return;
-              pendingPickRef.current = false;
-              // Pick after the committed syllable lands in the field, so it does not reappear after the field clears.
-              window.setTimeout(() => pickActiveRef.current(), 0);
-            }}
             className="min-w-0 flex-1 appearance-none bg-transparent text-base text-v2-fg outline-none placeholder:text-v2-fg-tertiary disabled:text-v2-fg-disabled sm:text-sm"
           />
         </label>
@@ -450,14 +466,19 @@ function PartySlots({
         ) : null}
       </div>
       <div
+        ref={listRef}
         id={listId}
         role="listbox"
         aria-label="학생 검색 결과"
-        className={cn("flex flex-wrap gap-1.5", !trimmed && "hidden")}
+        className={cn(
+          "grid grid-cols-[repeat(auto-fill,3.5rem)] gap-2 sm:grid-cols-[repeat(auto-fill,4rem)]",
+          !trimmed && "hidden",
+        )}
       >
         {matches.map((student, index) => {
           const { name, variant } = splitVisibleStudentName(student.name);
           const isActive = student.uid === active?.uid;
+          const recruited = Boolean(context.recruited[student.uid]);
           return (
             <button
               key={student.uid}
@@ -465,27 +486,44 @@ function PartySlots({
               type="button"
               role="option"
               aria-selected={isActive}
-              // The keyboard stays in the search field, which moves the active option with ↑↓.
+              aria-label={`${formatRaidStudentName(student.name)}${recruited ? "" : ", 미모집"}`}
+              // The keyboard stays in the search field, which moves the active option with the arrow keys.
               tabIndex={-1}
               onMouseDown={(event) => event.preventDefault()}
-              onMouseEnter={() => setActiveIndex(index)}
+              // Only a pointer that moves picks the active card. Scrolling a card under a resting pointer sends
+              // mouse events without movement, which would take the active card from the keyboard.
+              onMouseMove={(event) => {
+                if (event.movementX !== 0 || event.movementY !== 0) setActiveIndex(index);
+              }}
               onClick={() => pick(student.uid)}
+              // Scroll margins keep a scrolled-to card clear of the mobile header and of the form's save bar, which sits
+              // 0.75rem above the mobile navigation (safe area included) and is about 3rem tall; from lg it sits 1rem
+              // above the bottom edge.
               className={cn(
-                "flex cursor-pointer items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-0.5 text-sm text-v2-fg ring-1 ring-v2-control-border",
-                isActive && "bg-v2-accent-subtle ring-2 ring-v2-accent",
+                "relative block w-full cursor-pointer rounded-md text-left",
+                "scroll-mt-[calc(var(--mobile-header-height)+0.5rem)] scroll-mb-[calc(var(--mobile-nav-height)+4.75rem)]",
+                "lg:scroll-mt-2 lg:scroll-mb-20",
               )}
             >
-              <RoundStudentImage studentUid={student.uid} size="sm" />
-              <span>
-                {name}
-                {variant ? <span className="ml-0.5 text-xs text-v2-fg-tertiary">({variant})</span> : null}
-              </span>
-              {context.recruited[student.uid] ? null : <span className="text-xs text-v2-fg-tertiary">모집하지 않음</span>}
+              <StudentThumb
+                studentUid={student.uid}
+                name={name}
+                variant={variant}
+                recruitmentLabel={recruited ? undefined : "미모집"}
+                captionPlacement="overlay"
+              />
+              {isActive ? (
+                // A thick ring set off from the portrait by a gap of the card's surface, so it reads on any portrait.
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 top-0 aspect-[5/6] rounded-md ring-3 ring-v2-accent ring-offset-2 ring-offset-v2-surface"
+                />
+              ) : null}
             </button>
           );
         })}
         {trimmed && matches.length === 0 ? (
-          <p className="py-1 text-sm text-v2-fg-secondary">검색 결과가 없어요</p>
+          <p className="col-span-full py-1 text-sm text-v2-fg-secondary">검색 결과가 없어요</p>
         ) : null}
       </div>
     </div>
@@ -617,7 +655,7 @@ function PartyGrowthTable({
                 "flex min-h-8 shrink-0 cursor-pointer items-center border-b-2 px-2.5 text-sm whitespace-nowrap",
                 bundle.key === bundleKey
                   ? "border-v2-link font-semibold text-v2-fg"
-                  : "border-transparent text-v2-fg-secondary hover:text-v2-fg",
+                  : "border-transparent text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
                 v2FocusRing,
               )}
             >
@@ -702,21 +740,18 @@ function PartyGrowthTable({
           </tbody>
         </table>
       </div>
-      <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-v2-fg-tertiary">
-        {anyChanged ? (
-          <span className="inline-flex items-center gap-1">
-            <span
-              aria-hidden="true"
-              className={cn(
-                "size-3.5 rounded-sm bg-v2-accent-subtle ring-1 ring-v2-accent ring-inset",
-                CHANGED_FORCED_COLORS_MARK,
-              )}
-            />
-            <span id={changedLegendId}>모집한 학생 정보에서 수정한 값</span>
-          </span>
-        ) : null}
-        <span>–: 입력하지 않았거나 해당 없음</span>
-      </p>
+      {anyChanged ? (
+        <p className="mt-1 flex items-center gap-1 text-xs text-v2-fg-tertiary">
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-3.5 rounded-sm bg-v2-accent-subtle ring-1 ring-v2-accent ring-inset",
+              CHANGED_FORCED_COLORS_MARK,
+            )}
+          />
+          <span id={changedLegendId}>모집한 학생 정보에서 수정한 값</span>
+        </p>
+      ) : null}
     </div>
   );
 }

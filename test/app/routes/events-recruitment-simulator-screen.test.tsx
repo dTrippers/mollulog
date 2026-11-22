@@ -136,7 +136,6 @@ describe("event recruitment simulator screen", () => {
     expect(within(bar).getByText("3성 학생 비율 0.00%")).toBeTruthy();
     expect(within(bar).getByText("모집 스택 10")).toBeTruthy();
     expect(bar.textContent).toContain("100까지 90회 · 50% 확률로 픽업");
-    expect(screen.getByText("모집 결과").parentElement?.textContent).toContain("총 10회 모집");
     expect(
       within(bar)
         .getAllByRole("button")

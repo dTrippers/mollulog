@@ -47,7 +47,7 @@ export function ScannerQuotaMeter({ subject, state }: ScannerQuotaMeterProps) {
           type="button"
           onClick={state.onRetry}
           className={cn(
-            "w-fit cursor-pointer rounded-md text-xs font-medium text-v2-fg-secondary underline underline-offset-2 hover:text-v2-fg",
+            "w-fit cursor-pointer rounded-md text-xs font-medium text-v2-fg-secondary underline underline-offset-2 hover:text-v2-fg v2-interaction-transition",
             v2FocusRing,
           )}
         >

@@ -102,7 +102,7 @@ function PickupHeader({ event, typeLabel }: { event: PickupHistoryViewProps["eve
             <Link
               key={eventItem.uid}
               to={`/events/${eventItem.uid}`}
-              className="block whitespace-pre-line hover:underline"
+              className="block whitespace-pre-line underline decoration-transparent hover:decoration-current v2-interaction-transition"
             >
               {eventItem.name}
             </Link>

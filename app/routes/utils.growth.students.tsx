@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { data, redirect, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import type { StudentStateWriteMode } from "~/db/postgres/student-state-projection";
+import { isGrowthSortOrder } from "~/domain/growth-planner";
 import { getRelationshipLevelValidationError } from "~/domain/relationship-level";
 import {
   isStaleStudentStateRequestError,
@@ -11,6 +12,7 @@ import {
 } from "~/domain/student-state-errors";
 import { ActionValidationError } from "~/lib/action-errors";
 import { getLogger } from "~/lib/observability.server";
+import { saveGrowthPlannerSortOrder } from "~/models/planner-state";
 import {
   type RecruitedStudentCurrentStateInput,
   RecruitedStudentValidationError,
@@ -21,7 +23,9 @@ import { getStudentStateWriteMode, updateRelationshipLevel } from "~/models/rela
 import { getAllStudentsMap } from "~/models/student";
 import {
   removeStudentGrowth,
+  reorderStudentGrowths,
   type StudentGrowthInput,
+  StudentGrowthOrderConflictError,
   StudentGrowthValidationError,
   saveStudentGrowthAndCurrentState,
   upsertStudentGrowth,
@@ -117,6 +121,25 @@ type ResourceRequirementsActionData = {
   stateFormat?: "legacy" | "nullable";
 };
 
+type StudentActionData =
+  | GrowthActionData
+  | TierActionData
+  | AddActionData
+  | RemoveActionData
+  | EnrollActionData
+  | RelationshipActionData
+  | ResourceRequirementsActionData;
+
+type SortActionData = {
+  _intent: "sort";
+  sortOrder: unknown;
+};
+
+type ReorderActionData = {
+  _intent: "reorder";
+  orderedStudentUids: unknown;
+};
+
 function parseNullableInteger(value: unknown): number | null {
   if (value == null || value === "") {
     return null;
@@ -180,18 +203,28 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   }
 
   try {
-    const payload =
-      await request.json<
-        Partial<
-          | GrowthActionData
-          | TierActionData
-          | AddActionData
-          | RemoveActionData
-          | EnrollActionData
-          | RelationshipActionData
-          | ResourceRequirementsActionData
-        >
-      >();
+    const body = await request.json<Partial<StudentActionData | SortActionData | ReorderActionData>>();
+    // Planner-wide choices; they name no single student.
+    if (body._intent === "sort") {
+      const { sortOrder } = body as Partial<SortActionData>;
+      if (!isGrowthSortOrder(sortOrder)) {
+        return data<GrowthActionResult>({ error: "정렬 기준이 올바르지 않아요", retryable: false }, { status: 400 });
+      }
+      await saveGrowthPlannerSortOrder(env, currentUser.id, sortOrder);
+      return data<GrowthActionResult>({ kind: "sortOrder", sortOrder });
+    }
+    if (body._intent === "reorder") {
+      const { orderedStudentUids } = body as Partial<ReorderActionData>;
+      if (
+        !Array.isArray(orderedStudentUids) ||
+        !orderedStudentUids.every((uid): uid is string => typeof uid === "string" && uid.length > 0)
+      ) {
+        return data<GrowthActionResult>({ error: "학생 순서가 올바르지 않아요", retryable: false }, { status: 400 });
+      }
+      await reorderStudentGrowths(env, currentUser.id, orderedStudentUids);
+      return data<GrowthActionResult>({ kind: "order", orderedStudentUids });
+    }
+    const payload = body as Partial<StudentActionData>;
     if (
       "stateFormat" in payload &&
       payload.stateFormat != null &&
@@ -277,6 +310,13 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     }
     return data<GrowthActionResult>({ kind: "studentUpdate", student: row, submissionId: payload._submissionId });
   } catch (error) {
+    if (error instanceof StudentGrowthOrderConflictError) {
+      // The list changed in another tab; the screen reloads it instead of retrying an outdated order.
+      return data<GrowthActionResult>(
+        { error: "학생 목록이 바뀌어 순서를 저장하지 못했어요", retryable: false },
+        { status: 409 },
+      );
+    }
     if (isStaleStudentStateRequestError(error)) {
       return data<GrowthActionResult>(
         {
@@ -299,7 +339,15 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 };
 
 export default function GrowthStudentsPage() {
-  const { managedStudents, availableStudents, updateStudent } = useOutletContext<GrowthLayoutContext>();
+  const {
+    managedStudents,
+    availableStudents,
+    updateStudent,
+    sortOrder,
+    sortOrderStored,
+    setStudentPositions,
+    stacked,
+  } = useOutletContext<GrowthLayoutContext>();
   const loaderData = useLoaderData<typeof loader>();
   const [writeMode] = useState(loaderData.writeMode);
 
@@ -309,6 +357,10 @@ export default function GrowthStudentsPage() {
       availableStudents={availableStudents}
       onStudentUpdate={updateStudent}
       writeMode={writeMode}
+      stacked={stacked}
+      sortOrder={sortOrder}
+      sortOrderStored={sortOrderStored}
+      onPositionsChange={setStudentPositions}
     />
   );
 }

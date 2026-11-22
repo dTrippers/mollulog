@@ -5,6 +5,9 @@ import {
   getStudentGrowths,
   getStudentGrowthsWithMetadata,
   getStudentGrowthWithMetadata,
+  removeStudentGrowth,
+  reorderStudentGrowths,
+  StudentGrowthOrderConflictError,
   saveStudentGrowthAndCurrentState,
   upsertStudentGrowth,
   validateMergedStudentGrowthTarget,
@@ -108,6 +111,7 @@ function studentTargetRow(overrides: Record<string, unknown> = {}) {
     relationshipTargetLevel: null,
     giftPlan: {},
     plannerAddedAt: "2026-06-13T00:00:00.000000Z",
+    plannerPosition: null,
     deletedAt: null,
     createdAt: "2026-06-13T00:00:00.000Z",
     updatedAt: "2026-06-13T00:00:00.000Z",
@@ -636,5 +640,49 @@ describe("student-growth target state", () => {
         targetAbilityHeal: null,
       }),
     ).rejects.toThrow("목표 능력 해방은(는) 고유무기 장착 후 입력할 수 있어요");
+  });
+
+  it("rejects a manual order that does not list exactly the planner's students, without writing", async () => {
+    const { db, env } = createEnv();
+    db.tables.student_targets.push(
+      studentTargetRow(),
+      studentTargetRow({ id: 2, uid: "target-row-b", studentUid: "student-b", studentGrowthUid: "growth-b" }),
+      studentTargetRow({
+        id: 3,
+        uid: "target-row-tombstone",
+        studentUid: "student-tombstone",
+        studentGrowthUid: "growth-tombstone",
+        deletedAt: new Date("2026-06-14T00:00:00.000Z"),
+      }),
+    );
+
+    for (const order of [
+      ["student-a"],
+      ["student-a", "student-b", "student-c"],
+      ["student-a", "student-a"],
+      ["student-a", "student-tombstone"],
+    ]) {
+      await expect(reorderStudentGrowths(env, 1, order)).rejects.toBeInstanceOf(StudentGrowthOrderConflictError);
+    }
+    expect(db.statements.some((statement) => /^\s*update/i.test(statement))).toBe(false);
+  });
+
+  it("clears the manual position when a student leaves the planner", async () => {
+    const db = new FakePostgresClient(
+      {
+        student_state_migration_control: [{ key: "default", nullableSemanticsEnabled: true }],
+        student_targets: [studentTargetRow({ targetLevel: 70, plannerPosition: 3 })],
+      },
+      "student_growth",
+    );
+    const env = { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env;
+
+    await removeStudentGrowth(env, 1, "student-a");
+
+    expect(db.tables.student_targets[0]).toMatchObject({
+      studentGrowthUid: null,
+      plannerAddedAt: null,
+      plannerPosition: null,
+    });
   });
 });

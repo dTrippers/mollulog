@@ -40,7 +40,7 @@ export function FavoriteEventCard({ event, now }: { event: FavoriteEvent; now: U
             <Link
               to={`/events/${event.uid}`}
               prefetch="intent"
-              className={cn("whitespace-pre-line hover:underline", v2FocusRing)}
+              className={cn("whitespace-pre-line underline decoration-transparent hover:decoration-current v2-interaction-transition", v2FocusRing)}
               {...getV2LinkTransitionProps("forward")}
             >
               <TrailingIconText text={event.name}>
@@ -99,7 +99,7 @@ function FavoriteStudentRow({ student }: { student: FavoriteEventStudent }) {
             to={`/students/${student.uid}`}
             prefetch="intent"
             className={cn(
-              "inline-flex items-center gap-1 text-sm font-semibold text-v2-fg hover:underline",
+              "inline-flex items-center gap-1 text-sm font-semibold text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition",
               v2FocusRing,
             )}
             {...getV2LinkTransitionProps("forward")}

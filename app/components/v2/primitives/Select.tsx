@@ -23,7 +23,7 @@ export function Select<T extends string>({
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.currentTarget.value as T)}
-        className={cn("min-h-v2-control-min min-w-28 appearance-none rounded-md bg-v2-inset py-2 pr-8 pl-3 text-sm text-v2-fg hover:bg-v2-filled-hover active:bg-v2-filled-hover", v2FocusRing)}
+        className={cn("min-h-v2-control-min min-w-28 appearance-none rounded-md bg-v2-inset py-2 pr-8 pl-3 text-sm text-v2-fg hover:bg-v2-filled-hover active:bg-v2-filled-hover v2-interaction-transition", v2FocusRing)}
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

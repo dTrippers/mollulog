@@ -121,7 +121,7 @@ export function StudentRaidRecordList({
         </div>
       )}
       {records.length > 5 ? (
-        <button type="button" className="mt-2 inline-flex min-h-7 items-center rounded-md px-2 text-xs leading-[1.43] text-v2-fg-secondary hover:bg-v2-hover" onClick={() => onShowMoreChange(!showMore)}>
+        <button type="button" className="mt-2 inline-flex min-h-7 items-center rounded-md px-2 text-xs leading-[1.43] text-v2-fg-secondary hover:bg-v2-hover v2-interaction-transition" onClick={() => onShowMoreChange(!showMore)}>
           {showMore ? "접기" : "더 보기"}
         </button>
       ) : null}
@@ -158,7 +158,7 @@ function RaidRecordCard({ record, timeZone, detailHref, forms, currentStudentUid
         <RaidBossThumb boss={raid.boss} />
         <div className="min-w-0 flex-1">
           <p className="text-xs leading-[1.43] text-v2-fg-secondary">{recordEyebrow}</p>
-          <Link to={href} {...getV2LinkTransitionProps("crossfade")} className="block truncate text-base leading-[1.4] font-semibold text-v2-fg hover:underline">
+          <Link to={href} {...getV2LinkTransitionProps("crossfade")} className="block truncate text-base leading-[1.4] font-semibold text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition">
             {raid.name}
           </Link>
           <p className="text-xs leading-[1.43] text-v2-fg-tertiary tabular-nums">{recordMetadata}</p>
@@ -189,7 +189,7 @@ function RaidRecordCard({ record, timeZone, detailHref, forms, currentStudentUid
                 onClick={() => setMode(item)}
                 className={cn(
                   "inline-flex min-h-6 cursor-pointer items-center gap-1 rounded-[5px] px-2 text-xs whitespace-nowrap",
-                  mode === item ? "bg-v2-selected text-v2-on-selected" : "text-v2-fg-secondary hover:bg-v2-filled-hover",
+                  mode === item ? "bg-v2-selected text-v2-on-selected" : "text-v2-fg-secondary hover:bg-v2-filled-hover v2-interaction-transition",
                   v2FocusRing,
                 )}
               >

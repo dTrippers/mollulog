@@ -88,7 +88,7 @@ export function ShopBonusSection({ plan }: { plan: EventShopPlanContext }) {
             disabled={!plan.signedIn || plan.recruitedStudentUids.length === 0}
             onClick={applyRecruited}
           >
-            보유 학생 반영
+            모집한 학생 반영
           </Button>
           <Button size="sm" onClick={chooseAll}>
             모두 선택
@@ -305,6 +305,7 @@ function BonusStudentThumb({
       selectedIndicatorSize="small"
       fluid
       captionPlacement="overlay"
+      hideOverlayCaptionOnMobile
       grayscaleWhenUnselected
       showRecruitmentLabel={recruited}
     />

@@ -27,6 +27,10 @@ The primary should perform basic actual visual QA before presenting an
 implemented result for the user to judge. Check the relevant density, hierarchy,
 alignment, redundant text or nested boxes, long labels and large values, and
 empty/failure states.
+Before presenting, list each description, caption, hint, note, tag, and
+placeholder, and each border, outline, ring, and divider the change adds.
+Remove every one the screen's design guide ([design](design.md) or
+[design system 2.0](design-system-v2.md)) does not call for.
 Visual changes need actual render evidence. Behavior changes need actual
 interaction evidence; a screenshot alone cannot prove a state transition. A
 description records evidence that was actually obtained and does not replace

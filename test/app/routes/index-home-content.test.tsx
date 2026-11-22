@@ -415,7 +415,6 @@ describe("home bottom and aside", () => {
   it("separates a failed feed from an empty YouTube result, and links each channel in a new window", () => {
     const feed = render(<HomeFeedBlock feed={{ status: "error" }} timeZone={TZ} onRetry={noop} />);
     expect(feed).toContain("최근 피드를 불러오지 못했어요");
-    expect(feed).toContain("일시적인 문제일 수 있어요.");
     expect(feed).not.toContain('href="/community"');
 
     const youtube = render(

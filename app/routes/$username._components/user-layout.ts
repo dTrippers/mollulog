@@ -115,5 +115,5 @@ export function buildUserScreenItems({
   ];
 }
 
-export const FOLLOW_FAILURE_MESSAGE = "팔로우하지 못했어요. 다시 시도해주세요.";
-export const UNFOLLOW_FAILURE_MESSAGE = "팔로우를 해제하지 못했어요. 다시 시도해주세요.";
+export const FOLLOW_FAILURE_MESSAGE = "팔로우하지 못했어요.";
+export const UNFOLLOW_FAILURE_MESSAGE = "팔로우를 해제하지 못했어요.";
