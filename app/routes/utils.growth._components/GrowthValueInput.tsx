@@ -61,7 +61,7 @@ export function GrowthValueInput({
         commit(clamp(Number(digits)));
       }}
       className={cn(
-        "block h-full min-w-0 appearance-none bg-transparent px-0 text-center text-sm font-medium text-v2-fg tabular-nums outline-none placeholder:text-v2-fg-tertiary",
+        "block h-full min-w-0 appearance-none bg-transparent px-0 text-center text-sm font-normal text-v2-fg-secondary tabular-nums outline-none placeholder:text-v2-fg-tertiary",
         leading ? "w-[3ch] flex-none" : "flex-1",
       )}
     />
