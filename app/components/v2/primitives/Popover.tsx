@@ -195,7 +195,7 @@ export function Popover({
             ...(maxHeight === null ? {} : { "--v2-popover-room": `${maxHeight}px` }),
           }}
           className={cn(
-            "fixed z-30 w-72 rounded-lg bg-v2-popover-surface p-v2-block-p shadow-md ring-1 ring-v2-popover-divider backdrop-blur-md",
+            "fixed z-30 w-72 rounded-lg bg-v2-popover-surface p-v2-block-p shadow-v2-popover backdrop-blur-md",
             // A panel taller than the room between the fixed bars scrolls inside. A caller that sets its own max height
             // replaces this one, so it caps with min(…, var(--v2-popover-room, 100dvh)) to keep the room.
             "max-h-[var(--v2-popover-room,100dvh)] overflow-y-auto overscroll-contain",

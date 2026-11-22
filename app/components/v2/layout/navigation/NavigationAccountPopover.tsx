@@ -249,7 +249,7 @@ export function NavigationAccountPopover({
           aria-label="계정 메뉴"
           aria-hidden={!position}
           className={cn(
-            "fixed z-layer-navigation-menu w-66 overflow-y-auto rounded-lg bg-v2-popover-surface p-1.5 shadow-md ring-1 ring-v2-popover-divider backdrop-blur-md",
+            "fixed z-layer-navigation-menu w-66 overflow-y-auto rounded-lg bg-v2-popover-surface p-1.5 shadow-v2-popover backdrop-blur-md",
             !position && "pointer-events-none invisible opacity-0",
           )}
           style={{

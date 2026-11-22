@@ -270,7 +270,7 @@ describe("corr-5 control border token, docs, and gutter comment", () => {
       "| `border-v2-control-border` | `oklch(0.968 0 0)` | `oklch(0.388 0 0)` | Idle boundary for text inputs, selects, textareas, and grouped inputs. The value is the former 40% border over `bg-v2-surface`, made opaque; do not add an opacity modifier. Not for cards, buttons, or region separation. |",
     );
     expect(docs).toContain(
-      "| `border-v2-control-border-strong`, `ring-v2-control-border-strong` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Focused input boundary (paired with the focus ring), hover boundary, popover ring, and the upload drop zone. |",
+      "| `border-v2-control-border-strong`, `ring-v2-control-border-strong` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Focused input boundary (paired with the focus ring), hover boundary, and the upload drop zone. |",
     );
     expect(docs).toContain("- Radius tokens. Keep the 1.x base radius");
     expect(docs).not.toContain("Border and radius tokens");
