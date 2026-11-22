@@ -1,7 +1,7 @@
 import { Portal, Transition } from "@headlessui/react";
 import { type PointerEvent, type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
-import { getPopoverPosition, type PopoverPosition } from "./popover-position";
+import { getPopoverMaxHeight, getPopoverPosition, type PopoverPosition } from "./popover-position";
 
 export type PopoverProps = {
   open: boolean;
@@ -23,6 +23,25 @@ export type PopoverProps = {
   children: ReactNode;
 };
 
+// Fixed bars that cover an edge of the viewport, such as the mobile header and bottom navigation, carry
+// `data-v2-fixed-bar="top"` or `"bottom"`. A bar hidden at the current width measures as an empty box and is skipped.
+function getFixedBarInsets(viewportHeight: number) {
+  let top = 0;
+  let bottom = 0;
+  for (const bar of document.querySelectorAll<HTMLElement>("[data-v2-fixed-bar]")) {
+    const rect = bar.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      continue;
+    }
+    if (bar.dataset.v2FixedBar === "top") {
+      top = Math.max(top, rect.bottom);
+    } else if (bar.dataset.v2FixedBar === "bottom") {
+      bottom = Math.max(bottom, viewportHeight - rect.top);
+    }
+  }
+  return { top, bottom };
+}
+
 // Layout effects run before the browser paints. Server render has no layout, so it uses useEffect.
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
@@ -34,9 +53,9 @@ const hiddenPanelMotion =
 
 // Anchored panel for the desktop quick view. It renders in a portal on the body, so a scrolling table or list does not
 // clip it. It sits below the trigger, flips above when there is no room below, and stays inside the viewport. It follows
-// the trigger on resize and scroll. Escape and an outside pointer press close it, and focus returns to the trigger on
-// Escape. It fades and settles from the trigger side. Motion is off for reduced-motion users, and the exit finishes
-// before the panel unmounts.
+// the trigger on resize and scroll, and it stays clear of the mobile header and bottom navigation. Escape and an outside
+// pointer press close it, and focus returns to the trigger on Escape. It fades and settles from the trigger side. Motion
+// is off for reduced-motion users, and the exit finishes before the panel unmounts.
 export function Popover({
   open,
   label,
@@ -55,6 +74,7 @@ export function Popover({
   // The transition mounts the panel one commit after `open` turns true, so focus waits for the node itself.
   const [panelNode, setPanelNode] = useState<HTMLDivElement | null>(null);
   const [position, setPosition] = useState<PopoverPosition | null>(null);
+  const [maxHeight, setMaxHeight] = useState<number | null>(null);
   const placement = position?.placement ?? "below";
   const setPanelElement = useCallback((node: HTMLDivElement | null) => {
     panelRef.current = node;
@@ -89,11 +109,15 @@ export function Popover({
       if (!anchor) {
         return;
       }
+      const insets = getFixedBarInsets(window.innerHeight);
+      const nextMaxHeight = getPopoverMaxHeight({ viewportHeight: window.innerHeight, insets });
+      setMaxHeight((prev) => (prev === nextMaxHeight ? prev : nextMaxHeight));
       const next = getPopoverPosition({
         anchor,
         panel: { width: panelNode.offsetWidth, height: panelNode.offsetHeight },
         viewport: { width: window.innerWidth, height: window.innerHeight },
         placement: placementMode,
+        insets,
       });
       setPosition((prev) =>
         prev && prev.top === next.top && prev.left === next.left && prev.placement === next.placement ? prev : next,
@@ -165,9 +189,16 @@ export function Popover({
           data-placement={placement}
           onPointerEnter={onPanelPointerEnter}
           onPointerLeave={onPanelPointerLeave}
-          style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
+          style={{
+            top: position?.top ?? 0,
+            left: position?.left ?? 0,
+            ...(maxHeight === null ? {} : { "--v2-popover-room": `${maxHeight}px` }),
+          }}
           className={cn(
             "fixed z-30 w-72 rounded-lg bg-v2-popover-surface p-v2-block-p shadow-md ring-1 ring-v2-popover-divider backdrop-blur-md",
+            // A panel taller than the room between the fixed bars scrolls inside. A caller that sets its own max height
+            // replaces this one, so it caps with min(…, var(--v2-popover-room, 100dvh)) to keep the room.
+            "max-h-[var(--v2-popover-room,100dvh)] overflow-y-auto overscroll-contain",
             "focus:outline-none",
             placement === "above" ? "origin-bottom-left" : "origin-top-left",
             className,

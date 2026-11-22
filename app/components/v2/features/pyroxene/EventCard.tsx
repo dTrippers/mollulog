@@ -550,11 +550,6 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                     if (!student.favorited) handlers.onFavoriteChange(student.contentUid, student.uid, true);
                     const anchor = thumbRefs.current.get(student.uid) ?? null;
                     tierAnchorRef.current = anchor;
-                    // The popover opens below the thumbnail and does not know the fixed bottom navigation, so a
-                    // thumbnail low on the screen first moves to the middle, where the panel fits below it.
-                    if (anchor && anchor.getBoundingClientRect().bottom > window.innerHeight * 0.6) {
-                      anchor.scrollIntoView({ block: "center", behavior: "smooth" });
-                    }
                     setTierPopover({ uid: student.uid, open: true });
                   }}
                   selected={student.favorited}

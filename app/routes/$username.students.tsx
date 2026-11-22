@@ -917,7 +917,7 @@ export default function UserPage() {
                 label="필터 및 정렬"
                 onClose={() => setFilterPopoverOpen(false)}
                 returnFocusRef={filterTriggerRef}
-                className="max-h-[70dvh] w-80 overflow-y-auto"
+                className="max-h-[min(70dvh,var(--v2-popover-room,100dvh))] w-80 overflow-y-auto"
               >
                 <StudentsFilterBody state={filter} onChange={setFilter} />
               </Popover>
