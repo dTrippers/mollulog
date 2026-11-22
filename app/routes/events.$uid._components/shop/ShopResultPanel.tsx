@@ -146,7 +146,7 @@ export function ShopSignInNote() {
     <div className="flex items-center justify-between gap-2 px-1 text-xs text-v2-fg-secondary">
       <span className="inline-flex min-w-0 items-center gap-1.5">
         <UserIcon className="size-3.5 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
-        <span className="break-keep">로그인하면 계정 저장·보유 학생 반영</span>
+        <span className="break-keep">로그인하면 계정 저장·모집한 학생 반영</span>
       </span>
       <Button size="sm" variant="primary" onClick={showSignIn}>
         로그인

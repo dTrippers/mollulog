@@ -2098,7 +2098,7 @@ function getPlanReviewSections(
       title: "보너스 학생",
       lines: [
         `선택 방식: ${state.bonusStudentSelectionMode === "shared" ? "공통 선택" : "재화별 선택"}`,
-        `보유 학생 반영: ${state.includeRecruitedStudents ? "포함" : "미포함"}`,
+        `모집한 학생 반영: ${state.includeRecruitedStudents ? "포함" : "미포함"}`,
         ...bonuses,
       ],
     },
