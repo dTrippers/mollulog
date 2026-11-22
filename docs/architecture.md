@@ -17,10 +17,9 @@ Cloudflare Workers
 - The web app is a React Router v7 SSR app running on Cloudflare Workers.
 - Game source data is read primarily from the BAQL GraphQL API.
 - PostgreSQL is the canonical persistence store. Workers connect through Hyperdrive, which provides connection pooling without query caching.
-- D1 is not an active runtime store. Historical source tables are retained only through the approved `zzz_` archive operation.
 - KV is used for response caching and for precomputed work driven by cron.
 
-The migration boundary is repository-based. Every persistence domain reads and writes PostgreSQL directly without a D1 fallback, comparison mode, or dual-write path. External BAQL data, KV cache/session state, and queues remain separate infrastructure concerns.
+Every persistence domain reads and writes PostgreSQL directly without a secondary store, fallback, comparison mode, or dual-write path. External BAQL data, KV cache/session state, and queues remain separate infrastructure concerns.
 
 ## Layers
 
