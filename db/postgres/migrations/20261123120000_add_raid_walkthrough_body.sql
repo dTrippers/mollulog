@@ -2,8 +2,8 @@
 -- against an allowlist before storing it. Null means the guide has no body.
 --
 -- The existing plain-text descriptions move into the body: each line becomes a paragraph (an empty line an empty
--- paragraph, as the description showed it), and every http(s) URL becomes a link. The description column stays for one
--- release so the move can be checked, and a later migration drops it.
+-- paragraph, as the description showed it), and every http(s) URL becomes a link. The description column stays in place
+-- so the move can be checked; the code no longer reads or writes it, and retiring it follows docs/data/database.md.
 ALTER TABLE raid_walkthroughs ADD COLUMN body jsonb;
 
 DO $$
