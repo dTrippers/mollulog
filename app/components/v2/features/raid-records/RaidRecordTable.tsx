@@ -473,7 +473,7 @@ function ScoreModeSwitch({ model, context }: { model: RowModel; context: CellCon
       disabled={row.unavailableRecordUid !== null}
       aria-label={`#${row.season.seasonIndex} ${showsTotal ? "방어 타입별로 입력" : "합산 점수로 입력"}`}
       className={cn(
-        "cursor-pointer rounded-sm text-[0.6875rem] leading-4 font-medium whitespace-nowrap text-v2-link hover:underline disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:no-underline",
+        "cursor-pointer rounded-sm text-[0.6875rem] leading-4 font-medium whitespace-nowrap text-v2-link underline decoration-transparent hover:decoration-current disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:no-underline v2-interaction-transition",
         v2FocusRing,
       )}
     >
