@@ -55,6 +55,11 @@ single owner for commands and claim-to-evidence mapping.
 - Does a component that copies loader data into state still show revalidated
   data? Copy only what the screen edits locally, and refresh the copy whenever
   the loader data changes, not only when its list of keys does.
+- When a screen changes a selection locally before the server answers, such as
+  adding a planner target, does the loader data its calculation joins with that
+  selection cover the new item too? A loader that reads only what the saved
+  selection names, such as account data for current favorites only, makes the
+  screen calculate the new item from missing data until revalidation.
 - Does code that handles a PostgreSQL error, such as a unique violation, read it
   through `postgresUniqueConstraintName` (`app/lib/db.ts`)? Drizzle wraps driver
   errors in `DrizzleQueryError`, so the code and constraint are on its `cause`,
