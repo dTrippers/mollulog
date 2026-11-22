@@ -184,8 +184,13 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     const moving = hoverRules.filter(([, , body]) => /\b(?:animation|transform|translate|scale|rotate)\s*:/.test(body));
     expect(moving.map(([, selector]) => selector.trim())).toEqual([]);
     // A touch leaves :hover on the tapped thumbnail, which would stay dimmed in a selection grid.
-    const thumbSource = readFileSync(join(process.cwd(), "app/components/v2/features/students/StudentThumb.tsx"), "utf8");
-    expect(thumbSource).toContain('"[@media(hover:hover)_and_(pointer:fine)]:hover:opacity-80 v2-interaction-transition"');
+    const thumbSource = readFileSync(
+      join(process.cwd(), "app/components/v2/features/students/StudentThumb.tsx"),
+      "utf8",
+    );
+    expect(thumbSource).toContain(
+      '"[@media(hover:hover)_and_(pointer:fine)]:hover:opacity-80 v2-interaction-transition"',
+    );
   });
 
   it("V3: the panel section uses block padding, and only the collapsible header keeps the row minimum", () => {
