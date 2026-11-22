@@ -46,7 +46,7 @@ describe("rank party card student overlays", () => {
       compactLevel: true,
     });
 
-    const tags = markup.match(/<span role="img" aria-label="개시 스킬 [1-5]번" title="개시 스킬 [1-5]번" class="[^"]*">[1-5]<\/span>/g) ?? [];
+    const tags = markup.match(/<span role="img" aria-label="시작 스킬 [1-5]번" title="시작 스킬 [1-5]번" class="[^"]*">[1-5]<\/span>/g) ?? [];
     expect(tags).toHaveLength(5);
     expect(tags[0]).toContain("absolute top-0 -left-[3px]");
     expect(tags[0]).toContain("size-3.5");
@@ -60,7 +60,7 @@ describe("rank party card student overlays", () => {
       expect(tag).toContain("bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200");
       expect(tag).toContain("ring-[1.5px] ring-card");
     }
-    expect(markup).not.toContain("개시 스킬 6번");
+    expect(markup).not.toContain("시작 스킬 6번");
   });
 
   it("uses a compact level chip and stacks the unrecruited badge beneath it", () => {
@@ -104,7 +104,7 @@ describe("rank party card student overlays", () => {
 
     expect(markup).toContain(">Lv. 85</span>");
     expect(markup).not.toContain("Lv.85");
-    expect(markup).not.toContain("개시 스킬");
+    expect(markup).not.toContain("시작 스킬");
   });
 });
 

@@ -353,7 +353,7 @@ describe("global navigation catalog", () => {
     ]);
     expect(signedInSections.find(({ id }) => id === "community")?.items.map(({ name }) => name)).toEqual([
       "피드",
-      "공략 타임라인",
+      "공략/타임라인",
       "공략 작성하기",
     ]);
     expect(signedInSections.find(({ id }) => id === "settings")?.items.map(({ name }) => name)).toEqual([

@@ -55,13 +55,13 @@ export default function UserPartiesPage() {
     <Page
       title="이전 편성·공략"
       description={`@${username} 선생님이 이전 방식으로 등록한 편성과 공략이에요`}
-      backward={{ title: "공략 타임라인", to: "/timelines" }}
+      backward={{ title: "공략/타임라인", to: "/timelines" }}
     >
       <div className="py-4">
         <Callout
           Icon={QueueListIcon}
-          title="공략 타임라인 작성 기능이 추가됐어요"
-          description="기존 페이지에서는 더 이상 작성할 수 없어요. 새로운 공략 타임라인 기능을 이용해주세요."
+          title="공략/타임라인 작성 기능이 추가됐어요"
+          description="기존 페이지에서는 더 이상 작성할 수 없어요. 새로운 공략/타임라인 기능을 이용해주세요."
           tone="warning"
         />
 

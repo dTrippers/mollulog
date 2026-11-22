@@ -75,7 +75,7 @@ describe("community post block helpers", () => {
     expect(
       createWalkthroughTimelineCommunityPostBlocks({
         uid: "timeline-1",
-        description: "공략 설명",
+        bodyText: "공략 설명",
         bossUid: "boss-1",
         terrain: "indoor",
         defenseType: "heavy",

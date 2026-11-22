@@ -108,7 +108,7 @@ export function WalkthroughAttachment({ block }: { block: WalkthroughTimelineCom
             <span className="text-xs text-v2-fg-tertiary">외 {block.partyCount - 1}편성</span>
           ) : null}
         </span>
-        <span className="ml-auto text-xs font-medium text-v2-link">공략 타임라인 자세히 보기</span>
+        <span className="ml-auto text-xs font-medium text-v2-link">공략/타임라인 자세히 보기</span>
       </span>
     </Link>
   );

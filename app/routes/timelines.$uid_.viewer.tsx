@@ -32,11 +32,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   ]);
   const timeline = demo ? DEMO_WALKTHROUGH_TIMELINE : storedTimeline;
   if (!timeline || (storedTimeline?.visibility === "private" && storedTimeline.userId !== currentUser?.id)) {
-    throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
+    throw routeError(404, "timeline.not_found", "공략/타임라인을 찾을 수 없어요.");
   }
   const author = storedTimeline ? await getSenseiById(env, storedTimeline.userId, { ctx }) : null;
   if (storedTimeline && (!author || !isSenseiProfileVisibleTo(author, currentUser?.id))) {
-    throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
+    throw routeError(404, "timeline.not_found", "공략/타임라인을 찾을 수 없어요.");
   }
   const students = await getAllStudentsMap(env, true);
   return {

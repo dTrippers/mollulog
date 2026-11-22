@@ -74,7 +74,7 @@ function getPostTypeLabel(post: CommunityFeedPostItem) {
   }
 
   if (post.postType === "walkthrough_timeline") {
-    return "공략 타임라인";
+    return "공략/타임라인";
   }
 
   return "공략";
@@ -546,7 +546,7 @@ function BlockView({
               </div>
             </div>
           ) : null}
-          <p className="text-sm font-medium text-primary">공략 타임라인 자세히 보기</p>
+          <p className="text-sm font-medium text-primary">공략/타임라인 자세히 보기</p>
         </div>
       </Link>
     );

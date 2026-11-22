@@ -10,7 +10,7 @@ export const MOVED_MENUS_NOTICE_ENDS_AT = Date.parse("2026-12-01T00:00:00+09:00"
 
 const linkClassName = "font-medium text-v2-link underline underline-offset-2 hover:decoration-2";
 
-// Whether the owner's notice about the moved 공략 타임라인 and 편성/공략 tabs shows. It turns on only after the browser says
+// Whether the owner's notice about the moved 공략/타임라인 and 편성/공략 tabs shows. It turns on only after the browser says
 // it was not dismissed and the notice period has not ended, so a dismissed notice never flashes. Closing it is remembered
 // in this browser only. The layout renders the notice in two places (the Aside, and above the screen while the Aside is
 // hidden), so both share this one state.
@@ -49,10 +49,10 @@ export function MovedMenusNotice({ onDismiss, className }: { onDismiss: () => vo
       className={className}
       action={<IconButton icon={XMarkIcon} label="안내 닫기" onClick={onDismiss} className="-my-1.5 -mr-1.5" />}
     >
-      <p className="break-keep">공략 타임라인과 편성은 커뮤니티에서 확인해주세요.</p>
+      <p className="break-keep">공략/타임라인과 편성은 커뮤니티에서 확인해주세요.</p>
       <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
         <Link to="/timelines?mine=1" className={linkClassName}>
-          내 공략 타임라인
+          내 공략/타임라인
         </Link>
       </p>
     </StatusNotice>

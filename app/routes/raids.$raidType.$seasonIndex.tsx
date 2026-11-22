@@ -258,9 +258,9 @@ export default function RaidPage() {
           linkState: futureLinkState,
         },
         {
-          text: "타임라인 (β)",
+          text: "공략/타임라인",
           Icon: QueueListIcon,
-          description: "선생님들이 공유한 공략 타임라인 정보",
+          description: "선생님들이 공유한 공략/타임라인 정보",
           link: `/timelines?${timelineSearchParams.toString()}`,
           active: false,
         },

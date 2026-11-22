@@ -269,8 +269,8 @@ function PartyStudentCard({
       {showStartingSkillOrder && slot.startingSkillOrder != null ? (
         <span
           role="img"
-          aria-label={`개시 스킬 ${slot.startingSkillOrder}번`}
-          title={`개시 스킬 ${slot.startingSkillOrder}번`}
+          aria-label={`시작 스킬 ${slot.startingSkillOrder}번`}
+          title={`시작 스킬 ${slot.startingSkillOrder}번`}
           className={cn(
             "pointer-events-none absolute top-0 -left-[3px] z-20 inline-flex size-3.5 items-center justify-center rounded text-xs leading-none font-bold tabular-nums ring-[1.5px] ring-card shadow-sm",
             slot.startingSkillOrder <= 3

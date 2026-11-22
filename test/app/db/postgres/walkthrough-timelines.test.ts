@@ -23,6 +23,27 @@ const document: WalkthroughTimelineDocument = {
   parties: [],
 };
 
+const body = {
+  type: "doc" as const,
+  content: [{ type: "paragraph" as const, content: [{ type: "text" as const, text: "공략 설명" }] }],
+};
+
+// A document that passes the save rules: one party with a striker.
+const savableDocument: WalkthroughTimelineDocument = {
+  ...document,
+  parties: [
+    {
+      uid: "party-1",
+      order: 0,
+      startingSkillStudentUids: [],
+      units: [{ slot: 0, studentUid: "student-1" }],
+      steps: [],
+    },
+  ],
+};
+
+const studentName = (uid: string) => (uid === "student-1" ? "시로코" : undefined);
+
 function postgresRow(
   uid = "timeline-1",
   visibility: "private" | "unlisted" | "public" = "public",
@@ -33,7 +54,8 @@ function postgresRow(
     uid,
     10,
     "공략",
-    "공략 설명",
+    "",
+    body,
     visibility,
     isAuto,
     "boss-1",
@@ -70,14 +92,14 @@ function createClient(rowsFor: (sql: string) => unknown[], options: { failOn?: s
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive };
 const input = {
   title: "공략",
-  description: "공략 설명",
+  body,
   visibility: "public" as const,
   isAuto: false,
   bossUid: "boss-1",
   terrain: "indoor" as const,
   defenseType: "heavy" as const,
   maxDifficulty: "torment" as const,
-  document,
+  document: savableDocument,
 };
 
 describe("PostgreSQL walkthrough timelines", () => {
@@ -85,7 +107,7 @@ describe("PostgreSQL walkthrough timelines", () => {
     const { client, query } = createClient(() => [postgresRow()]);
     const result = await createPostgresWalkthroughTimeline(env, 10, input, { createClient: () => client });
     expect(result.uid).toBe("timeline-1");
-    expect(result.description).toBe("공략 설명");
+    expect(result.body).toEqual(body);
     expect(result.terrain).toBe("indoor");
     const sql = (query.mock.calls[0]?.[0] as { text: string }).text;
     expect(sql).toContain('insert into "raid_walkthroughs"');
@@ -209,7 +231,7 @@ describe("PostgreSQL walkthrough timelines", () => {
     const options = { createClient: () => client };
 
     await expect(
-      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, options),
+      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, studentName, options),
     ).resolves.toMatchObject({ uid: "timeline-1" });
     await expect(deletePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, options)).resolves.toBe(
       true,
@@ -223,7 +245,7 @@ describe("PostgreSQL walkthrough timelines", () => {
 
   it("rejects a malformed JSONB document instead of rendering fallback data", async () => {
     const malformed = postgresRow();
-    malformed[11] = { type: "walkthrough_timeline", schemaVersion: 999 };
+    malformed[12] = { type: "walkthrough_timeline", schemaVersion: 999 };
     const { client } = createClient(() => [malformed]);
     await expect(getPostgresWalkthroughTimeline(env, "timeline-1", { createClient: () => client })).rejects.toThrow(
       "schemaVersion",
@@ -237,7 +259,7 @@ describe("PostgreSQL walkthrough timelines", () => {
     });
 
     await expect(
-      createPostgresWalkthroughTimelineWithCommunityPost(env, 10, input, { createClient: () => client }),
+      createPostgresWalkthroughTimelineWithCommunityPost(env, 10, input, studentName, { createClient: () => client }),
     ).resolves.toMatchObject({ uid: "timeline-1" });
 
     const sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
@@ -255,7 +277,7 @@ describe("PostgreSQL walkthrough timelines", () => {
     });
 
     await expect(
-      createPostgresWalkthroughTimelineWithCommunityPost(env, 10, input, { createClient: () => client }),
+      createPostgresWalkthroughTimelineWithCommunityPost(env, 10, input, studentName, { createClient: () => client }),
     ).rejects.toThrow('insert into "community_posts"');
 
     const sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
@@ -272,7 +294,7 @@ describe("PostgreSQL walkthrough timelines", () => {
     const options = { createClient: () => client };
 
     await expect(
-      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, options),
+      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, studentName, options),
     ).resolves.toMatchObject({
       uid: "timeline-1",
     });
@@ -296,14 +318,14 @@ describe("PostgreSQL walkthrough timelines", () => {
     const options = { createClient: () => client };
 
     await expect(
-      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, options),
+      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, studentName, options),
     ).rejects.toThrow('insert into "community_posts"');
     let sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
     expect(sqlTexts).toContain("rollback");
     expect(sqlTexts).not.toContain("commit");
 
     await expect(
-      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, options),
+      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, studentName, options),
     ).resolves.toMatchObject({
       uid: "timeline-1",
     });
@@ -328,7 +350,7 @@ describe("PostgreSQL walkthrough timelines", () => {
     const options = { createClient: () => client };
 
     await expect(
-      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, { ...input, visibility }, options),
+      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, { ...input, visibility }, studentName, options),
     ).rejects.toThrow('update "community_posts"');
 
     const sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
@@ -373,7 +395,7 @@ describe("PostgreSQL walkthrough timelines", () => {
     await expect(
       Promise.all(
         clients.map(({ client }) =>
-          updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, {
+          updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, studentName, {
             createClient: () => client,
           }),
         ),

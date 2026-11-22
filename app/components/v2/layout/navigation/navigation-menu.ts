@@ -265,7 +265,7 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
     case "raid-records":
       return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/raids`));
     case "my-walkthroughs":
-      // The walkthrough list itself stays under 공략 타임라인; this entry owns the earlier parties page.
+      // The walkthrough list itself stays under 공략/타임라인; this entry owns the earlier parties page.
       return Boolean(currentUsername && pathname.startsWith("/timelines/parties/"));
     case "screen-scanner":
       return isMyDataConnectionPath(pathname);
@@ -650,7 +650,7 @@ export function getNavigationCatalog({
       group: "community",
       surfaces: ["desktop", "more", "search"],
       to: "/timelines",
-      name: "공략 타임라인",
+      name: "공략/타임라인",
       mobileNavigationId: "strategy-timeline",
       mobileLabel: "공략",
       favoriteId: "strategy-timeline",

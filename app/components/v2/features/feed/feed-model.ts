@@ -12,7 +12,7 @@ export function getFeedPostTypeLabel(postType: CommunityPostType): string {
     case "recruitment_result":
       return "모집 결과";
     case "walkthrough_timeline":
-      return "공략 타임라인";
+      return "공략/타임라인";
     default:
       return "공략";
   }

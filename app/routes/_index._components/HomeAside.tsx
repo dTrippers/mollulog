@@ -25,7 +25,7 @@ const CHANNEL_TITLES: Record<YoutubeChannelKey, string> = {
 const POST_TYPE_LABELS: Record<string, string> = {
   student_review: "학생 평가",
   event_opinion: "이벤트 의견",
-  walkthrough_timeline: "공략 타임라인",
+  walkthrough_timeline: "공략/타임라인",
 };
 
 // The item's target follows the existing community feed: an event opinion opens its event, a student review opens its
