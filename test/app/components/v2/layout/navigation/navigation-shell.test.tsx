@@ -162,7 +162,7 @@ describe("desktop navigation shell rendering", () => {
     expect(favoritesGroupIndex).toBeLessThan(firstFavoriteIndex);
     expect(firstFavoriteIndex).toBeLessThan(secondFavoriteIndex);
     expect(expandedNav).toContain('aria-label="학생부 즐겨찾기에서 제거" aria-pressed="true"');
-    expect(expandedNav).toContain('aria-label="쿠폰, 새 항목 있음"');
+    expect(expandedNav).toContain('aria-label="쿠폰, 확인할 내 정보 있음"');
     expect(expandedNav).not.toContain("☆를 눌러 즐겨찾기에 추가");
   });
 
@@ -236,13 +236,21 @@ describe("desktop navigation shell rendering", () => {
     expect(railToggle).toContain('title="메뉴 펼치기"');
   });
 
-  it("anchors the active rail group's red-dot summary to the icon corner", () => {
+  it("announces a collapsed sidebar group's account-dot summary", () => {
+    const html = renderNavigation("/students", false, "sensei", true, { game: false });
+    const groupButton = html.match(/<button[^>]*aria-controls="desktop-navigation-group-game"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+
+    expect(groupButton).toContain('<span class="sr-only">, 확인할 내 정보 있음</span>');
+    expect(groupButton).toContain('data-navigation-dot="account"');
+  });
+
+  it("anchors the active rail group's account-dot summary to the icon corner", () => {
     const html = renderNavigation("/students", true, null, true);
 
-    expect(html).toContain('aria-label="게임 정보, 새 항목 있음"');
+    expect(html).toContain('aria-label="게임 정보, 확인할 내 정보 있음"');
     expect(html).toContain('class="relative flex size-5 items-center justify-center"');
     expect(html).toContain(
-      'class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-v2-unread"',
+      'class="size-1.5 rounded-full bg-v2-account-dot absolute -top-0.5 -right-0.5" data-navigation-dot="account"',
     );
   });
 

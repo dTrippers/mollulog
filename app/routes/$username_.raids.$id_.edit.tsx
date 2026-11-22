@@ -9,7 +9,7 @@ import { Button } from "~/components/v2/primitives/Button";
 import { Dialog } from "~/components/v2/primitives/Dialog";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { getRaidRecordRankStatus, getRaidRecordTotalScore } from "~/domain/raid-record";
+import { getRaidRecordRankStatus, getRaidRecordShownTotalScore } from "~/domain/raid-record";
 import { routeError } from "~/lib/http-errors";
 import { getRaidRecord } from "~/models/raid-record";
 import { loadRaidRecordFormData } from "~/views/raid-records";
@@ -43,7 +43,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     season,
     record: {
       uid: record.uid,
+      scoreMode: record.scoreMode,
       scores: record.scores,
+      totalScore: record.totalScore,
       rank: record.rank,
       rankStatus: getRaidRecordRankStatus(record, season.rankConfirmAt),
       memo: record.memo,
@@ -96,7 +98,7 @@ export default function EditRaidRecord() {
       <DeleteRecordDialog
         open={deleteOpen}
         onClose={() => setDeleteOpen(false)}
-        summary={`#${season.seasonIndex} ${season.boss.name} · ${formatRaidScore(getRaidRecordTotalScore(record.scores))}점`}
+        summary={`#${season.seasonIndex} ${season.boss.name} · ${formatRaidScore(getRaidRecordShownTotalScore(record))}점`}
       />
     </V2Page>
   );

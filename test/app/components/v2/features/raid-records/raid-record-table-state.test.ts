@@ -8,7 +8,7 @@ import {
   raidTableRowStatus,
   toRaidTableSubmissionRow,
 } from "~/components/v2/features/raid-records/raid-record-table-state";
-import type { RaidRecordRankStatus } from "~/domain/raid-record";
+import type { RaidRecordRankStatus, RaidRecordScoreMode } from "~/domain/raid-record";
 import { Terrain } from "~/graphql/graphql";
 import type { RaidRecordSeasonView, RaidRecordTableRowView } from "~/views/raid-records";
 
@@ -42,19 +42,26 @@ function season(raidType: "total_assault" | "elimination"): RaidRecordSeasonView
 
 function row(
   raidType: "total_assault" | "elimination",
-  record: { scores: Record<string, number>; rank: number | null; rankStatus: RaidRecordRankStatus } | null,
+  record: {
+    scores: Record<string, number>;
+    rank: number | null;
+    rankStatus: RaidRecordRankStatus;
+    scoreMode?: RaidRecordScoreMode;
+    totalScore?: number | null;
+  } | null,
+  { ongoing = false }: { ongoing?: boolean } = {},
 ): RaidRecordTableRowView {
-  const rowSeason = season(raidType);
+  const rowSeason = { ...season(raidType), ongoing };
   return {
     season: rowSeason,
     record: record && {
       uid: "record-1",
-      scores: rowSeason.scoreDefenseTypes.map(({ defenseType }) => ({
-        defenseType,
-        score: record.scores[defenseType] ?? null,
-        difficulty: null,
-        clearTimeMs: null,
-      })),
+      scoreMode: record.scoreMode ?? "defense_type",
+      scores: rowSeason.scoreDefenseTypes.flatMap(({ defenseType }) => {
+        const score = record.scores[defenseType];
+        return score === undefined ? [] : [{ defenseType, score }];
+      }),
+      totalScore: record.totalScore ?? null,
       rank: record.rank,
       rankStatus: record.rankStatus,
       updatedAt: "2026-11-05T00:00:00.000Z",
@@ -63,8 +70,12 @@ function row(
   };
 }
 
-function draft(scores: RaidTableDraft["scores"], rank: number | null): RaidTableDraft {
-  return { scores, rank };
+function draft(
+  scores: RaidTableDraft["scores"],
+  rank: number | null,
+  total: Partial<Pick<RaidTableDraft, "scoreMode" | "totalScore">> = {},
+): RaidTableDraft {
+  return { scoreMode: "defense_type", totalScore: null, ...total, scores, rank };
 }
 
 describe("raid record table drafts", () => {
@@ -75,6 +86,32 @@ describe("raid record table drafts", () => {
       ),
     ).toEqual(draft({ heavy: 40_000_000, elastic: null, light: null }, 1200));
     expect(initialRaidTableDraft(row("total_assault", null))).toEqual(draft({ special: null }, null));
+  });
+
+  it("starts an ended 대결전 season without a record with the total alone, and a saved record as it was saved", () => {
+    expect(initialRaidTableDraft(row("elimination", null)).scoreMode).toBe("total");
+    expect(initialRaidTableDraft(row("elimination", null, { ongoing: true })).scoreMode).toBe("defense_type");
+    expect(initialRaidTableDraft(row("total_assault", null)).scoreMode).toBe("defense_type");
+    const savedTotal = row("elimination", {
+      scores: { heavy: 40_000_000 },
+      rank: 1200,
+      rankStatus: "confirmed",
+      scoreMode: "total",
+      totalScore: 90_000_000,
+    });
+    expect(initialRaidTableDraft(savedTotal)).toEqual(
+      draft({ heavy: 40_000_000, elastic: null, light: null }, 1200, { scoreMode: "total", totalScore: 90_000_000 }),
+    );
+    const savedScores = row("elimination", { scores: { heavy: 40_000_000 }, rank: 1200, rankStatus: "confirmed" });
+    expect(initialRaidTableDraft(savedScores).scoreMode).toBe("defense_type");
+  });
+
+  it("changes with the score mode of a saved record, but not of an empty row", () => {
+    const saved = row("elimination", { scores: { heavy: 40_000_000 }, rank: 1200, rankStatus: "confirmed" });
+    const switched = { ...initialRaidTableDraft(saved), scoreMode: "total" as const };
+    expect(isRaidTableRowChanged(saved, switched)).toBe(true);
+    const empty = row("elimination", null);
+    expect(isRaidTableRowChanged(empty, { ...initialRaidTableDraft(empty), scoreMode: "defense_type" })).toBe(false);
   });
 
   it("is unchanged until a score or the rank differs from what is saved", () => {
@@ -127,8 +164,8 @@ describe("raid record table errors", () => {
       { heavy: 40_348_000, elastic: 40_348_000, light: 40_000_000 },
     );
     expect(errors).toEqual([
-      { field: "score", defenseType: "heavy", message: "이 시즌에서 달성할 수 있는 최대 점수(40,348,000)보다 높아요." },
-      { field: "score", defenseType: "light", message: "이 시즌에서 달성할 수 있는 최대 점수(40,000,000)보다 높아요." },
+      { field: "score", defenseType: "heavy", message: "최대 점수(40,348,000)보다 높아요." },
+      { field: "score", defenseType: "light", message: "최대 점수(40,000,000)보다 높아요." },
     ]);
     // A defense type without a known maximum (a boss the score formula does not know) is not checked.
     expect(raidTableRowErrors(row("elimination", null), draft({ heavy: 50_000_000 }, 1200), { heavy: null })).toEqual(
@@ -136,10 +173,38 @@ describe("raid record table errors", () => {
     );
   });
 
+  it("asks for the total of a row that shows it alone, and checks it against the season maximum", () => {
+    const empty = row("elimination", null);
+    expect(raidTableRowErrors(empty, draft({}, 1200, { scoreMode: "total" }))).toEqual([
+      { field: "totalScore", message: "합산 점수를 입력해 주세요." },
+    ]);
+    expect(
+      raidTableRowErrors(empty, draft({}, 1200, { scoreMode: "total", totalScore: 120_000_001 }), {}, 120_000_000),
+    ).toEqual([{ field: "totalScore", message: "최대 합산 점수(120,000,000)보다 높아요." }]);
+    expect(raidTableRowErrors(empty, draft({}, 1200, { scoreMode: "total", totalScore: 0 }))).toEqual([
+      { field: "totalScore", message: "합산 점수를 확인해 주세요." },
+    ]);
+    // A row that shows its total needs no score per defense type.
+    expect(raidTableRowErrors(empty, draft({}, 1200, { scoreMode: "total", totalScore: 90_000_000 }))).toEqual([]);
+  });
+
+  it("does not check the side a row does not show", () => {
+    const empty = row("elimination", null);
+    expect(
+      raidTableRowErrors(empty, draft({ heavy: 50_000_000 }, 1200, { scoreMode: "total", totalScore: 90_000_000 }), {
+        heavy: 40_348_000,
+      }),
+    ).toEqual([]);
+    expect(
+      raidTableRowErrors(empty, draft({ heavy: 30_000_000 }, 1200, { totalScore: 120_000_001 }), {}, 120_000_000),
+    ).toEqual([]);
+  });
+
   it("labels an error by season and field", () => {
     const tableRow = row("elimination", null);
     expect(raidTableErrorLabel(tableRow, { field: "rank", message: "" })).toBe("#35 순위");
     expect(raidTableErrorLabel(tableRow, { field: "score", defenseType: "heavy", message: "" })).toBe("#35 점수");
+    expect(raidTableErrorLabel(tableRow, { field: "totalScore", message: "" })).toBe("#35 합산");
   });
 });
 
@@ -201,12 +266,49 @@ describe("raid record table submission", () => {
       seasonIndex: 35,
       recordUid: "record-1",
       recordUpdatedAt: "2026-11-05T00:00:00.000Z",
+      scoreMode: "defense_type",
       scores: [
         { defenseType: "heavy", score: 40_000_000 },
         { defenseType: "light", score: 27_000_000 },
       ],
+      totalScore: null,
       rank: 1100,
     });
     expect(() => toRaidTableSubmissionRow(saved, draft({ heavy: 1 }, null))).toThrow();
+  });
+
+  it("sends the total and the scores together, whichever the row shows", () => {
+    const saved = row("elimination", { scores: { heavy: 40_000_000 }, rank: 1200, rankStatus: "provisional" });
+    expect(
+      toRaidTableSubmissionRow(
+        saved,
+        draft({ heavy: 40_000_000, elastic: null, light: null }, 1200, { scoreMode: "total", totalScore: 90_000_000 }),
+      ),
+    ).toMatchObject({
+      scoreMode: "total",
+      scores: [{ defenseType: "heavy", score: 40_000_000 }],
+      totalScore: 90_000_000,
+    });
+    // A hidden value that would not save is left out.
+    expect(
+      toRaidTableSubmissionRow(
+        saved,
+        draft({ heavy: 50_000_000, light: 30_000_000 }, 1200, { scoreMode: "total", totalScore: 90_000_000 }),
+        { heavy: 40_348_000, light: 40_000_000 },
+      ),
+    ).toMatchObject({ scores: [{ defenseType: "light", score: 30_000_000 }], totalScore: 90_000_000 });
+    expect(
+      toRaidTableSubmissionRow(
+        saved,
+        draft({ heavy: 30_000_000 }, 1200, { scoreMode: "defense_type", totalScore: 120_000_001 }),
+        {},
+        120_000_000,
+      ),
+    ).toMatchObject({ scores: [{ defenseType: "heavy", score: 30_000_000 }], totalScore: null });
+    // A 총력전 row never sends a total.
+    const assault = row("total_assault", null);
+    expect(
+      toRaidTableSubmissionRow(assault, draft({ special: 1 }, 1, { scoreMode: "total", totalScore: 5 })),
+    ).toMatchObject({ scoreMode: "defense_type", totalScore: null });
   });
 });

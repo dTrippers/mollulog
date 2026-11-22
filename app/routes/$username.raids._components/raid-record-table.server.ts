@@ -10,6 +10,8 @@ import {
   isRaidSeasonStarted,
   normalizeRaidRecordScores,
   parseRaidRecordRank,
+  parseRaidRecordScoreMode,
+  parseRaidRecordTotalScore,
   type RaidRecordScoreInput,
 } from "~/domain/raid-record";
 import { nowUtcIso } from "~/lib/date-time";
@@ -18,6 +20,7 @@ import {
   getRaidRecordSeasons,
   listRaidRecords,
   RaidRecordBatchStaleError,
+  RaidRecordScoreAboveMaxError,
   RaidRecordTableScoresAboveMaxError,
   type RaidRecordTableRowInput,
   raidRecordSeasonRules,
@@ -98,13 +101,23 @@ export async function handleRaidRecordTableAction({
       return failure(STALE_MESSAGE, [], 409);
     }
 
+    let scoreMode: RaidRecordTableRowInput["scoreMode"];
+    try {
+      scoreMode = parseRaidRecordScoreMode(row.scoreMode, raidType);
+    } catch (error) {
+      if (!(error instanceof InvalidRaidRecordError)) throw error;
+      return failure("요청을 확인하지 못했어요.");
+    }
+    // The scores and the total are both kept, whichever the row shows; only the shown one is required.
     let scores: RaidRecordTableRowInput["scores"] = [];
+    let scoresValid = true;
     try {
       scores = normalizeRaidRecordScores(
         Array.isArray(row.scores) ? (row.scores as RaidRecordScoreInput[]) : [],
         raidRecordSeasonRules(season),
       );
-      if (scores.length === 0) {
+      if (scoreMode === "defense_type" && scores.length === 0) {
+        scoresValid = false;
         rowErrors.push({
           seasonIndex,
           field: "score",
@@ -113,7 +126,24 @@ export async function handleRaidRecordTableAction({
       }
     } catch (error) {
       if (!(error instanceof InvalidRaidRecordError)) throw error;
+      scoresValid = false;
       rowErrors.push({ seasonIndex, field: "score", message: error.message });
+    }
+    let totalScore: number | null = null;
+    let totalValid = true;
+    try {
+      totalScore = parseRaidRecordTotalScore(row.totalScore);
+      if (raidType !== "elimination" && totalScore !== null) {
+        return failure("요청을 확인하지 못했어요.");
+      }
+      if (scoreMode === "total" && totalScore === null) {
+        totalValid = false;
+        rowErrors.push({ seasonIndex, field: "totalScore", message: "합산 점수를 입력해 주세요." });
+      }
+    } catch (error) {
+      if (!(error instanceof InvalidRaidRecordError)) throw error;
+      totalValid = false;
+      rowErrors.push({ seasonIndex, field: "totalScore", message: error.message });
     }
     let rank: number | null = null;
     try {
@@ -123,7 +153,7 @@ export async function handleRaidRecordTableAction({
       if (!(error instanceof InvalidRaidRecordError)) throw error;
       rowErrors.push({ seasonIndex, field: "rank", message: error.message });
     }
-    if (rank !== null && scores.length > 0) inputs.push({ season, current, scores, rank });
+    if (rank !== null && scoresValid && totalValid) inputs.push({ season, current, scoreMode, scores, totalScore, rank });
   }
   if (rowErrors.length > 0) return failure(null, rowErrors);
 
@@ -133,12 +163,11 @@ export async function handleRaidRecordTableAction({
     if (error instanceof RaidRecordTableScoresAboveMaxError) {
       return failure(
         null,
-        error.rows.map(({ seasonIndex, error: rowError }) => ({
-          seasonIndex,
-          field: "score",
-          defenseType: rowError.defenseType,
-          message: rowError.message,
-        })),
+        error.rows.map(({ seasonIndex, error: rowError }) =>
+          rowError instanceof RaidRecordScoreAboveMaxError
+            ? { seasonIndex, field: "score" as const, defenseType: rowError.defenseType, message: rowError.message }
+            : { seasonIndex, field: "totalScore" as const, message: rowError.message },
+        ),
       );
     }
     if (error instanceof RaidRecordBatchStaleError) return failure(STALE_MESSAGE, [], 409);

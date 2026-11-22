@@ -56,8 +56,10 @@ import {
 } from "~/domain/mobile-navigation";
 import {
   applyMenuBadgeOverride,
+  type NavigationDot,
   type NavigationMenuId,
   type ResolvedMenuBadgeOverride,
+  summarizeNavigationDots,
 } from "~/domain/navigation-menu-badges";
 import type { UtcIsoString } from "~/lib/date-time";
 import { NAVIGATION_ICONS } from "./navigation-icons";
@@ -85,7 +87,7 @@ export type NavigationItem = {
   OutlineIcon: IconComponent;
   SolidIcon: IconComponent;
   isActive?: boolean;
-  showRedDot?: boolean;
+  dot?: NavigationDot;
   badgeLabel?: string;
   disabled?: boolean;
   requiresSignIn?: boolean;
@@ -284,7 +286,6 @@ export function getNavigationCatalog({
   upcomingEvent,
   hasOngoingRaid,
   hasUnconsumedCoupons,
-  isSignedIn,
   currentUsername = null,
   hasRecentNews = false,
   hasUnreadFeedbackReplies = false,
@@ -416,7 +417,7 @@ export function getNavigationCatalog({
       OutlineIcon: TicketIconOutline,
       SolidIcon: TicketIconSolid,
       isActive: itemIsActive("coupons", pathname, currentUsername),
-      showRedDot: hasUnconsumedCoupons,
+      dot: hasUnconsumedCoupons ? "account" : undefined,
     },
     {
       menuId: "ai-question",
@@ -453,7 +454,6 @@ export function getNavigationCatalog({
       mobileNavigationId: "pyroxene-planner",
       favoriteId: "pyroxene-planner",
       description: "모집 시점의 청휘석을 계산해보세요",
-      badgeLabel: isSignedIn ? undefined : "로그인 없이 사용",
       OutlineIcon: NAVIGATION_ICONS["pyroxene-planner"].OutlineIcon,
       SolidIcon: NAVIGATION_ICONS["pyroxene-planner"].SolidIcon,
       isActive: itemIsActive("pyroxene-planner", pathname, currentUsername),
@@ -647,7 +647,7 @@ export function getNavigationCatalog({
       favoriteId: "news",
       OutlineIcon: MegaphoneIconOutline,
       SolidIcon: MegaphoneIconSolid,
-      showRedDot: hasRecentNews,
+      dot: hasRecentNews ? "attention" : undefined,
       isActive: itemIsActive("news", pathname, currentUsername),
     },
     {
@@ -659,7 +659,7 @@ export function getNavigationCatalog({
       favoriteId: "contact",
       OutlineIcon: EnvelopeIconOutline,
       SolidIcon: EnvelopeIconSolid,
-      showRedDot: hasUnreadFeedbackReplies,
+      dot: hasUnreadFeedbackReplies ? "account" : undefined,
       isActive: itemIsActive("contact", pathname, currentUsername),
     },
     {
@@ -729,10 +729,10 @@ export function getNavigationCatalog({
     if (!item.menuId) return item;
     const badge = applyMenuBadgeOverride(
       item.menuId,
-      { label: item.badgeLabel, showRedDot: item.showRedDot },
+      { label: item.badgeLabel, dot: item.dot },
       menuBadgeOverrides?.[item.menuId],
     );
-    return { ...item, badgeLabel: badge.label, showRedDot: badge.showRedDot };
+    return { ...item, badgeLabel: badge.label, dot: badge.dot };
   });
 }
 
@@ -901,6 +901,6 @@ export function getAccountNavigationActions(options: NavigationCatalogOptions): 
   );
 }
 
-export function getNavigationGroupBadgeSummary(items: readonly NavigationItem[]): boolean {
-  return items.some((item) => item.showRedDot === true);
+export function getNavigationGroupBadgeSummary(items: readonly NavigationItem[]): NavigationDot | undefined {
+  return summarizeNavigationDots(items.map((item) => item.dot));
 }

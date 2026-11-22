@@ -3,14 +3,17 @@ import { Link, useBlocker, useFetcher, useNavigate } from "react-router";
 import {
   computeRaidClearResult,
   getRaidMaxScore,
+  getRaidMaxTotalScore,
   type RaidRecordDefenseType,
   type RaidRecordRaidType,
+  type RaidRecordScoreMode,
   type RaidRecordServer,
 } from "~/domain/raid-record";
 import { cn } from "~/lib/utils";
 import { defenseTypeLocale, terrainLocale } from "~/locales/ko";
 import type { RaidRecordTableRowView, RaidRecordTableView } from "~/views/raid-records";
 import { PageActionBar } from "../../layout/PageActionBar";
+import { v2FocusRing } from "../../layout/styles";
 import { useV2Page } from "../../layout/V2Page";
 import { Button, v2ButtonClassName } from "../../primitives/Button";
 import { Checkbox } from "../../primitives/Checkbox";
@@ -40,18 +43,20 @@ import {
   isRaidTableRankChanged,
   isRaidTableRowChanged,
   isRaidTableScoreChanged,
+  isRaidTableTotalScoreChanged,
   type RaidTableCellError,
   type RaidTableDraft,
   type RaidTableRowStatus,
   raidTableErrorLabel,
   raidTableRowErrors,
   raidTableRowStatus,
+  raidTableShowsTotal,
   toRaidTableSubmissionRow,
 } from "./raid-record-table-state";
 
 export type RaidRecordTableRowError = {
   seasonIndex: number;
-  field: "score" | "rank";
+  field: "score" | "totalScore" | "rank";
   defenseType?: RaidRecordDefenseType;
   message: string;
 };
@@ -95,14 +100,16 @@ type RowModel = {
   changed: boolean;
   errors: RaidTableCellError[];
   status: RaidTableRowStatus;
+  maxScores: Partial<Record<RaidRecordDefenseType, number | null>>;
+  maxTotalScore: number | null;
 };
 
-function cellError(model: RowModel, field: "score" | "rank", defenseType?: RaidRecordDefenseType) {
+function cellError(model: RowModel, field: "score" | "totalScore" | "rank", defenseType?: RaidRecordDefenseType) {
   const firstDefenseType = model.row.season.scoreDefenseTypes[0]?.defenseType;
   return model.errors.find(
     (error) =>
       error.field === field &&
-      (field === "rank" ||
+      (field !== "score" ||
         error.defenseType === defenseType ||
         (error.defenseType === undefined && defenseType === firstDefenseType)),
   );
@@ -143,13 +150,14 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
         for (const { defenseType, maxDifficulty } of row.season.scoreDefenseTypes) {
           maxScores[defenseType] = getRaidMaxScore(row.season.boss.uid, maxDifficulty);
         }
+        const maxTotalScore = getRaidMaxTotalScore(row.season.boss.uid, row.season.scoreDefenseTypes);
         const errors = [
-          ...raidTableRowErrors(row, draft, maxScores),
+          ...raidTableRowErrors(row, draft, maxScores, maxTotalScore),
           ...serverErrors
             .filter((error) => error.seasonIndex === row.season.seasonIndex)
             .map(({ field, defenseType, message }) => ({ field, defenseType, message })),
         ];
-        return { row, draft, changed, errors, status: raidTableRowStatus(row, draft, now) };
+        return { row, draft, changed, errors, status: raidTableRowStatus(row, draft, now), maxScores, maxTotalScore };
       }),
     [rows, drafts, serverErrors, now],
   );
@@ -182,6 +190,10 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
   const setScore = (row: RaidRecordTableRowView, defenseType: RaidRecordDefenseType, score: number | null) =>
     updateDraft(row, (draft) => ({ ...draft, scores: { ...draft.scores, [defenseType]: score } }));
   const setRank = (row: RaidRecordTableRowView, rank: number | null) => updateDraft(row, (draft) => ({ ...draft, rank }));
+  const setTotalScore = (row: RaidRecordTableRowView, totalScore: number | null) =>
+    updateDraft(row, (draft) => ({ ...draft, totalScore }));
+  const setScoreMode = (row: RaidRecordTableRowView, scoreMode: RaidRecordScoreMode) =>
+    updateDraft(row, (draft) => ({ ...draft, scoreMode }));
 
   const filtered = onlyUnrecorded
     ? models.filter((model) => (!model.row.record && !model.row.unavailableRecordUid) || model.changed)
@@ -195,12 +207,14 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
     if (!canSave) return;
     savingRef.current = true;
     fetcher.submit(
-      { server, raidType, rows: changedModels.map((model) => toRaidTableSubmissionRow(model.row, model.draft)) },
+      { server, raidType, rows: changedModels.map((model) =>
+          toRaidTableSubmissionRow(model.row, model.draft, model.maxScores, model.maxTotalScore),
+        ) },
       { method: "post", encType: "application/json" },
     );
   };
 
-  const cellProps: CellContext = { username, getInputProps, setScore, setRank };
+  const cellProps: CellContext = { username, getInputProps, setScore, setTotalScore, setScoreMode, setRank };
   const pageMessage = fetcher.state === "idle" && fetcher.data && !fetcher.data.ok ? fetcher.data.message : null;
 
   return (
@@ -360,6 +374,8 @@ type CellContext = {
   username: string;
   getInputProps: (options?: { disabled?: boolean }) => NumberInputFlowNavigationInputProps;
   setScore: (row: RaidRecordTableRowView, defenseType: RaidRecordDefenseType, score: number | null) => void;
+  setTotalScore: (row: RaidRecordTableRowView, totalScore: number | null) => void;
+  setScoreMode: (row: RaidRecordTableRowView, scoreMode: RaidRecordScoreMode) => void;
   setRank: (row: RaidRecordTableRowView, rank: number | null) => void;
 };
 
@@ -416,6 +432,53 @@ function ScoreCell({
         </CellHint>
       ) : null}
     </span>
+  );
+}
+
+// The total of an elimination row that shows it alone.
+function TotalScoreCell({ model, context }: { model: RowModel; context: CellContext }) {
+  const errorId = useId();
+  const { row, draft } = model;
+  const error = cellError(model, "totalScore");
+  const disabled = row.unavailableRecordUid !== null;
+  return (
+    <span className="block">
+      <DigitsInput
+        aria-label={`#${row.season.seasonIndex} 합산 점수`}
+        value={draft.totalScore}
+        onValueChange={(value) => context.setTotalScore(row, value)}
+        changed={isRaidTableTotalScoreChanged(row, draft)}
+        invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        disabled={disabled}
+        {...context.getInputProps({ disabled })}
+      />
+      {error ? (
+        <CellHint id={errorId} danger>
+          {error.message}
+        </CellHint>
+      ) : null}
+    </span>
+  );
+}
+
+// Switches an elimination row between the scores per defense type and the total alone. The other side keeps its values.
+function ScoreModeSwitch({ model, context }: { model: RowModel; context: CellContext }) {
+  const { row, draft } = model;
+  const showsTotal = raidTableShowsTotal(row, draft);
+  return (
+    <button
+      type="button"
+      onClick={() => context.setScoreMode(row, showsTotal ? "defense_type" : "total")}
+      disabled={row.unavailableRecordUid !== null}
+      aria-label={`#${row.season.seasonIndex} ${showsTotal ? "방어 타입별로 입력" : "합산 점수로 입력"}`}
+      className={cn(
+        "cursor-pointer rounded-sm text-[0.6875rem] leading-4 font-medium whitespace-nowrap text-v2-link hover:underline disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:no-underline",
+        v2FocusRing,
+      )}
+    >
+      {showsTotal ? "방어 타입별로 입력" : "합산 점수로 입력"}
+    </button>
   );
 }
 
@@ -534,22 +597,21 @@ const DEFENSE_LABEL_SLOT = "block h-4 text-[0.6875rem] leading-4";
 // The height of a score input with its border, for text that sits beside one.
 const INPUT_LINE = "flex min-h-[calc(var(--spacing-v2-input-min)+2px)] items-center";
 
+// The sum of an elimination row's scores.
 function EliminationTotal({ model }: { model: RowModel }) {
   const entered = model.row.season.scoreDefenseTypes.flatMap(({ defenseType }) => {
     const score = model.draft.scores[defenseType];
     return score == null ? [] : [score];
   });
-  if (entered.length === 0) {
-    return <span className={cn(INPUT_LINE, "justify-end text-v2-fg-tertiary")}>–</span>;
-  }
-  const total = entered.reduce((sum, score) => sum + score, 0);
-  const count = model.row.season.scoreDefenseTypes.length;
   return (
     <span className="block text-right">
-      <span className={cn(INPUT_LINE, "justify-end font-semibold text-v2-fg tabular-nums")}>
-        {formatRaidScore(total)}
-      </span>
-      {entered.length < count ? <CellHint>{`${entered.length}/${count} 입력`}</CellHint> : null}
+      {entered.length === 0 ? (
+        <span className={cn(INPUT_LINE, "justify-end text-v2-fg-tertiary")}>–</span>
+      ) : (
+        <span className={cn(INPUT_LINE, "justify-end font-semibold text-v2-fg tabular-nums")}>
+          {formatRaidScore(entered.reduce((sum, score) => sum + score, 0))}
+        </span>
+      )}
     </span>
   );
 }
@@ -619,31 +681,50 @@ function TableRow({ model, context }: { model: RowModel; context: CellContext })
         </>
       ) : (
         <>
-          {[0, 1, 2].map((index) => {
-            const entry = season.scoreDefenseTypes[index];
-            return (
-              <td key={index} className="align-top!">
-                {entry ? (
-                  <span className="flex flex-col gap-0.5">
-                    <DefenseTypeLabel
-                      defenseType={entry.defenseType}
-                      className={cn(DEFENSE_LABEL_SLOT, "flex text-v2-fg-secondary")}
-                    />
-                    <ScoreCell
-                      model={model}
-                      defenseType={entry.defenseType}
-                      context={context}
-                      label={`#${season.seasonIndex} ${defenseTypeLocale[entry.defenseType]} 점수`}
-                    />
-                  </span>
-                ) : null}
-              </td>
-            );
-          })}
+          {raidTableShowsTotal(row, model.draft) ? (
+            <td colSpan={3} className="align-top!">
+              <InputLine aligned>
+                <span className={INPUT_LINE}>
+                  <ScoreModeSwitch model={model} context={context} />
+                </span>
+              </InputLine>
+            </td>
+          ) : (
+            [0, 1, 2].map((index) => {
+              const entry = season.scoreDefenseTypes[index];
+              return (
+                <td key={index} className="align-top!">
+                  {entry ? (
+                    <span className="flex flex-col gap-0.5">
+                      <DefenseTypeLabel
+                        defenseType={entry.defenseType}
+                        className={cn(DEFENSE_LABEL_SLOT, "flex text-v2-fg-secondary")}
+                      />
+                      <ScoreCell
+                        model={model}
+                        defenseType={entry.defenseType}
+                        context={context}
+                        label={`#${season.seasonIndex} ${defenseTypeLocale[entry.defenseType]} 점수`}
+                      />
+                    </span>
+                  ) : null}
+                </td>
+              );
+            })
+          )}
           <td className={inputLineCell}>
-            <InputLine aligned>
-              <EliminationTotal model={model} />
-            </InputLine>
+            {raidTableShowsTotal(row, model.draft) ? (
+              <InputLine aligned>
+                <TotalScoreCell model={model} context={context} />
+              </InputLine>
+            ) : (
+              <span className="flex flex-col gap-0.5">
+                <span className={cn(DEFENSE_LABEL_SLOT, "flex justify-end")}>
+                  <ScoreModeSwitch model={model} context={context} />
+                </span>
+                <EliminationTotal model={model} />
+              </span>
+            )}
           </td>
         </>
       )}
@@ -720,22 +801,34 @@ function SeasonCard({ model, context }: { model: RowModel; context: CellContext 
         </span>
       ) : (
         <span className="flex flex-col gap-1.5">
-          {season.scoreDefenseTypes.map(({ defenseType }) => (
-            <span key={defenseType} className="grid grid-cols-[6rem_1fr] items-start gap-2">
-              <DefenseTypeLabel defenseType={defenseType} className="min-h-7 text-xs text-v2-fg-secondary" />
-              <ScoreCell
-                model={model}
-                defenseType={defenseType}
-                context={context}
-                label={`#${season.seasonIndex} ${defenseTypeLocale[defenseType]} 점수`}
-              />
-            </span>
-          ))}
+          <span className="flex flex-col items-start">
+            <ScoreModeSwitch model={model} context={context} />
+          </span>
+          {raidTableShowsTotal(row, model.draft) ? null : (
+            season.scoreDefenseTypes.map(({ defenseType }) => (
+              <span key={defenseType} className="grid grid-cols-[6rem_1fr] items-start gap-2">
+                <DefenseTypeLabel defenseType={defenseType} className="min-h-7 text-xs text-v2-fg-secondary" />
+                <ScoreCell
+                  model={model}
+                  defenseType={defenseType}
+                  context={context}
+                  label={`#${season.seasonIndex} ${defenseTypeLocale[defenseType]} 점수`}
+                />
+              </span>
+            ))
+          )}
           <span className="grid grid-cols-[1fr_8.5rem] items-start gap-2">
-            <span className="flex min-h-7 items-center justify-between gap-2 text-xs text-v2-fg-secondary">
-              합산
-              <EliminationTotal model={model} />
-            </span>
+            {raidTableShowsTotal(row, model.draft) ? (
+              <span className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2">
+                <span className="flex min-h-7 items-center text-xs text-v2-fg-secondary">합산</span>
+                <TotalScoreCell model={model} context={context} />
+              </span>
+            ) : (
+              <span className="flex min-h-7 items-start justify-between gap-2 text-xs text-v2-fg-secondary">
+                <span className="flex min-h-7 shrink-0 items-center">합산</span>
+                <EliminationTotal model={model} />
+              </span>
+            )}
             <RankCell model={model} context={context} />
           </span>
         </span>

@@ -7,6 +7,7 @@ import {
   getMoreNavigationSections,
   getNavigationCatalog,
   getNavigationFavoriteItems,
+  getNavigationGroupBadgeSummary,
   getSearchableMenuItems,
   isAccountNavigationActive,
 } from "~/components/v2/layout/navigation/navigation-menu";
@@ -162,11 +163,11 @@ describe("global navigation catalog", () => {
       menuId: "mollulog-api",
       name: "개발자 센터",
       badgeLabel: "베타",
-      showRedDot: true,
+      dot: "attention",
     });
     expect(getNavigationCatalog(guestOptions).find(({ to }) => to === "/developers")).toMatchObject({
       badgeLabel: undefined,
-      showRedDot: false,
+      dot: undefined,
     });
   });
 
@@ -493,25 +494,50 @@ describe("global navigation catalog", () => {
     });
     const itemById = new Map(catalog.flatMap((item) => (item.menuId ? [[item.menuId, item] as const] : [])));
 
-    expect(itemById.get("integrated-planner")).toMatchObject({ badgeLabel: "새 달력", showRedDot: true });
-    expect(itemById.get("ap-planner")).toMatchObject({ badgeLabel: "새 기능", showRedDot: true });
-    expect(itemById.get("raids")).toMatchObject({ badgeLabel: "새 시즌", showRedDot: false });
-    expect(itemById.get("coupons")).toMatchObject({ badgeLabel: undefined, showRedDot: false });
-    expect(itemById.get("news")).toMatchObject({ badgeLabel: undefined, showRedDot: true });
-    expect(itemById.get("contact")).toMatchObject({ showRedDot: true });
-    expect(catalog.find(({ to }) => to === "/notifications")?.showRedDot).toBeUndefined();
+    expect(itemById.get("integrated-planner")).toMatchObject({ badgeLabel: "새 달력", dot: "attention" });
+    expect(itemById.get("ap-planner")).toMatchObject({ badgeLabel: "새 기능", dot: "attention" });
+    expect(itemById.get("raids")).toMatchObject({ badgeLabel: "새 시즌", dot: undefined });
+    // The operator's red-dot "hidden" never hides the user's own account dot.
+    expect(itemById.get("coupons")).toMatchObject({ badgeLabel: undefined, dot: "account" });
+    expect(itemById.get("news")).toMatchObject({ badgeLabel: undefined, dot: "attention" });
+    expect(itemById.get("contact")).toMatchObject({ dot: "account" });
+    expect(catalog.find(({ to }) => to === "/notifications")?.dot).toBeUndefined();
   });
 
   it("does not keep the retired hard-coded labels or notification dot", () => {
     const catalog = getNavigationCatalog({ ...signedInOptions, hasRecentNews: false, hasUnreadFeedbackReplies: false });
 
     expect(catalog.some(({ badgeLabel }) => badgeLabel === "v1.2" || badgeLabel === "베타")).toBe(false);
-    expect(catalog.find(({ to }) => to === "/notifications")?.showRedDot).toBeUndefined();
+    expect(catalog.find(({ to }) => to === "/notifications")?.dot).toBeUndefined();
     expect(catalog.find(({ to }) => to === "/utils/pyroxene")?.badgeLabel).toBeUndefined();
     expect(catalog.find(({ to }) => to === "/raids")?.badgeLabel).toBeUndefined();
   });
 
-  it("keeps automatic raid and guest-planner labels", () => {
+  it("marks coupons and contact replies as account dots and recent news as an attention dot", () => {
+    const catalog = getNavigationCatalog({
+      ...signedInOptions,
+      hasUnconsumedCoupons: true,
+      hasRecentNews: true,
+      hasUnreadFeedbackReplies: true,
+    });
+    const dotByMenuId = new Map(catalog.flatMap((item) => (item.menuId ? [[item.menuId, item.dot] as const] : [])));
+
+    expect(dotByMenuId.get("coupons")).toBe("account");
+    expect(dotByMenuId.get("contact")).toBe("account");
+    expect(dotByMenuId.get("news")).toBe("attention");
+  });
+
+  it("summarizes a group with mixed dots as an attention dot", () => {
+    const catalog = getNavigationCatalog({ ...signedInOptions, hasRecentNews: true, hasUnreadFeedbackReplies: true });
+    const newsGroup = catalog.filter((item) => item.group === "news");
+    const accountOnly = catalog.filter((item) => item.menuId === "contact" || item.menuId === "coupons");
+
+    expect(getNavigationGroupBadgeSummary(newsGroup)).toBe("attention");
+    expect(getNavigationGroupBadgeSummary(accountOnly)).toBe("account");
+    expect(getNavigationGroupBadgeSummary(catalog.filter((item) => item.menuId === "home"))).toBeUndefined();
+  });
+
+  it("keeps the automatic raid label and no guest-planner label", () => {
     const activeRaid = getDesktopNavigation({ ...guestOptions, hasOngoingRaid: true });
     const raidItem = activeRaid.groups.find(({ id }) => id === "game")?.items.find(({ to }) => to === "/raids");
     const guestPlanner = getDesktopNavigation(guestOptions)
@@ -519,6 +545,6 @@ describe("global navigation catalog", () => {
       ?.items.find(({ to }) => to === "/utils/pyroxene");
 
     expect(raidItem?.badgeLabel).toBe("진행중");
-    expect(guestPlanner?.badgeLabel).toBe("로그인 없이 사용");
+    expect(guestPlanner?.badgeLabel).toBeUndefined();
   });
 });

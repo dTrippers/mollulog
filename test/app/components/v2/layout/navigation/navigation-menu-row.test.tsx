@@ -16,7 +16,7 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof NavigationMenu
             OutlineIcon={FireIcon}
             SolidIcon={FireIcon}
             badgeLabel="진행중"
-            showRedDot
+            dot="attention"
             favoriteId="raids"
             onFavoriteToggle={() => undefined}
             {...overrides}
@@ -110,5 +110,15 @@ describe("navigation menu row favorite affordance", () => {
     expect(html).toContain("bg-v2-nav-active font-semibold text-v2-fg");
     expect(badge).toContain("text-v2-fg-secondary");
     expect(badge).not.toContain("text-v2-fg-tertiary");
+  });
+});
+
+describe("NavigationMenuRow account dot", () => {
+  it("renders the account dot color and announces it as the user's own information", () => {
+    const html = renderRow({ dot: "account", badgeLabel: undefined });
+
+    expect(html).toContain('data-navigation-dot="account"');
+    expect(html).toContain("bg-v2-account-dot");
+    expect(html).toContain('aria-label="총력전 / 대결전, 확인할 내 정보 있음"');
   });
 });

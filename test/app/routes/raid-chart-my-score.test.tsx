@@ -326,13 +326,13 @@ describe("useRaidChartMyScore with a record", () => {
   });
 
   it("shows the server's message for a rejected score and offers a retry for a failed save", async () => {
-    respond = async () => jsonResponse(400, { ok: false, message: "이 시즌에서 달성할 수 있는 최대 점수(40,348,000)보다 높아요." });
+    respond = async () => jsonResponse(400, { ok: false, message: "최대 점수(40,348,000)보다 높아요." });
     const { result } = renderMyScore({ context: context() });
     act(() => result.current.onChange("50000000"));
     await advance(1000);
     expect(result.current.status).toEqual({
       kind: "failed",
-      message: "이 시즌에서 달성할 수 있는 최대 점수(40,348,000)보다 높아요.",
+      message: "최대 점수(40,348,000)보다 높아요.",
       retryable: false,
     });
 

@@ -7,6 +7,7 @@ import {
   MENU_BADGE_MAX_LABEL_LENGTH,
   resolveMenuBadgeOverrides,
   type StoredMenuBadge,
+  summarizeNavigationDots,
 } from "~/domain/navigation-menu-badges";
 
 function badge(overrides: Partial<StoredMenuBadge> = {}): StoredMenuBadge {
@@ -61,17 +62,17 @@ describe("navigation menu badge resolution", () => {
       "2026-09-27T00:00:00.000Z",
     ).overrides.raids;
 
-    expect(applyMenuBadgeOverride("raids", { label: "진행중", showRedDot: true }, customLabel)).toEqual({
+    expect(applyMenuBadgeOverride("raids", { label: "진행중", dot: "attention" }, customLabel)).toEqual({
       label: "새 시즌",
-      showRedDot: false,
+      dot: undefined,
     });
-    expect(applyMenuBadgeOverride("raids", { label: "진행중", showRedDot: false }, automaticDot)).toEqual({
+    expect(applyMenuBadgeOverride("raids", { label: "진행중", dot: undefined }, automaticDot)).toEqual({
       label: undefined,
-      showRedDot: true,
+      dot: "attention",
     });
-    expect(applyMenuBadgeOverride("raids", { label: "진행중", showRedDot: true })).toEqual({
+    expect(applyMenuBadgeOverride("raids", { label: "진행중", dot: "attention" })).toEqual({
       label: "진행중",
-      showRedDot: true,
+      dot: "attention",
     });
   });
 
@@ -83,9 +84,9 @@ describe("navigation menu badge resolution", () => {
 
     expect(warnings).toEqual([{ menuId: "raids", reason: "invalid-label" }]);
     expect(overrides.raids).toMatchObject({ labelMode: "auto", label: null, redDotMode: "show" });
-    expect(applyMenuBadgeOverride("raids", { label: "진행중", showRedDot: false }, overrides.raids)).toEqual({
+    expect(applyMenuBadgeOverride("raids", { label: "진행중", dot: undefined }, overrides.raids)).toEqual({
       label: "진행중",
-      showRedDot: true,
+      dot: "attention",
     });
   });
 
@@ -97,9 +98,9 @@ describe("navigation menu badge resolution", () => {
 
     expect(warnings).toEqual([{ menuId: "raids", reason: "invalid-label" }]);
     expect(overrides.raids).toMatchObject({ labelMode: "auto", label: null, redDotMode: "show" });
-    expect(applyMenuBadgeOverride("raids", { label: "진행중", showRedDot: false }, overrides.raids)).toEqual({
+    expect(applyMenuBadgeOverride("raids", { label: "진행중", dot: undefined }, overrides.raids)).toEqual({
       label: "진행중",
-      showRedDot: true,
+      dot: "attention",
     });
   });
 
@@ -164,9 +165,36 @@ describe("navigation menu badge resolution", () => {
     );
 
     expect(overrides).toEqual({});
-    expect(applyMenuBadgeOverride("raids", { label: "진행중", showRedDot: false }, overrides.raids)).toEqual({
+    expect(applyMenuBadgeOverride("raids", { label: "진행중", dot: undefined }, overrides.raids)).toEqual({
       label: "진행중",
-      showRedDot: false,
+      dot: undefined,
     });
+  });
+
+  it("hides only the attention dot and keeps an automatic account dot", () => {
+    const hidden = resolveMenuBadgeOverrides(
+      [badge({ menuId: "coupons", labelMode: "auto", redDotMode: "hidden" })],
+      "2026-09-27T00:00:00.000Z",
+    ).overrides.coupons;
+    const shown = resolveMenuBadgeOverrides(
+      [badge({ menuId: "coupons", labelMode: "auto", redDotMode: "show" })],
+      "2026-09-27T00:00:00.000Z",
+    ).overrides.coupons;
+
+    expect(applyMenuBadgeOverride("coupons", { dot: "account" }, hidden)).toEqual({ label: undefined, dot: "account" });
+    expect(applyMenuBadgeOverride("coupons", { dot: "attention" }, hidden)).toEqual({
+      label: undefined,
+      dot: undefined,
+    });
+    expect(applyMenuBadgeOverride("coupons", { dot: "account" }, shown)).toEqual({
+      label: undefined,
+      dot: "attention",
+    });
+  });
+
+  it("prefers the attention dot when summarizing mixed dots", () => {
+    expect(summarizeNavigationDots(["account", undefined, "attention"])).toBe("attention");
+    expect(summarizeNavigationDots(["account", undefined])).toBe("account");
+    expect(summarizeNavigationDots([undefined])).toBeUndefined();
   });
 });

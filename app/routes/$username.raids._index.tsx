@@ -387,11 +387,6 @@ function RaidRecordRow({
         <div className="min-w-0 @min-[40rem]:text-right">
           <p className="flex flex-wrap items-baseline gap-x-2 text-[0.9375rem] font-bold text-v2-fg tabular-nums @min-[40rem]:justify-end">
             {formatRaidScore(row.totalScore)}
-            {elimination && row.enteredCount < season.scoreDefenseTypes.length ? (
-              <span className="text-xs font-medium text-v2-fg-tertiary">
-                {row.enteredCount}/{season.scoreDefenseTypes.length} 입력
-              </span>
-            ) : null}
           </p>
           {clearResult ? <p className="text-xs text-v2-fg-secondary tabular-nums">{clearResult}</p> : null}
         </div>
@@ -399,7 +394,7 @@ function RaidRecordRow({
           <RankCell row={row} isOwner={isOwner} timeZone={timeZone} onConfirm={onConfirm} editTo={to} />
         </div>
         <ChevronRightIcon className="hidden size-5 text-v2-fg-tertiary @min-[40rem]:block" aria-hidden="true" />
-        {elimination ? (
+        {elimination && row.scoreMode === "defense_type" ? (
           <p className="col-span-2 flex flex-col gap-y-0.5 text-xs text-v2-fg-secondary tabular-nums @min-[40rem]:col-span-4 @min-[40rem]:flex-row @min-[40rem]:flex-wrap @min-[40rem]:gap-x-3">
             {row.scores.map((entry) => (
               <span key={entry.defenseType} className="inline-flex items-center gap-1.5">

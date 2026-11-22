@@ -27,7 +27,7 @@ import {
   normalizeNavigationFavoriteIds,
   toggleNavigationFavoriteId,
 } from "~/domain/navigation-favorites";
-import type { NavigationMenuId, ResolvedMenuBadgeOverride } from "~/domain/navigation-menu-badges";
+import type { NavigationDot, NavigationMenuId, ResolvedMenuBadgeOverride } from "~/domain/navigation-menu-badges";
 import type { SiteBanner as SiteBannerData } from "~/domain/site-banner";
 import { parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
@@ -38,6 +38,7 @@ import type { SearchResponse, SearchResult } from "~/routes/api.search";
 import { v2FocusRing } from "../styles";
 import { mobileNavigationTutorialStorageKey } from "./mobile-navigation-tutorial";
 import { NavigationAccountPopover } from "./NavigationAccountPopover";
+import { NAVIGATION_DOT_LABELS, NavigationDotMark } from "./NavigationDotMark";
 import { NavigationFlyout } from "./NavigationFlyout";
 import { NavigationFavoriteMenuRow, NavigationMenuRow } from "./NavigationMenuRow";
 import { NavigationRail, type NavigationRailGroup } from "./NavigationRail";
@@ -662,7 +663,7 @@ export default function NavigationBar({
                 title={section.name}
                 items={section.items}
                 expanded={groupIsExpanded(section.id as DesktopNavigationPreferenceGroupId)}
-                hasRedDot={getNavigationGroupBadgeSummary(section.items)}
+                dot={getNavigationGroupBadgeSummary(section.items)}
                 active={section.items.some((item) => item.isActive)}
                 favoriteIdSet={favoriteIdSet}
                 onFavoriteToggle={onFavoriteToggle}
@@ -766,7 +767,7 @@ function DesktopNavigationGroup({
   title,
   items,
   expanded,
-  hasRedDot,
+  dot,
   active,
   favoriteIdSet,
   onFavoriteToggle,
@@ -776,7 +777,7 @@ function DesktopNavigationGroup({
   title: string;
   items: NavigationItem[];
   expanded: boolean;
-  hasRedDot: boolean;
+  dot: NavigationDot | undefined;
   active: boolean;
   favoriteIdSet: Set<string>;
   onFavoriteToggle: (favoriteId: string) => void;
@@ -798,9 +799,8 @@ function DesktopNavigationGroup({
         onClick={() => onToggle?.(!expanded)}
       >
         <span className="min-w-0 flex-1 truncate">{title}</span>
-        {!expanded && hasRedDot ? (
-          <span className="size-1.5 shrink-0 rounded-full bg-v2-unread" aria-hidden="true" />
-        ) : null}
+        {!expanded && dot ? <span className="sr-only">, {NAVIGATION_DOT_LABELS[dot]}</span> : null}
+        {!expanded && dot ? <NavigationDotMark dot={dot} className="shrink-0" /> : null}
         {expanded ? (
           <ChevronDownIcon className="size-3 shrink-0" aria-hidden="true" />
         ) : (

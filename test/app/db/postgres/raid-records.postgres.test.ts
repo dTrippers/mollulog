@@ -17,7 +17,9 @@ import type { RaidRecordScore } from "~/domain/raid-record";
 // Runs against a real PostgreSQL (the PG* environment), in a schema of its own that is dropped afterwards.
 const describeDatabase = process.env.MOLLULOG_RAID_RECORDS_POSTGRES === "1" ? describe : describe.skip;
 const schema = `raid_records_test_${randomUUID().replaceAll("-", "")}`;
-const migration = readFileSync(resolve("db/postgres/migrations/20261120120000_create_raid_records.sql"), "utf8");
+const migrations = ["20261120120000_create_raid_records.sql", "20261122120000_add_raid_record_total_score.sql"].map(
+  (file) => readFileSync(resolve("db/postgres/migrations", file), "utf8"),
+);
 const env = {} as Env;
 const options = {
   createClient: () => new Client({ options: `-c search_path=${schema}`, connectionTimeoutMillis: 5000 }),
@@ -39,7 +41,9 @@ async function createRecord(
     USER_ID,
     key,
     {
+      scoreMode: "defense_type",
       scores: [score("heavy", 40_000_000)],
+      totalScore: null,
       rank: 1200,
       rankRecordedAt: "2026-11-20T00:00:00.000Z",
       memo: "",
@@ -56,7 +60,7 @@ describeDatabase("raid records on PostgreSQL", () => {
     await admin.connect();
     await admin.query(`CREATE SCHEMA ${schema}`);
     await admin.query(`SET search_path TO ${schema}`);
-    await admin.query(migration);
+    for (const migration of migrations) await admin.query(migration);
   });
 
   beforeEach(async () => {
@@ -80,6 +84,34 @@ describeDatabase("raid records on PostgreSQL", () => {
     await expect(createRecord({ ...elimination, server: "jp" })).resolves.toMatchObject({ server: "jp" });
   });
 
+  it("reads a record saved before the total existed as one that shows its scores", async () => {
+    await admin.query(
+      `INSERT INTO raid_records (uid, user_id, server, raid_type, season_index, scores, rank)
+       VALUES ('legacy-1', $1, 'kr', 'elimination', 30, '[{"defenseType":"heavy","score":40000000}]', 900)`,
+      [USER_ID],
+    );
+    expect(
+      await getPostgresRaidRecordBySeason(env, USER_ID, { ...elimination, seasonIndex: 30 }, options),
+    ).toMatchObject({
+      scoreMode: "defense_type",
+      totalScore: null,
+      scores: [score("heavy", 40_000_000)],
+    });
+  });
+
+  it("keeps the scores and the total, whichever the record shows", async () => {
+    const created = await createRecord(elimination, { scoreMode: "total", totalScore: 90_000_000 });
+    expect(created).toMatchObject({ scoreMode: "total", totalScore: 90_000_000, scores: [score("heavy", 40_000_000)] });
+  });
+
+  it("fails to read a record that shows a total it does not have", async () => {
+    await createRecord(elimination);
+    await admin.query("UPDATE raid_records SET score_mode = 'total', total_score = NULL");
+    await expect(getPostgresRaidRecordBySeason(env, USER_ID, elimination, options)).rejects.toThrow(
+      "저장된 합산 점수를 읽지 못했어요.",
+    );
+  });
+
   describe("table batch save", () => {
     it("creates and updates every row in one transaction", async () => {
       const existing = await createRecord(elimination);
@@ -90,12 +122,24 @@ describeDatabase("raid records on PostgreSQL", () => {
           {
             key: elimination,
             current: { uid: existing.uid, updatedAt: existing.updatedAt },
-            values: { scores: [score("heavy", 41_000_000)], rank: 1100, rankRecordedAt: existing.rankRecordedAt },
+            values: {
+              scoreMode: "defense_type",
+              totalScore: null,
+              scores: [score("heavy", 41_000_000)],
+              rank: 1100,
+              rankRecordedAt: existing.rankRecordedAt,
+            },
           },
           {
             key: { ...elimination, seasonIndex: 34 },
             current: null,
-            values: { scores: [score("light", 30_000_000)], rank: 900, rankRecordedAt: "2026-11-21T00:00:00.000Z" },
+            values: {
+              scoreMode: "defense_type",
+              totalScore: null,
+              scores: [score("light", 30_000_000)],
+              rank: 900,
+              rankRecordedAt: "2026-11-21T00:00:00.000Z",
+            },
           },
         ],
         options,
@@ -120,12 +164,12 @@ describeDatabase("raid records on PostgreSQL", () => {
             {
               key: { ...elimination, seasonIndex: 33 },
               current: null,
-              values: { scores: [], rank: 1, rankRecordedAt: null },
+              values: { scoreMode: "defense_type", totalScore: null, scores: [], rank: 1, rankRecordedAt: null },
             },
             {
               key: { ...elimination, seasonIndex: 34 },
               current: null,
-              values: { scores: [], rank: 1, rankRecordedAt: null },
+              values: { scoreMode: "defense_type", totalScore: null, scores: [], rank: 1, rankRecordedAt: null },
             },
           ],
           options,
@@ -144,7 +188,7 @@ describeDatabase("raid records on PostgreSQL", () => {
             {
               key: { ...elimination, seasonIndex: 34 },
               current: { uid: existing.uid, updatedAt: existing.updatedAt },
-              values: { scores: [], rank: 1, rankRecordedAt: null },
+              values: { scoreMode: "defense_type", totalScore: null, scores: [], rank: 1, rankRecordedAt: null },
             },
           ],
           options,
@@ -167,7 +211,13 @@ describeDatabase("raid records on PostgreSQL", () => {
             {
               key: elimination,
               current: { uid: existing.uid, updatedAt: readVersion },
-              values: { scores: existing.scores, rank: 1100, rankRecordedAt: existing.rankRecordedAt },
+              values: {
+                scoreMode: "defense_type",
+                totalScore: null,
+                scores: existing.scores,
+                rank: 1100,
+                rankRecordedAt: existing.rankRecordedAt,
+              },
             },
           ],
           options,
@@ -245,6 +295,27 @@ describeDatabase("raid records on PostgreSQL", () => {
           options,
         ),
       ).resolves.toEqual({ kind: "kept", record: null });
+    });
+
+    it("saves a score to a record that shows its total without changing what it shows", async () => {
+      const existing = await createRecord(elimination, { scores: [], scoreMode: "total", totalScore: 90_000_000 });
+
+      const result = await applyPostgresRaidRecordChartScore(
+        env,
+        USER_ID,
+        elimination,
+        score("elastic", 39_000_000),
+        options,
+      );
+      expect(result).toMatchObject({
+        kind: "saved",
+        record: {
+          uid: existing.uid,
+          scoreMode: "total",
+          totalScore: 90_000_000,
+          scores: [score("elastic", 39_000_000)],
+        },
+      });
     });
 
     it("updates the record another save created first instead of failing", async () => {
