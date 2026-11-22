@@ -23,6 +23,25 @@ export type PopoverProps = {
   children: ReactNode;
 };
 
+// Fixed bars that cover an edge of the viewport, such as the mobile header and bottom navigation, carry
+// `data-v2-fixed-bar="top"` or `"bottom"`. A bar hidden at the current width measures as an empty box and is skipped.
+function getFixedBarInsets(viewportHeight: number) {
+  let top = 0;
+  let bottom = 0;
+  for (const bar of document.querySelectorAll<HTMLElement>("[data-v2-fixed-bar]")) {
+    const rect = bar.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      continue;
+    }
+    if (bar.dataset.v2FixedBar === "top") {
+      top = Math.max(top, rect.bottom);
+    } else if (bar.dataset.v2FixedBar === "bottom") {
+      bottom = Math.max(bottom, viewportHeight - rect.top);
+    }
+  }
+  return { top, bottom };
+}
+
 // Layout effects run before the browser paints. Server render has no layout, so it uses useEffect.
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
@@ -34,9 +53,9 @@ const hiddenPanelMotion =
 
 // Anchored panel for the desktop quick view. It renders in a portal on the body, so a scrolling table or list does not
 // clip it. It sits below the trigger, flips above when there is no room below, and stays inside the viewport. It follows
-// the trigger on resize and scroll. Escape and an outside pointer press close it, and focus returns to the trigger on
-// Escape. It fades and settles from the trigger side. Motion is off for reduced-motion users, and the exit finishes
-// before the panel unmounts.
+// the trigger on resize and scroll, and it stays clear of the mobile header and bottom navigation. Escape and an outside
+// pointer press close it, and focus returns to the trigger on Escape. It fades and settles from the trigger side. Motion
+// is off for reduced-motion users, and the exit finishes before the panel unmounts.
 export function Popover({
   open,
   label,
@@ -94,6 +113,7 @@ export function Popover({
         panel: { width: panelNode.offsetWidth, height: panelNode.offsetHeight },
         viewport: { width: window.innerWidth, height: window.innerHeight },
         placement: placementMode,
+        insets: getFixedBarInsets(window.innerHeight),
       });
       setPosition((prev) =>
         prev && prev.top === next.top && prev.left === next.left && prev.placement === next.placement ? prev : next,

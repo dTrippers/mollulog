@@ -992,7 +992,7 @@ function MobileBrandHeader({
   }, [searchResetKey]);
 
   return (
-    <header className="lg:hidden fixed inset-x-0 top-0 z-layer-navigation flex flex-col bg-v2-nav">
+    <header data-v2-fixed-bar="top" className="lg:hidden fixed inset-x-0 top-0 z-layer-navigation flex flex-col bg-v2-nav">
       <div className="flex h-[var(--mobile-header-row-height)] w-full items-center justify-between px-4 pt-[env(safe-area-inset-top)]">
         <Link
           to="/"
@@ -1076,6 +1076,7 @@ function MobileBottomNavigation({
 
   return (
     <nav
+      data-v2-fixed-bar="bottom"
       className="lg:hidden fixed inset-x-0 bottom-0 z-layer-navigation h-[var(--mobile-nav-height)] bg-v2-nav pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1"
       aria-label="주요 메뉴"
     >
