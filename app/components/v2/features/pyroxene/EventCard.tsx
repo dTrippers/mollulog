@@ -555,7 +555,6 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                   selected={student.favorited}
                   showSelectedIndicator={false}
                   captionPlacement="overlay"
-                  overlayOnMobile
                   selectionActionLabel={student.favorited ? "목표 성급 설정" : "관심 학생으로 추가"}
                   favorite={{
                     visible: student.favorited,

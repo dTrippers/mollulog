@@ -140,11 +140,10 @@ describe("StudentThumb shop grid options", () => {
     expect(screen.getByText("모집")).toBeTruthy();
   });
 
-  it("keeps an opted-in overlay caption visible on mobile", () => {
+  it("shows an overlay caption on mobile by default", () => {
     const { container } = renderThumb({
       onOpen: undefined,
       captionPlacement: "overlay",
-      overlayOnMobile: true,
     });
 
     const caption = container.querySelector(".bg-linear-15");
@@ -152,6 +151,18 @@ describe("StudentThumb shop grid options", () => {
     expect(caption?.className).not.toContain("hidden");
     // The variant sits small above the name, as the 1.x cards did.
     expect(caption?.textContent).toBe("수영복키사키");
+  });
+
+  it("hides an overlay caption on mobile only when opted out", () => {
+    const { container } = renderThumb({
+      onOpen: undefined,
+      captionPlacement: "overlay",
+      hideOverlayCaptionOnMobile: true,
+    });
+
+    const caption = container.querySelector(".bg-linear-15");
+    expect(caption?.className).toContain("hidden");
+    expect(caption?.className).toContain("md:flex");
   });
 
   it("moves the selected check below the recruitment badge when opted in", () => {

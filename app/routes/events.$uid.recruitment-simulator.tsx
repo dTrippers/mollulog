@@ -629,7 +629,6 @@ function RecruitmentStudentThumb({
       grayscaleWhenUnselected={dimUnselected}
       scrimAriaLabel={accessibleDetail}
       captionPlacement="overlay"
-      overlayOnMobile
       fluid
     />
   );
@@ -855,7 +854,6 @@ function RecruitmentResultCard({
             favorite={emptyFavorite}
             showRecruitmentLabel={selectedPickup}
             captionPlacement="overlay"
-            overlayOnMobile
             fluid
           />
         </div>

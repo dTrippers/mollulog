@@ -101,6 +101,34 @@ describe("furniture route revalidation", () => {
       shouldRevalidate(createRevalidationArgs({ nextUrl: new URL("http://127.0.0.1/furniture?search=chair") })),
     ).toBe(true);
   });
+
+  it("skips revalidation when navigating only by the theme query parameter", () => {
+    expect(
+      shouldRevalidate(
+        createRevalidationArgs({
+          formMethod: undefined,
+          formAction: undefined,
+          json: undefined,
+          actionStatus: undefined,
+          actionResult: undefined,
+          nextUrl: new URL("http://127.0.0.1/furniture?theme=100"),
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      shouldRevalidate(
+        createRevalidationArgs({
+          currentUrl: new URL("http://127.0.0.1/furniture?theme=100"),
+          nextUrl: new URL("http://127.0.0.1/furniture"),
+          formMethod: undefined,
+          formAction: undefined,
+          json: undefined,
+          actionStatus: undefined,
+          actionResult: undefined,
+        }),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("furniture inventory action", () => {
