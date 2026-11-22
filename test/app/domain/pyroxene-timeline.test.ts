@@ -1288,7 +1288,7 @@ describe("recruitment target copies from the owned state", () => {
     const withOwned = buildTestTimeline({
       scheduleItems: [event],
       options: ceilOptions,
-      ownedStates: { ["student-2-픽업 학생"]: { tier: 5, eleph: 500 } },
+      ownedStates: { "student-2-픽업 학생": { tier: 5, eleph: 500 } },
     });
     expect(eventEntry(withOwned)?.resourceDelta).toEqual(eventEntry(withoutOwned)?.resourceDelta);
   });
