@@ -10,6 +10,7 @@ import { useFetcher } from "react-router";
 import { Button } from "~/components/v2/primitives/Button";
 import { Popover } from "~/components/v2/primitives/Popover";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { cn } from "~/lib/utils";
 import type { ActionData } from "../api.followerships";
 import { FOLLOW_FAILURE_MESSAGE, UNFOLLOW_FAILURE_MESSAGE } from "./user-layout";
 
@@ -58,16 +59,18 @@ export function UserFollowButton({
       </>
     );
   } else if (following) {
-    content = hovered ? (
-      <>
-        <UserMinusIcon className="size-4" aria-hidden="true" />
-        팔로우 해제
-      </>
-    ) : (
-      <>
-        <CheckIcon className="size-4" aria-hidden="true" />
-        팔로우 중
-      </>
+    // Both labels share one grid cell, so the button keeps the wider label's width and hover never resizes it.
+    content = (
+      <span className="grid">
+        <span className={cn("col-start-1 row-start-1 inline-flex items-center justify-center gap-1.5", hovered && "invisible")}>
+          <CheckIcon className="size-4" aria-hidden="true" />
+          팔로우 중
+        </span>
+        <span className={cn("col-start-1 row-start-1 inline-flex items-center justify-center gap-1.5", !hovered && "invisible")}>
+          <UserMinusIcon className="size-4" aria-hidden="true" />
+          팔로우 해제
+        </span>
+      </span>
     );
   }
 

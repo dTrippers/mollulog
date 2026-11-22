@@ -113,7 +113,7 @@ function ReviewSummary({
     </span>
   );
   const isEmptyReview = !reviewerName && !review.comment?.trim() && !(review.tags?.length);
-  return to ? <Link to={to} aria-label={isEmptyReview ? "내 평가 수정" : undefined} className="rounded-md hover:bg-v2-hover">{content}</Link> : content;
+  return to ? <Link to={to} aria-label={isEmptyReview ? "내 평가 수정" : undefined} className="rounded-md hover:bg-v2-hover v2-interaction-transition">{content}</Link> : content;
 }
 
 function NewGrading({ title, message, studentUid, signedIn }: { title: string; message: string; studentUid: string; signedIn: boolean }) {

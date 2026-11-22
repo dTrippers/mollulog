@@ -141,8 +141,8 @@ export function ActionMenu({
                   className={cn(
                     "flex min-h-v2-row-min w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm text-v2-fg focus:outline-none",
                     item.danger
-                      ? "text-v2-danger hover:bg-v2-danger-subtle focus:bg-v2-danger-subtle"
-                      : "hover:bg-v2-hover focus:bg-v2-hover",
+                      ? "text-v2-danger hover:bg-v2-danger-subtle focus:bg-v2-danger-subtle v2-interaction-transition"
+                      : "hover:bg-v2-hover focus:bg-v2-hover v2-interaction-transition",
                     v2FocusRing,
                   )}
                 >

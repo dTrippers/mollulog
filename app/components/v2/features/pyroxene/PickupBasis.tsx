@@ -48,10 +48,10 @@ export function SegmentedChoice<T extends string>({
               variant === "segmented"
                 ? selected
                   ? "bg-v2-surface text-v2-fg shadow-sm"
-                  : "text-v2-fg-secondary hover:text-v2-fg"
+                  : "text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition"
                 : selected
                   ? "bg-v2-selected text-v2-on-selected"
-                  : "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover",
+                  : "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover v2-interaction-transition",
               option.className,
             )}
           >

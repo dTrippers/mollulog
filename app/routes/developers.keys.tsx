@@ -405,7 +405,7 @@ export default function DevelopersKeys() {
               <footer className="flex flex-wrap items-center justify-end gap-4">
                 <Link
                   to="/developers/docs"
-                  className="text-sm font-medium text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+                  className="text-sm font-medium text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
                   {...getV2LinkTransitionProps("crossfade")}
                 >
                   API 문서 보기
@@ -474,7 +474,7 @@ export default function DevelopersKeys() {
 
             {inactiveKeys.length > 0 ? (
               <details className="group rounded-lg bg-v2-surface">
-                <summary className="flex min-h-v2-row-min cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-v2-block-p py-v2-row-y font-semibold hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus">
+                <summary className="flex min-h-v2-row-min cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-v2-block-p py-v2-row-y font-semibold hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition">
                   <span>만료·삭제된 키 {inactiveKeys.length}개</span>
                   <ChevronDownIcon
                     className="size-4 shrink-0 text-v2-fg-tertiary motion-safe:transition-transform motion-safe:duration-v2-base motion-safe:ease-v2-standard group-open:rotate-180"
@@ -599,7 +599,7 @@ function KeyRow({
         <footer className="flex flex-wrap items-center justify-end gap-4">
           <Link
             to="/data-history?filter=api"
-            className="whitespace-nowrap text-sm font-medium text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+            className="whitespace-nowrap text-sm font-medium text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
             {...getV2LinkTransitionProps("crossfade")}
           >
             데이터 변경 이력

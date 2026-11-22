@@ -33,7 +33,7 @@ export function PostRowList({ posts, timeZone, linkState }: PostRowListProps) {
               prefetch="intent"
               aria-labelledby={titleId}
               aria-describedby={dateId}
-              className={`relative isolate -mx-2 flex min-h-12 items-baseline justify-between gap-3 rounded-md px-2 py-3 text-v2-fg before:absolute before:inset-x-0 before:inset-y-1 before:-z-10 before:rounded-md before:content-[''] hover:before:bg-v2-hover focus-visible:before:bg-v2-hover ${v2FocusRing}`}
+              className={`relative isolate -mx-2 flex min-h-12 items-baseline justify-between gap-3 rounded-md px-2 py-3 text-v2-fg before:absolute before:inset-x-0 before:inset-y-1 before:-z-10 before:rounded-md before:content-[''] hover:before:bg-v2-hover focus-visible:before:bg-v2-hover ${v2FocusRing} before:v2-interaction-transition`}
               {...getV2LinkTransitionProps("forward")}
             >
               <span id={titleId} className="min-w-0 break-keep break-words text-sm leading-5">

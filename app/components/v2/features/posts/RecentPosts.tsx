@@ -28,7 +28,7 @@ export function RecentPosts({ source, timeZone, onRetry }: RecentPostsProps) {
         </h2>
         <Link
           to="/news"
-          className={`inline-flex items-center gap-0.5 rounded-md text-sm text-v2-fg-secondary hover:text-v2-fg ${v2FocusRing}`}
+          className={`inline-flex items-center gap-0.5 rounded-md text-sm text-v2-fg-secondary hover:text-v2-fg ${v2FocusRing} v2-interaction-transition`}
           {...getV2LinkTransitionProps("reverse")}
         >
           모두 보기

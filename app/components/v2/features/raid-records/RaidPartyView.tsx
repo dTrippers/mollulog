@@ -96,7 +96,7 @@ export function RaidPartyView({
                 "flex min-h-8 shrink-0 cursor-pointer items-center border-b-2 px-2.5 text-sm whitespace-nowrap",
                 bundle.key === bundleKey
                   ? "border-v2-link font-semibold text-v2-fg"
-                  : "border-transparent text-v2-fg-secondary hover:text-v2-fg",
+                  : "border-transparent text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
                 v2FocusRing,
               )}
             >

@@ -764,7 +764,7 @@ function EliminationScores({
                   type="button"
                   onClick={() => onShowParties(defenseType)}
                   aria-label={`${defenseTypeLocale[defenseType]} 편성 보기, ${typeParties.length}파티 ${students}명`}
-                  className={cn("inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-md hover:opacity-80", v2FocusRing)}
+                  className={cn("inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-md hover:opacity-80 v2-interaction-transition", v2FocusRing)}
                 >
                   <PartyMiniRow party={typeParties[0]} studentsByUid={studentsByUid} />
                   <span className="text-xs whitespace-nowrap text-v2-fg-tertiary tabular-nums">
@@ -812,7 +812,7 @@ function DefenseTypeTabs({
             onClick={() => onChange(defenseType)}
             className={cn(
               "flex min-h-v2-row-min shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-3 text-sm whitespace-nowrap",
-              selected ? "border-v2-link font-semibold text-v2-fg" : "border-transparent text-v2-fg-secondary hover:text-v2-fg",
+              selected ? "border-v2-link font-semibold text-v2-fg" : "border-transparent text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
               v2FocusRing,
             )}
           >

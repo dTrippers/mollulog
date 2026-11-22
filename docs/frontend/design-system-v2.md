@@ -233,7 +233,10 @@ UI copy uses these terms for these game and product concepts. Add a term here on
   - `ease-v2-exit` `cubic-bezier(0.3, 0, 1, 1)`: leaving (accelerate).
   - `ease-v2-standard` `cubic-bezier(0.2, 0, 0, 1)`: movement within the screen.
 - Exit is one step shorter than enter. For example, a popover enters with `base` and `enter`, and exits with `fast` and `exit`.
-- Animate only `transform` and `opacity`.
+- Animate only `transform` and `opacity`, except hover and press feedback, which may also transition colors and filter.
+- Every pressable element (button, link, row, chip, thumbnail) changes on hover and press over `duration-v2-fast` with `ease-v2-standard`. Hover never moves or resizes an element: no scale and no translate.
+- An element whose look is an image or a solid fill (a thumbnail, a `primary` or `danger` button) lowers its opacity on hover. An unfilled control or row keeps its hover fill (`bg-v2-hover`, `bg-v2-filled-hover`) or text color change.
+- Put the `v2-interaction-transition` utility (defined in `tailwind.css`) on the element whose style changes: the element itself, a `group-hover` child, or the pseudo-element that carries the hover fill (`before:v2-interaction-transition`). A link that underlines on hover keeps the underline and fades its color in (`underline decoration-transparent hover:decoration-current`), because an underline cannot fade in on its own.
 - Put `transform` animation inside `motion-safe:`.
 - Under `prefers-reduced-motion: reduce`, the v2 base and slow durations become 120ms, and only fades remain. The 1.x `mllg-*` keyframes and view transitions are unchanged and are not overridden.
 - Motion belongs to the 2.0 components, not to pages.
@@ -269,6 +272,7 @@ On those files, the guard rejects:
 - imports of 1.x components, resolved by path, including relative paths that reach the same directories;
 - Tailwind color utilities that are not `v2-` tokens: palette hues such as `red-500`, `white`, `black`, 1.x semantic colors such as `bg-card` and `text-muted-foreground`, and arbitrary color values;
 - `duration-<number>` and arbitrary durations, `ease-linear`, `ease-in`, `ease-out`, `ease-in-out`, and arbitrary easings;
+- hover variants of `scale`, `translate`, `rotate`, and `skew`;
 - literal colors in CSS or inline styles (`#hex`, `oklch(`, `rgb(`, `hsl(`), literal millisecond or second durations, and `cubic-bezier(`.
 - 1.x color variables, including through `var()` or the `prefix-(--name)` shorthand (for example `bg-[var(--card)]`, `bg-(--card)`, or `color: var(--muted-foreground)`). Only `v2-` tokens and non-color variables are allowed.
 

@@ -1102,7 +1102,7 @@ function StudentCompletionCard({ student }: { student: { uid: string; name?: str
           <Link
             to={`/students/${student.uid}`}
             prefetch="intent"
-            className="flex min-h-v2-row-min items-center rounded-md px-2 text-sm text-v2-fg hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+            className="flex min-h-v2-row-min items-center rounded-md px-2 text-sm text-v2-fg hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
           >
             학생부 보기 (평가·통계)
           </Link>
@@ -1594,7 +1594,7 @@ function StudentIdentity({
   const registerAction = (wrapper: HTMLSpanElement | null) =>
     excludeRef(wrapper?.querySelector<HTMLButtonElement>("button") ?? null);
   const actionClassName = cn(
-    "border border-v2-control-border bg-v2-surface px-1.5 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg",
+    "border border-v2-control-border bg-v2-surface px-1.5 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
     stacked ? "min-h-8 text-sm" : "min-h-6 text-[0.6875rem]",
   );
   const nameLine = (

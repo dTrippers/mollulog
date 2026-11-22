@@ -433,7 +433,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
       type="button"
       onClick={() => setShowRecruited(true)}
       className={cn(
-        "inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded text-xs whitespace-nowrap text-v2-fg-tertiary hover:text-v2-fg",
+        "inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded text-xs whitespace-nowrap text-v2-fg-tertiary hover:text-v2-fg v2-interaction-transition",
         v2FocusRing,
       )}
     >
@@ -528,7 +528,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                   thumbWidth,
                   // A student not yet added brightens on hover, as adding it will.
                   !student.favorited &&
-                    "opacity-45 motion-safe:transition-opacity motion-safe:duration-v2-fast motion-safe:ease-v2-standard [@media(hover:hover)_and_(pointer:fine)]:hover:opacity-90",
+                    "opacity-45 [@media(hover:hover)_and_(pointer:fine)]:hover:opacity-90 v2-interaction-transition",
                 )}
               >
                 <StudentThumb
@@ -550,11 +550,6 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                     if (!student.favorited) handlers.onFavoriteChange(student.contentUid, student.uid, true);
                     const anchor = thumbRefs.current.get(student.uid) ?? null;
                     tierAnchorRef.current = anchor;
-                    // The popover opens below the thumbnail and does not know the fixed bottom navigation, so a
-                    // thumbnail low on the screen first moves to the middle, where the panel fits below it.
-                    if (anchor && anchor.getBoundingClientRect().bottom > window.innerHeight * 0.6) {
-                      anchor.scrollIntoView({ block: "center", behavior: "smooth" });
-                    }
                     setTierPopover({ uid: student.uid, open: true });
                   }}
                   selected={student.favorited}
@@ -598,7 +593,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
               aria-label={showRecruited ? "모집한 학생 접기" : `모집한 학생 ${recruited.length}명 보기`}
               onClick={() => setShowRecruited((current) => !current)}
               className={cn(
-                "flex aspect-[5/6] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover",
+                "flex aspect-[5/6] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover v2-interaction-transition",
                 thumbWidth,
                 v2FocusRing,
               )}

@@ -49,7 +49,7 @@ export function SortControl(props: DirectorySortControlProps | DirectionSortCont
         disabled={directionDisabled}
         onClick={() => onDirectionChange(currentDirection === "recent" ? "old" : "recent")}
         className={cn(
-          "inline-flex min-h-v2-control-min shrink-0 items-center gap-1 rounded-md bg-v2-inset px-3 text-sm text-v2-fg hover:bg-v2-filled-hover active:bg-v2-filled-hover disabled:text-v2-fg-disabled disabled:hover:bg-v2-inset",
+          "inline-flex min-h-v2-control-min shrink-0 items-center gap-1 rounded-md bg-v2-inset px-3 text-sm text-v2-fg hover:bg-v2-filled-hover active:bg-v2-filled-hover disabled:text-v2-fg-disabled disabled:hover:bg-v2-inset v2-interaction-transition",
           v2FocusRing,
         )}
       >
@@ -87,7 +87,7 @@ export function SortControl(props: DirectorySortControlProps | DirectionSortCont
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          "inline-flex min-h-v2-control-min items-center gap-1 rounded-md bg-v2-inset px-3 text-sm text-v2-fg hover:bg-v2-filled-hover active:bg-v2-filled-hover disabled:text-v2-fg-disabled disabled:hover:bg-v2-inset",
+          "inline-flex min-h-v2-control-min items-center gap-1 rounded-md bg-v2-inset px-3 text-sm text-v2-fg hover:bg-v2-filled-hover active:bg-v2-filled-hover disabled:text-v2-fg-disabled disabled:hover:bg-v2-inset v2-interaction-transition",
           v2FocusRing,
         )}
       >
@@ -100,7 +100,7 @@ export function SortControl(props: DirectorySortControlProps | DirectionSortCont
         disabled={disabled}
         onClick={toggleDirection}
         className={cn(
-          "inline-flex min-h-v2-control-min items-center gap-1 rounded-md bg-v2-inset px-3 text-sm text-v2-fg hover:bg-v2-filled-hover active:bg-v2-filled-hover disabled:text-v2-fg-disabled disabled:hover:bg-v2-inset",
+          "inline-flex min-h-v2-control-min items-center gap-1 rounded-md bg-v2-inset px-3 text-sm text-v2-fg hover:bg-v2-filled-hover active:bg-v2-filled-hover disabled:text-v2-fg-disabled disabled:hover:bg-v2-inset v2-interaction-transition",
           v2FocusRing,
         )}
       >
@@ -137,7 +137,7 @@ export function SortControl(props: DirectorySortControlProps | DirectionSortCont
                 type="button"
                 aria-label="로그인 후 사용 가능: 로그인하고 내 기록으로 정렬·필터하기"
                 onClick={onRequestSignIn}
-                className={cn("cursor-pointer rounded-md px-1 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg active:bg-v2-filled-hover active:text-v2-fg", v2FocusRing)}
+                className={cn("cursor-pointer rounded-md px-1 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg active:bg-v2-filled-hover active:text-v2-fg v2-interaction-transition", v2FocusRing)}
               >
                 로그인 후 사용 가능
               </button>
@@ -182,7 +182,7 @@ function SortOption({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex min-h-v2-row-min w-full items-center justify-between rounded-md px-3 text-left text-sm hover:bg-v2-hover active:bg-v2-filled-hover disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-transparent",
+        "flex min-h-v2-row-min w-full items-center justify-between rounded-md px-3 text-left text-sm hover:bg-v2-hover active:bg-v2-filled-hover disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-transparent v2-interaction-transition",
         selected ? "bg-v2-hover text-v2-fg" : "text-v2-fg-secondary",
         v2FocusRing,
       )}

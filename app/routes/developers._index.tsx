@@ -130,7 +130,7 @@ export default function DevelopersIndex() {
               기능 추가 등의 의견은{" "}
               <a
                 href="https://mollulog.net/contact"
-                className="rounded-sm text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+                className="rounded-sm text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
               >
                 제안/문의
               </a>{" "}
@@ -146,7 +146,7 @@ export default function DevelopersIndex() {
 function introCtaClassName() {
   return v2ButtonClassName({
     variant: "primary",
-    className: "gap-2.5 px-4 bg-v2-dev-accent-strong text-v2-dev-on-accent hover:opacity-100 hover:brightness-90",
+    className: "gap-2.5 px-4 bg-v2-dev-accent-strong text-v2-dev-on-accent hover:opacity-100 hover:brightness-90 v2-interaction-transition",
   });
 }
 

@@ -30,7 +30,7 @@ export type PageHeaderProps = {
 function HeaderBack({ back, titleHidden = false }: { back: PageHeaderBack; titleHidden?: boolean }) {
   const backClassName = cn(
     !titleHidden && "mb-2",
-    "inline-flex min-h-v2-row-min cursor-pointer items-center gap-1 rounded-md text-sm text-v2-fg-secondary hover:text-v2-fg",
+    "inline-flex min-h-v2-row-min cursor-pointer items-center gap-1 rounded-md text-sm text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
     v2FocusRing,
   );
   return "to" in back ? (

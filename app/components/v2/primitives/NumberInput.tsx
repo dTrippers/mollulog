@@ -237,7 +237,7 @@ function StepButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "relative inline-flex h-full min-w-5 shrink-0 items-center justify-center px-0 whitespace-nowrap text-xs leading-4 text-v2-fg-tertiary before:absolute before:inset-x-0 before:inset-y-[min(0px,calc(50%-var(--spacing-v2-control-min)/2))] before:content-[''] hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled",
+        "relative inline-flex h-full min-w-5 shrink-0 items-center justify-center px-0 whitespace-nowrap text-xs leading-4 text-v2-fg-tertiary before:absolute before:inset-x-0 before:inset-y-[min(0px,calc(50%-var(--spacing-v2-control-min)/2))] before:content-[''] hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled v2-interaction-transition",
         className,
         v2FocusRing,
       )}

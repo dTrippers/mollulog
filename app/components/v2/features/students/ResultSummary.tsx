@@ -85,7 +85,7 @@ export function ResultSummary({
           variant="danger-subtle"
           data-filter-reset
           onClick={reset}
-          className="min-h-8 shrink-0 px-0 bg-transparent hover:bg-transparent active:bg-transparent sm:min-h-7"
+          className="min-h-8 shrink-0 px-0 bg-transparent hover:bg-transparent active:bg-transparent sm:min-h-7 v2-interaction-transition"
         >
           <span className="inline-flex min-h-8 items-center rounded-md bg-v2-danger-subtle px-3 text-xs text-v2-danger sm:min-h-7">
             초기화

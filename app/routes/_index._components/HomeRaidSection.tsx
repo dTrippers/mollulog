@@ -28,7 +28,7 @@ function RaidTile({ content, now, timeZone }: { content: TimelineRaidContent; no
   return (
     <Link
       to={`/raids/${raidTypeToParam(schedule.raidType)}/${schedule.seasonIndex}`}
-      className="flex min-w-0 flex-1 items-stretch overflow-hidden rounded-lg bg-v2-surface transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+      className="flex min-w-0 flex-1 items-stretch overflow-hidden rounded-lg bg-v2-surface hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
     >
       <img
         src={bossImageUrl(schedule.raidBoss.uid)}
@@ -98,7 +98,7 @@ function RaidSlotColumn({
       detail={
         <Link
           to="/futures"
-          className="inline-flex items-center gap-0.5 text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
+          className="inline-flex items-center gap-0.5 text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition"
         >
           미래시에서 보기
           <ChevronRightIcon aria-hidden="true" className="size-4 shrink-0 text-v2-fg-tertiary" />
