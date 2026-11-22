@@ -30,6 +30,10 @@ single owner for commands and claim-to-evidence mapping.
 - Does the sort or condition used on screen match the actual data query?
 - Are real failures distinct from absent data, with no fake successful state or
   raw internal error exposed to users?
+- Does a student search match `altNames` as well as the name, through
+  `filterStudentByName` in `app/filters/student.ts`, and does its loader or
+  view pass `altNames` to the screen? Sensei search students by their common
+  nicknames.
 
 ### Data and state
 
@@ -91,6 +95,17 @@ single owner for commands and claim-to-evidence mapping.
   retry/control adjacency, keyboard, and mobile fixed-bar states handled? Check
   the relevant render and interaction evidence; a concrete changed-UX deviation
   is a must-fix finding.
+- Does a text field's Enter or arrow-key handler return early while
+  `event.nativeEvent.isComposing` is true, without calling `preventDefault`? A
+  Korean IME takes that key to commit the syllable and the browser sends the
+  key again after the commit; preventing the composing key left Enter
+  unanswered on macOS.
+- Does arrow-key movement follow the layout of the options: a grid moves with
+  all four arrow keys, not only up and down?
+- Does each grid column fit its content at the narrowest content width that
+  uses that column count? `sm:` and other breakpoints follow the viewport, not
+  the content area beside the sidebar, and `min-w-0` lets fixed-size content
+  overflow instead of shrinking it.
 - Accessibility must-fix findings are a control that cannot be operated with the
   keyboard, an interactive control without an accessible name, information
   conveyed only by an image or color, and body text too low in contrast to read.
