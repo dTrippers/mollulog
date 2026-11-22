@@ -167,7 +167,7 @@ export function Popover({
           onPointerLeave={onPanelPointerLeave}
           style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
           className={cn(
-            "fixed z-30 w-72 rounded-lg bg-v2-popover-surface p-v2-block-p shadow-md ring-1 ring-v2-popover-divider backdrop-blur-md",
+            "fixed z-30 w-72 rounded-lg bg-v2-popover-surface p-v2-block-p shadow-v2-popover backdrop-blur-md",
             "focus:outline-none",
             placement === "above" ? "origin-bottom-left" : "origin-top-left",
             className,
