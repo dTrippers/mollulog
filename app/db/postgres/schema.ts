@@ -15,6 +15,7 @@ import type { AccountLabel } from "~/domain/account-label";
 import type { CacheRefreshJobStatus, CacheRefreshTaskName, CacheRefreshTaskResults } from "~/domain/cache-refresh";
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
+import type { GuideBody } from "~/domain/guide-body";
 import type { OcrJobKind, OcrTaskMessage } from "~/domain/ocr";
 import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
 import type {
@@ -582,7 +583,9 @@ export const pgWalkthroughTimelinesTable = pgTable(
     uid: text().primaryKey(),
     userId: integer("user_id").notNull(),
     title: text().notNull(),
+    // Moved into body by 20261123120000_add_raid_walkthrough_body; no longer written, and dropped in a later release.
     description: text().notNull().default(""),
+    body: jsonb().$type<GuideBody>(),
     visibility: text().$type<WalkthroughTimelineVisibility>().notNull(),
     isAuto: boolean("is_auto").notNull().default(false),
     bossUid: text("boss_uid").notNull(),

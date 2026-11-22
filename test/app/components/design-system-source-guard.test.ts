@@ -255,9 +255,16 @@ const migratedRouteFiles: string[] = [
   "routes/furniture._components/furniture-state.ts",
   "routes/furniture._components/FurnitureQuantityField.tsx",
   "routes/furniture._components/FurnitureCatalogScreen.tsx",
+  "routes/timelines.$uid.tsx",
 ];
-// Allowed exceptions: the file, the line pattern, and the reason. The list starts empty.
-const v2GuardExceptions: { file: string; pattern: RegExp; reason: string }[] = [];
+// Allowed exceptions: the file, the line pattern, and the reason.
+const v2GuardExceptions: { file: string; pattern: RegExp; reason: string }[] = [
+  {
+    file: "routes/timelines.$uid.tsx",
+    pattern: /"~\/components\/features\/walkthrough-timeline\/useWalkthroughViewerWindow"/,
+    reason: "The timeline viewer window stays on the 1.x viewer until MLLG-73 redesigns it.",
+  },
+];
 
 const colorPrefixes =
   "ring-offset|border-[trblxyse]|bg|text|border|ring|outline|fill|stroke|from|via|to|divide|placeholder|caret|accent|decoration|shadow";

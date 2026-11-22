@@ -581,6 +581,11 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-popover-divider: var(--v2-popover-divider);
   --color-v2-backdrop: var(--v2-backdrop);
   --color-v2-highlight: var(--v2-highlight);
+  --color-v2-action-pair: var(--v2-action-pair);
+  --color-v2-start-skill-early: var(--v2-start-skill-early);
+  --color-v2-on-start-skill-early: var(--v2-on-start-skill-early);
+  --color-v2-start-skill-late: var(--v2-start-skill-late);
+  --color-v2-on-start-skill-late: var(--v2-on-start-skill-late);
   --color-v2-dev-accent: var(--v2-dev-accent);
   --color-v2-dev-accent-strong: var(--v2-dev-accent-strong);
   --color-v2-dev-on-accent: var(--v2-dev-on-accent);
@@ -714,6 +719,13 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-popover-shadow: rgb(0 0 0 / 10%);
   --v2-backdrop: oklch(0 0 0 / 30%);
   --v2-highlight: color-mix(in srgb, var(--v2-accent) 16%, transparent);
+  /* Groups a skill's student with its target on an inset timeline row: one step darker than inset. */
+  --v2-action-pair: oklch(0.905 0 0);
+  /* Starting skill order on a portrait: 1-3 amber, 4 and later blue, as the raid rank screen marks them. */
+  --v2-start-skill-early: oklch(0.962 0.059 95.617);
+  --v2-on-start-skill-early: oklch(0.414 0.112 45.904);
+  --v2-start-skill-late: oklch(0.932 0.032 255.585);
+  --v2-on-start-skill-late: oklch(0.379 0.146 265.522);
   --v2-ai-from: oklch(0.623 0.214 259.815);
   --v2-ai-to: oklch(0.606 0.25 292.717);
   --v2-info: var(--v2-accent);
@@ -837,6 +849,11 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-popover-shadow: rgb(0 0 0 / 40%);
   --v2-backdrop: oklch(0 0 0 / 55%);
   --v2-highlight: color-mix(in srgb, var(--v2-accent) 20%, transparent);
+  --v2-action-pair: oklch(0.46 0 0);
+  --v2-start-skill-early: oklch(0.279 0.077 45.635);
+  --v2-on-start-skill-early: oklch(0.924 0.12 95.746);
+  --v2-start-skill-late: oklch(0.282 0.091 267.935);
+  --v2-on-start-skill-late: oklch(0.882 0.059 254.128);
   --v2-ai-from: oklch(0.707 0.165 254.624);
   --v2-ai-to: oklch(0.702 0.183 293.541);
   --v2-info: var(--v2-accent);

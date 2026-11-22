@@ -75,15 +75,13 @@ function TimelineActionImage({
   uid,
   name,
   preview = false,
-  target = false,
 }: {
   uid: string;
   name: string;
   preview?: boolean;
-  target?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
-  const sizeClassName = target ? (preview ? "size-5" : "size-8") : preview ? "size-7" : "size-10";
+  const sizeClassName = preview ? "size-7" : "size-10";
 
   if (failed) {
     return (
@@ -133,22 +131,26 @@ function TimelineActionItem({
 
   return (
     <div className={cn("flex shrink-0 items-center", preview ? "gap-1.5" : "gap-2")}>
-      <div className={cn("flex items-center", preview ? "gap-1" : "gap-1.5")}>
+      {/* A targeted action sits in one pill: the student, an arrow, and the target. */}
+      <div
+        className={cn(
+          "flex items-center",
+          preview ? "gap-1" : "gap-1.5",
+          action.targetStudentUid && "rounded-full bg-v2-action-pair p-[3px]",
+        )}
+      >
         <TimelineActionImage uid={action.studentUid} name={student?.name ?? "학생"} preview={preview} />
         {action.targetStudentUid && (
           <>
             <ArrowRightIcon
-              className={cn("shrink-0 text-primary", preview ? "size-3" : "size-3.5")}
+              className={cn("shrink-0 text-v2-fg-secondary", preview ? "size-3" : "size-3.5")}
               aria-hidden="true"
             />
-            <span className="inline-flex rounded-full ring-2 ring-primary">
-              <TimelineActionImage
-                uid={action.targetStudentUid}
-                name={`${target?.name ?? "대상 학생"} 대상`}
-                preview={preview}
-                target
-              />
-            </span>
+            <TimelineActionImage
+              uid={action.targetStudentUid}
+              name={`${target?.name ?? "대상 학생"} 대상`}
+              preview={preview}
+            />
           </>
         )}
       </div>

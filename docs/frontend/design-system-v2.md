@@ -292,7 +292,7 @@ On those files, the guard rejects:
 
 `transparent`, `current`, and `inherit` are allowed.
 
-Exceptions go in `v2GuardExceptions` with a file, a pattern, and a reason. The list starts empty. Add an entry only when a violation is intentional and cannot be expressed with a token.
+Exceptions go in `v2GuardExceptions` with a file, a pattern, and a reason. Add an entry only when a violation is intentional and cannot be expressed with a token.
 
 To bring a migrated route under the guard, add its path (relative to `app/`) to `migratedRouteFiles`. The same rules then apply to it.
 

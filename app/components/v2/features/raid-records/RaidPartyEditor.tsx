@@ -28,7 +28,6 @@ import { useBundledGrowthTable } from "./use-bundled-growth-table";
 import {
   changedRaidFormFields,
   fillRaidFormUnit,
-  isStrikerSlot,
   type RaidFormParty,
   type RaidFormUnit,
   raidFormPartyStudentCount,
@@ -63,8 +62,8 @@ export function formatRaidStudentName(rawName: string): string {
   return variant ? `${name}(${variant})` : name;
 }
 
-function slotLabel(slot: number): string {
-  return isStrikerSlot(slot) ? `STRIKER ${slot + 1}` : `SPECIAL ${slot - 3}`;
+function slotLabel(slot: number, strikerSlots: number): string {
+  return slot < strikerSlots ? `STRIKER ${slot + 1}` : `SPECIAL ${slot - strikerSlots + 1}`;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -185,12 +184,10 @@ export function PartyMiniRow({
 // Slots
 // ---------------------------------------------------------------------------------------------------------------------
 
-const SLOT_COUNT = 6;
-
 // The first empty slot after `slot`, wrapping around, or null when every other slot is filled.
 function nextEmptySlot(slots: readonly (RaidFormUnit | null)[], slot: number): number | null {
-  for (let step = 1; step < SLOT_COUNT; step += 1) {
-    const candidate = (slot + step) % SLOT_COUNT;
+  for (let step = 1; step < slots.length; step += 1) {
+    const candidate = (slot + step) % slots.length;
     if (!slots[candidate]) return candidate;
   }
   return null;
@@ -204,16 +201,38 @@ function gridColumnCount(list: HTMLElement | null): number {
   return Math.max(options.filter((option) => option.offsetTop === firstRowTop).length, 1);
 }
 
+export type PartySlotsOptions = {
+  // The front slots that take strikers; the rest take specials. A party's slot count is the length of its slots.
+  strikerSlots?: number;
+  // "조력자로 표시" for a record's borrowed student. A guide has no 조력자.
+  allowAssist?: boolean;
+  // "always" keeps the search field under the slots, disabled until a slot is selected. "selected" shows it only while
+  // a slot is selected, so a filled party is one row of portraits; an empty party starts with its first slot selected.
+  search?: "always" | "selected";
+  showGroupLabels?: boolean;
+  // Extra marks on a filled slot's portrait, such as a guide's starting skill order and star tier.
+  slotScrimLabel?: (unit: RaidFormUnit, slot: number) => ReactNode;
+  slotScrimAriaLabel?: (unit: RaidFormUnit, slot: number) => string | undefined;
+  slotBadge?: (unit: RaidFormUnit, slot: number) => ReactNode;
+};
+
 // The slots and one search field under them. Typing a name and pressing Enter fills the selected slot and selects the
 // next empty one, so a party is six names and six Enters. The arrow keys move through the result grid while the focus
 // stays in the field. Once every slot is filled, focus moves to the growth table.
-function PartySlots({
+export function PartySlots({
   party,
   title,
   context,
   autoFocus,
   onAutoFocused,
   onChange,
+  strikerSlots = 4,
+  allowAssist = true,
+  search = "always",
+  showGroupLabels = true,
+  slotScrimLabel,
+  slotScrimAriaLabel,
+  slotBadge,
 }: {
   party: RaidFormParty;
   title: string;
@@ -221,19 +240,22 @@ function PartySlots({
   autoFocus: boolean;
   onAutoFocused: () => void;
   onChange: (party: RaidFormParty) => void;
-}) {
+} & PartySlotsOptions) {
   const id = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const slotRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
-  const [selected, setSelected] = useState<number | null>(() => party.slots.indexOf(null));
+  const [selected, setSelected] = useState<number | null>(() => {
+    if (search === "always") return party.slots.indexOf(null);
+    return party.slots.every((unit) => unit === null) ? 0 : null;
+  });
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
 
   const selectedSlot = selected !== null && selected >= 0 ? selected : null;
   const selectedUnit = selectedSlot === null ? null : party.slots[selectedSlot];
-  const role = selectedSlot === null || isStrikerSlot(selectedSlot) ? "striker" : "special";
+  const role = selectedSlot === null || selectedSlot < strikerSlots ? "striker" : "special";
   const trimmed = query.trim();
   const matches = useMemo(() => {
     if (!trimmed) return [];
@@ -263,7 +285,7 @@ function PartySlots({
     setActiveIndex(0);
     const next = nextEmptySlot(slots, selectedSlot);
     setSelected(next);
-    if (next === null) {
+    if (next === null && search === "always") {
       // The party is full: continue in the growth table, which renders with the new slot on the next frame.
       requestAnimationFrame(() => {
         rootRef.current?.parentElement?.querySelector<HTMLElement>("[data-number-input-flow]")?.focus();
@@ -319,13 +341,20 @@ function PartySlots({
     if (event.key === "Escape" && query) {
       event.preventDefault();
       setQuery("");
+      return;
+    }
+    if (event.key === "Escape" && search === "selected" && selectedSlot !== null) {
+      event.preventDefault();
+      const slot = selectedSlot;
+      setSelected(null);
+      slotRefs.current[slot]?.focus();
     }
   };
 
   const onSlotKeyDown = (event: KeyboardEvent<HTMLButtonElement>, slot: number) => {
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
-      const next = Math.min(Math.max(slot + (event.key === "ArrowLeft" ? -1 : 1), 0), SLOT_COUNT - 1);
+      const next = Math.min(Math.max(slot + (event.key === "ArrowLeft" ? -1 : 1), 0), party.slots.length - 1);
       selectSlot(next);
       slotRefs.current[next]?.focus();
       return;
@@ -356,7 +385,7 @@ function PartySlots({
           }}
           type="button"
           aria-pressed={isSelected}
-          aria-label={`${title} ${slotLabel(slot)}, ${studentName ? `${studentName}${unit?.assist ? " 조력자" : ""}` : "비어 있음"}`}
+          aria-label={`${title} ${slotLabel(slot, strikerSlots)}, ${studentName ? `${studentName}${unit?.assist ? " 조력자" : ""}` : "비어 있음"}`}
           aria-keyshortcuts={unit ? "Delete" : undefined}
           onClick={() => {
             selectSlot(slot);
@@ -371,6 +400,8 @@ function PartySlots({
               name={student ? name : "알 수 없는 학생"}
               variant={student ? variant : null}
               recruitmentLabel={unit.assist ? "조력자" : undefined}
+              scrimLabel={slotScrimLabel?.(unit, slot)}
+              scrimAriaLabel={slotScrimAriaLabel?.(unit, slot)}
             />
           ) : (
             <>
@@ -393,21 +424,30 @@ function PartySlots({
               className="pointer-events-none absolute inset-x-0 top-0 aspect-[5/6] rounded-md ring-2 ring-v2-accent"
             />
           ) : null}
+          {unit ? slotBadge?.(unit, slot) : null}
         </button>
       </li>
     );
   };
 
-  const slotName = selectedSlot === null ? null : `${title} ${slotLabel(selectedSlot)}`;
+  const slotName = selectedSlot === null ? null : `${title} ${slotLabel(selectedSlot, strikerSlots)}`;
   const listId = `${id}-results`;
+  const slotIndexes = party.slots.map((_, slot) => slot);
+  const showSearch = search === "always" || selectedSlot !== null;
   return (
     <div ref={rootRef} className="flex min-w-0 flex-col gap-2.5">
       <div className="flex min-w-0 flex-wrap items-start gap-x-2.5 gap-y-3">
-        <SlotGroup label="STRIKER">{[0, 1, 2, 3].map(renderSlot)}</SlotGroup>
-        <span aria-hidden="true" className="mx-1 hidden w-px self-stretch bg-v2-divider sm:block" />
-        <SlotGroup label="SPECIAL">{[4, 5].map(renderSlot)}</SlotGroup>
+        <SlotGroup label="STRIKER" showLabel={showGroupLabels}>
+          {slotIndexes.slice(0, strikerSlots).map(renderSlot)}
+        </SlotGroup>
+        {showGroupLabels ? (
+          <span aria-hidden="true" className="mx-1 hidden w-px self-stretch bg-v2-divider sm:block" />
+        ) : null}
+        <SlotGroup label="SPECIAL" showLabel={showGroupLabels}>
+          {slotIndexes.slice(strikerSlots).map(renderSlot)}
+        </SlotGroup>
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className={cn("flex min-w-0 flex-wrap items-center gap-2", !showSearch && "hidden")}>
         <label
           className={cn(
             "flex h-v2-control-min min-h-v2-control-min w-full min-w-0 items-center gap-2 rounded-md bg-v2-surface px-3 text-v2-fg-secondary ring-1 ring-v2-control-border sm:max-w-80",
@@ -441,6 +481,7 @@ function PartySlots({
         </label>
         {selectedUnit && selectedSlot !== null ? (
           <span className="flex items-center gap-1">
+            {allowAssist ? (
             <Button
               variant="text"
               size="sm"
@@ -458,6 +499,7 @@ function PartySlots({
               <HandRaisedIcon className="size-3.5" aria-hidden="true" />
               {selectedUnit.assist ? "조력자 해제" : "조력자로 표시"}
             </Button>
+            ) : null}
             <Button variant="text" size="sm" onClick={() => clearSlot(selectedSlot)}>
               <UserMinusIcon className="size-3.5" aria-hidden="true" />
               슬롯 비우기
@@ -472,7 +514,7 @@ function PartySlots({
         aria-label="학생 검색 결과"
         className={cn(
           "grid grid-cols-[repeat(auto-fill,3.5rem)] gap-2 sm:grid-cols-[repeat(auto-fill,4rem)]",
-          !trimmed && "hidden",
+          (!trimmed || !showSearch) && "hidden",
         )}
       >
         {matches.map((student, index) => {
@@ -530,12 +572,14 @@ function PartySlots({
   );
 }
 
-function SlotGroup({ label, children }: { label: string; children: ReactNode }) {
+function SlotGroup({ label, showLabel, children }: { label: string; showLabel: boolean; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <p aria-hidden="true" className="mb-1.5 text-[0.6875rem] font-semibold tracking-wide text-v2-fg-tertiary">
-        {label}
-      </p>
+      {showLabel ? (
+        <p aria-hidden="true" className="mb-1.5 text-[0.6875rem] font-semibold tracking-wide text-v2-fg-tertiary">
+          {label}
+        </p>
+      ) : null}
       <ul aria-label={label} className="flex gap-2">
         {children}
       </ul>
@@ -618,7 +662,7 @@ export function isRaidGrowthFieldApplicable(
   return true;
 }
 
-function PartyGrowthTable({
+export function PartyGrowthTable({
   party,
   title,
   studentsByUid,

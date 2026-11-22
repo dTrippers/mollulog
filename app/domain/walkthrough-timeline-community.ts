@@ -21,9 +21,19 @@ type WalkthroughTimelineCommunityPostBlocks = Array<
   { type: "plaintext"; text: string } | WalkthroughTimelineCommunityPostBlock
 >;
 
+// The feed shows the start of the body as plain text, as it showed the description before.
+export const WALKTHROUGH_COMMUNITY_TEXT_LENGTH = 300;
+
+export function walkthroughCommunityText(bodyText: string): string {
+  const text = bodyText.trim();
+  return text.length > WALKTHROUGH_COMMUNITY_TEXT_LENGTH
+    ? `${text.slice(0, WALKTHROUGH_COMMUNITY_TEXT_LENGTH).trimEnd()}…`
+    : text;
+}
+
 export function createWalkthroughTimelineCommunityPostBlocks({
   uid,
-  description,
+  bodyText,
   bossUid,
   terrain,
   defenseType,
@@ -31,7 +41,8 @@ export function createWalkthroughTimelineCommunityPostBlocks({
   document,
 }: {
   uid: string;
-  description: string;
+  // The body as plain text, with mentions as their names.
+  bodyText: string;
   bossUid: string;
   terrain: WalkthroughTimelineTerrain;
   defenseType: WalkthroughTimelineDefenseType;
@@ -43,7 +54,7 @@ export function createWalkthroughTimelineCommunityPostBlocks({
   ];
 
   return [
-    ...(description.trim().length > 0 ? [{ type: "plaintext" as const, text: description.trim() }] : []),
+    ...(bodyText.trim().length > 0 ? [{ type: "plaintext" as const, text: walkthroughCommunityText(bodyText) }] : []),
     {
       type: "walkthrough_timeline",
       timelineUid: uid,

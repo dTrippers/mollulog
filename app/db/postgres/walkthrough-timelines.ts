@@ -7,6 +7,8 @@ import {
 } from "~/db/postgres/community";
 import { communityAuthorVisiblePredicate } from "~/db/postgres/community-moderation";
 import { pgWalkthroughTimelineLikesTable, pgWalkthroughTimelinesTable } from "~/db/postgres/schema";
+import { type GuideBody, guideBodyPlainText, InvalidGuideBodyError, parseGuideBody } from "~/domain/guide-body";
+import { walkthroughMentionLabelResolver } from "~/domain/walkthrough-mentions";
 import {
   parseWalkthroughTimelineDocument,
   type WalkthroughTimelineDefenseType,
@@ -15,12 +17,21 @@ import {
   type WalkthroughTimelineRecord,
   type WalkthroughTimelineTerrain,
   type WalkthroughTimelineVisibility,
+  walkthroughSaveProblemMessage,
+  walkthroughSaveProblems,
 } from "~/domain/walkthrough-timeline";
 import { createWalkthroughTimelineCommunityPostBlocks } from "~/domain/walkthrough-timeline-community";
 import { ActionValidationError } from "~/lib/action-errors";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 
 type WalkthroughTimelineRow = typeof pgWalkthroughTimelinesTable.$inferSelect;
+
+// The current name of a student, for the plain-text body the community feed shows. Undefined for an unknown student.
+export type WalkthroughStudentNameLookup = (studentUid: string) => string | undefined;
+
+type NormalizedWalkthroughTimelineWriteInput = Omit<WalkthroughTimelineWriteInput, "body"> & {
+  body: GuideBody | null;
+};
 
 export type PostgresWalkthroughTimelineOptions = {
   ctx?: ExecutionContext;
@@ -29,7 +40,8 @@ export type PostgresWalkthroughTimelineOptions = {
 
 export type WalkthroughTimelineWriteInput = {
   title: string;
-  description: string;
+  // Checked against the body allowlist before it is stored.
+  body: unknown;
   visibility: WalkthroughTimelineVisibility;
   isAuto: boolean;
   bossUid: string;
@@ -44,7 +56,7 @@ function toDomain(row: WalkthroughTimelineRow): WalkthroughTimelineRecord {
     uid: row.uid,
     userId: row.userId,
     title: row.title,
-    description: row.description,
+    body: parseGuideBody(row.body),
     visibility: row.visibility,
     isAuto: row.isAuto,
     bossUid: row.bossUid,
@@ -80,10 +92,13 @@ async function withWalkthroughTimelineDatabase<T>(
   );
 }
 
-function normalizeWriteInput(input: WalkthroughTimelineWriteInput): WalkthroughTimelineWriteInput {
+// A copy keeps what its source has, so cloning skips the save rules (title, boss, a striker in every party); the copy
+// meets them before its next save.
+function normalizeWriteInput(
+  input: WalkthroughTimelineWriteInput,
+  { checkSaveRules = true }: { checkSaveRules?: boolean } = {},
+): NormalizedWalkthroughTimelineWriteInput {
   const title = input.title.trim();
-  const description = input.description.trim();
-  if (!title) throw new ActionValidationError("타임라인 제목을 입력해주세요.");
   if (typeof input.isAuto !== "boolean") throw new ActionValidationError("오토 여부를 확인해주세요.");
   if (
     input.document.context.bossUid !== input.bossUid ||
@@ -93,13 +108,32 @@ function normalizeWriteInput(input: WalkthroughTimelineWriteInput): WalkthroughT
   ) {
     throw new ActionValidationError("타임라인 문서와 공략 설정이 일치하지 않아요.");
   }
-  return { ...input, title, description, document: parseWalkthroughTimelineDocument(input.document) };
+  const document = parseWalkthroughTimelineDocument(input.document);
+  const [problem] = checkSaveRules ? walkthroughSaveProblems({ title, document }) : [];
+  if (problem) throw new ActionValidationError(walkthroughSaveProblemMessage(problem));
+  let body: GuideBody | null;
+  try {
+    body = parseGuideBody(input.body);
+  } catch (error) {
+    if (error instanceof InvalidGuideBodyError) throw new ActionValidationError(error.message);
+    throw error;
+  }
+  return { ...input, title, body, document };
+}
+
+function communityPostBlocks(timeline: WalkthroughTimelineRecord, studentName: WalkthroughStudentNameLookup) {
+  const bodyText = guideBodyPlainText(
+    timeline.body,
+    walkthroughMentionLabelResolver(timeline.document.parties, studentName),
+  );
+  return createWalkthroughTimelineCommunityPostBlocks({ ...timeline, bodyText });
 }
 
 async function createWalkthroughTimelineAndProjection(
   db: NodePgDatabase,
   userId: number,
-  normalized: WalkthroughTimelineWriteInput,
+  normalized: NormalizedWalkthroughTimelineWriteInput,
+  studentName: WalkthroughStudentNameLookup,
 ): Promise<WalkthroughTimelineRecord> {
   return db.transaction(async (tx) => {
     const now = new Date();
@@ -118,7 +152,7 @@ async function createWalkthroughTimelineAndProjection(
     await syncPostgresWalkthroughTimelineCommunityPostInTransaction(
       tx,
       timeline,
-      createWalkthroughTimelineCommunityPostBlocks(timeline),
+      communityPostBlocks(timeline, studentName),
     );
     return timeline;
   });
@@ -128,7 +162,8 @@ async function updateWalkthroughTimelineAndProjection(
   db: NodePgDatabase,
   uid: string,
   userId: number,
-  normalized: WalkthroughTimelineWriteInput,
+  normalized: NormalizedWalkthroughTimelineWriteInput,
+  studentName: WalkthroughStudentNameLookup,
 ): Promise<WalkthroughTimelineRecord | null> {
   return db.transaction(async (tx) => {
     const rows = await tx
@@ -141,7 +176,7 @@ async function updateWalkthroughTimelineAndProjection(
     await syncPostgresWalkthroughTimelineCommunityPostInTransaction(
       tx,
       timeline,
-      createWalkthroughTimelineCommunityPostBlocks(timeline),
+      communityPostBlocks(timeline, studentName),
     );
     return timeline;
   });
@@ -167,13 +202,14 @@ export async function createPostgresWalkthroughTimelineWithCommunityPost(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
   input: WalkthroughTimelineWriteInput,
+  studentName: WalkthroughStudentNameLookup,
   options: PostgresWalkthroughTimelineOptions = {},
 ): Promise<WalkthroughTimelineRecord> {
   const normalized = normalizeWriteInput(input);
   return withWalkthroughTimelineDatabase(
     env,
     "create_with_community",
-    (db) => createWalkthroughTimelineAndProjection(db, userId, normalized),
+    (db) => createWalkthroughTimelineAndProjection(db, userId, normalized, studentName),
     options,
   );
 }
@@ -183,13 +219,14 @@ export async function updatePostgresWalkthroughTimelineWithCommunityPost(
   uid: string,
   userId: number,
   input: WalkthroughTimelineWriteInput,
+  studentName: WalkthroughStudentNameLookup,
   options: PostgresWalkthroughTimelineOptions = {},
 ): Promise<WalkthroughTimelineRecord | null> {
   const normalized = normalizeWriteInput(input);
   return withWalkthroughTimelineDatabase(
     env,
     "update_with_community",
-    (db) => updateWalkthroughTimelineAndProjection(db, uid, userId, normalized),
+    (db) => updateWalkthroughTimelineAndProjection(db, uid, userId, normalized, studentName),
     options,
   );
 }
@@ -208,13 +245,14 @@ export async function deletePostgresWalkthroughTimelineWithCommunityPost(
   );
 }
 
+// Creates a guide without its community post. Used for clones, which start private.
 export async function createPostgresWalkthroughTimeline(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
   input: WalkthroughTimelineWriteInput,
   options: PostgresWalkthroughTimelineOptions = {},
 ): Promise<WalkthroughTimelineRecord> {
-  const normalized = normalizeWriteInput(input);
+  const normalized = normalizeWriteInput(input, { checkSaveRules: false });
   return withWalkthroughTimelineDatabase(
     env,
     "create",
@@ -385,7 +423,7 @@ export async function clonePostgresWalkthroughTimeline(
     userId,
     {
       title: `${source.title} 복사본`,
-      description: source.description,
+      body: source.body,
       visibility: "private",
       isAuto: source.isAuto,
       bossUid: source.bossUid,

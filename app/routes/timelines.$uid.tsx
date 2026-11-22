@@ -1,29 +1,45 @@
 import {
+  ArrowTopRightOnSquareIcon,
+  ChatBubbleOvalLeftIcon,
+  ClockIcon,
   DocumentDuplicateIcon,
   InformationCircleIcon,
-  LinkIcon,
   ListBulletIcon,
-  LockClosedIcon,
-  LockOpenIcon,
   PencilSquareIcon,
   TrashIcon,
-} from "@heroicons/react/24/outline";
-import { BoltIcon } from "@heroicons/react/16/solid";
+} from "@heroicons/react/16/solid";
 import { QRCodeSVG } from "qrcode.react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import LikeButton from "~/components/features/engagement/LikeButton";
-import { Page, RouteErrorBoundary } from "~/components/features/layout";
+// The viewer window keeps the 1.x timeline viewer until MLLG-73 redesigns it (see v2GuardExceptions).
+import { flattenTimelineParties, useWalkthroughViewerWindow } from "~/components/features/walkthrough-timeline/useWalkthroughViewerWindow";
+import { FeedbackSheet } from "~/components/v2/features/feedback/FeedbackSheet";
+import { GuideBodyContent } from "~/components/v2/features/walkthroughs/GuideBodyContent";
+import type { GuideMentionContext } from "~/components/v2/features/walkthroughs/GuideMentionChip";
+import { WalkthroughBossBanner, WalkthroughConditions } from "~/components/v2/features/walkthroughs/WalkthroughConditions";
 import {
-  flattenTimelineParties,
-  WalkthroughTimelineFeedbackButton,
-  WalkthroughTimelineReadOnly,
-  WalkthroughTimelineViewerLauncher,
-} from "~/components/features/walkthrough-timeline";
-import { AttributeBadge, Button, Callout } from "~/components/primitives";
-import { PanelBody } from "~/components/primitives/PanelBody";
+  WalkthroughLikeButton,
+  WalkthroughShareButton,
+} from "~/components/v2/features/walkthroughs/WalkthroughEngagement";
+import {
+  WalkthroughPartyDetailCard,
+  walkthroughPartyAnchorId,
+} from "~/components/v2/features/walkthroughs/WalkthroughPartyDetail";
+import { WalkthroughRouteError } from "~/components/v2/features/walkthroughs/WalkthroughRouteError";
+import type { WalkthroughStudent } from "~/components/v2/features/walkthroughs/walkthrough-parts";
+import { AsideLinks } from "~/components/v2/layout/AsideLinks";
+import { MobileActionBar } from "~/components/v2/layout/MobileActionBar";
+import { PageAside } from "~/components/v2/layout/PageAside";
+import { PageHeader } from "~/components/v2/layout/PageHeader";
+import { PageMain } from "~/components/v2/layout/PageMain";
+import { PanelSheet } from "~/components/v2/layout/PanelSheet";
+import { V2Page } from "~/components/v2/layout/V2Page";
+import { v2FocusRing } from "~/components/v2/layout/styles";
+import { Button } from "~/components/v2/primitives/Button";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import {
   canPostgresWalkthroughTimelineReceiveLike,
   getPostgresWalkthroughTimelineLikeSummaries,
@@ -38,26 +54,32 @@ import {
   DEMO_WALKTHROUGH_TIMELINE,
   isDemoWalkthroughTimelineUid,
 } from "~/domain/walkthrough-timeline-demo";
-import type { WalkthroughTimelineRecord } from "~/domain/walkthrough-timeline";
 import { compareInstantDesc, formatInstant } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
-import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
-import { bossImageUrl } from "~/models/assets";
+import { socialMeta } from "~/lib/seo";
+import { cn } from "~/lib/utils";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getSenseiById, isSenseiProfileVisibleTo } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
-import { socialMeta } from "~/lib/seo";
+import {
+  toWalkthroughRouteStudent,
+  walkthroughReferencedStudentUids,
+} from "./timelines._components/timeline-route-data.server";
+
+const NOT_FOUND_MESSAGE = "공략/타임라인을 찾을 수 없어요.";
+const FEEDBACK_TITLE = "의견/오류 제보";
 
 export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
-  const title = data?.timeline.title ?? "공략 타임라인";
+  const title = data?.timeline.title ?? "공략/타임라인";
   return [
     { title: `${title} | 몰루로그` },
     ...(data?.timeline.visibility === "public" ? [] : [{ name: "robots", content: "noindex,nofollow" }]),
     ...socialMeta({ title, pathname: location.pathname }),
   ];
 };
-export const ErrorBoundary = RouteErrorBoundary;
+
+export const ErrorBoundary = WalkthroughRouteError;
 
 type ActionData = { error: string };
 
@@ -69,14 +91,14 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     getActiveSensei(env, request, ctx),
   ]);
   const timeline = demo ? DEMO_WALKTHROUGH_TIMELINE : storedTimeline;
-  if (!timeline) throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
+  if (!timeline) throw routeError(404, "timeline.not_found", NOT_FOUND_MESSAGE);
   const owner = storedTimeline !== null && currentUser?.id === storedTimeline.userId;
   if (timeline.visibility === "private" && !owner) {
-    throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
+    throw routeError(404, "timeline.not_found", NOT_FOUND_MESSAGE);
   }
   const author = storedTimeline ? await getSenseiById(env, storedTimeline.userId, { ctx }) : null;
   if (storedTimeline && (!author || !isSenseiProfileVisibleTo(author, currentUser?.id))) {
-    throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
+    throw routeError(404, "timeline.not_found", NOT_FOUND_MESSAGE);
   }
   const [students, raids, engagementByUid, canLike] = await Promise.all([
     getAllStudentsMap(env, true),
@@ -98,8 +120,12 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     });
   const latestBossSchedule = bossSchedules[0] ?? null;
   const bossName = latestBossSchedule?.raidBoss.name ?? null;
-  const detailUrl = new URL(`/timelines/${timeline.uid}`, request.url).toString();
-  const viewerUrl = new URL(`/timelines/${timeline.uid}/viewer`, request.url).toString();
+  const referencedStudents = [...walkthroughReferencedStudentUids(timeline.document, timeline.body)].flatMap(
+    (uid) => {
+      const student = students[uid];
+      return student ? [toWalkthroughRouteStudent(student)] : [];
+    },
+  );
   return {
     timeline,
     engagement: engagementByUid[timeline.uid] ?? { liked: false, likeCount: 0 },
@@ -109,18 +135,16 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     signedIn: currentUser !== null,
     author: author ? { username: author.username } : null,
     bossName: bossName ?? (demo ? DEMO_WALKTHROUGH_BOSS_NAME : null),
-    latestBossTimelinePath: latestBossSchedule
+    otherGuidesPath: latestBossSchedule
       ? `/timelines?${new URLSearchParams({
           bossUid: timeline.bossUid,
           terrain: timeline.terrain,
           defenseType: timeline.defenseType,
         }).toString()}`
       : null,
-    detailUrl,
-    viewerUrl,
-    studentsByUid: Object.fromEntries(
-      Object.entries(students).map(([uid, student]) => [uid, { name: student.name, equipments: student.equipments }]),
-    ),
+    detailUrl: new URL(`/timelines/${timeline.uid}`, request.url).toString(),
+    viewerUrl: new URL(`/timelines/${timeline.uid}/viewer`, request.url).toString(),
+    students: referencedStudents,
   };
 };
 
@@ -129,7 +153,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const logger = getLogger(env, ctx, { route: "timelines.detail.action" });
   const currentUser = await getActiveSensei(env, request, ctx);
   if (!currentUser) return redirect("/unauthorized");
-  if (!params.uid) throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
+  if (!params.uid) throw routeError(404, "timeline.not_found", NOT_FOUND_MESSAGE);
   if (isDemoWalkthroughTimelineUid(params.uid)) {
     throw routeError(400, "timeline.invalid_action", "데모 타임라인은 변경할 수 없어요.");
   }
@@ -156,7 +180,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
         ctx,
       });
       if (!deleted) throw routeError(403, "timeline.forbidden", "이 타임라인을 삭제할 수 없어요.");
-      return redirect(`/@${currentUser.username}/timelines`);
+      return redirect("/timelines?mine=1");
     } catch (error) {
       if (error instanceof Response) throw error;
       logger.error("Failed to delete walkthrough timeline", error, {
@@ -170,6 +194,10 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   throw routeError(400, "timeline.invalid_action", "지원하지 않는 요청이에요.");
 };
 
+function visibilityLabel(visibility: "public" | "unlisted" | "private"): string {
+  return visibility === "public" ? "전체 공개" : visibility === "unlisted" ? "목록 미노출" : "나만 보기";
+}
+
 export default function WalkthroughTimelineDetailPage() {
   const {
     timeline,
@@ -180,284 +208,273 @@ export default function WalkthroughTimelineDetailPage() {
     signedIn,
     author,
     bossName,
-    latestBossTimelinePath,
-    studentsByUid,
+    otherGuidesPath,
     detailUrl,
     viewerUrl,
+    students,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
-  const deleteControlRef = useRef<HTMLDivElement>(null);
-  const isDeleteSubmitting = navigation.state !== "idle" && navigation.formData?.get("intent") === "delete";
-  const items = flattenTimelineParties(timeline.document.parties);
-  const visibilityLabel =
-    timeline.visibility === "public" ? "전체 공개" : timeline.visibility === "unlisted" ? "목록 미노출" : "나만 보기";
-  const authorSummary = demo ? (
-    <span>몰루로그</span>
-  ) : author ? (
-    <Link to={`/@${author.username}`} className="text-primary hover:underline">
-      @{author.username}
-    </Link>
-  ) : (
-    <span>작성자 정보 없음</span>
+  const timeZone = useDisplayTimeZone();
+  const [stacked, setStacked] = useState(false);
+  const onStackedChange = useCallback((value: boolean) => setStacked(value), []);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const isDeleting = navigation.state !== "idle" && navigation.formData?.get("intent") === "delete";
+  const isCloning = navigation.state !== "idle" && navigation.formData?.get("intent") === "clone";
+
+  const studentsByUid = useMemo(
+    () => new Map<string, WalkthroughStudent>(students.map((student) => [student.uid, student])),
+    [students],
   );
-  const visibilitySummary = (
-    <span className="inline-flex items-center gap-1">
-      {timeline.visibility === "public" ? (
-        <LockOpenIcon className="size-3.5" />
-      ) : timeline.visibility === "unlisted" ? (
-        <LinkIcon className="size-3.5" />
-      ) : (
-        <LockClosedIcon className="size-3.5" />
-      )}
-      {visibilityLabel}
+  const viewerStudents = useMemo(
+    () => Object.fromEntries(students.map((student) => [student.uid, { name: student.name, equipments: student.equipments }])),
+    [students],
+  );
+  const parties = useMemo(
+    () => [...timeline.document.parties].sort((left, right) => left.order - right.order),
+    [timeline.document.parties],
+  );
+  const viewerItems = useMemo(() => flattenTimelineParties(parties), [parties]);
+  const viewer = useWalkthroughViewerWindow({ items: viewerItems, studentsByUid: viewerStudents });
+  const hasTimeline = parties.some((party) => party.steps.length > 0);
+  const firstTimelinePartyUid = parties.find((party) => party.steps.length > 0)?.uid;
+  const mentionContext: GuideMentionContext = {
+    parties,
+    partySize: timeline.document.partySize,
+    studentsByUid,
+    partyHref: (party) => `#${walkthroughPartyAnchorId(party)}`,
+  };
+
+  const meta = (
+    <span className="inline-flex flex-wrap items-center gap-x-2">
+      {demo ? (
+        <span>몰루로그</span>
+      ) : author ? (
+        <Link to={`/@${author.username}`} className={cn("text-v2-link hover:underline", v2FocusRing)}>
+          @{author.username}
+        </Link>
+      ) : null}
+      {!demo ? (
+        <time dateTime={new Date(timeline.updatedAt).toISOString()} className="tabular-nums">
+          {formatInstant(timeline.updatedAt, { timeZone, format: "YYYY/MM/DD" })} 수정
+        </time>
+      ) : null}
     </span>
   );
 
-  useEffect(() => {
-    if (!actionData?.error || navigation.state !== "idle") return;
-    deleteControlRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
-  }, [actionData?.error, navigation.state]);
+  const openViewerButton = (fullWidth: boolean) => (
+    <>
+      <a
+        href={viewerUrl}
+        target="_blank"
+        rel="noopener"
+        className={cn(
+          "hidden min-h-v2-control-min items-center justify-center gap-1.5 rounded-md bg-v2-accent-solid px-3 text-sm font-medium text-v2-on-accent-solid hover:opacity-90 v2-interaction-transition [@media(any-pointer:coarse)]:inline-flex",
+          fullWidth && "w-full",
+          v2FocusRing,
+        )}
+      >
+        <ArrowTopRightOnSquareIcon className="size-4" aria-hidden="true" />
+        새 창에서 열기
+      </a>
+      <Button
+        variant="primary"
+        onClick={() => void viewer.open()}
+        className={cn("[@media(any-pointer:coarse)]:hidden", fullWidth && "w-full")}
+      >
+        <ArrowTopRightOnSquareIcon className="size-4" aria-hidden="true" />
+        {viewer.mode ? "뷰어로 돌아가기" : "새 창에서 열기"}
+      </Button>
+      {viewer.error ? <StatusNotice tone="danger">{viewer.error}</StatusNotice> : null}
+    </>
+  );
+
+  const ownerActions = owner ? (
+    <>
+      <Link
+        to={`/timelines/${timeline.uid}/edit`}
+        className={cn(
+          "inline-flex min-h-7 items-center gap-1.5 rounded-md bg-v2-inset px-2.5 text-[0.8125rem] font-medium text-v2-fg hover:bg-v2-filled-hover v2-interaction-transition",
+          v2FocusRing,
+        )}
+      >
+        <PencilSquareIcon className="size-4" aria-hidden="true" />
+        수정
+      </Link>
+      <Form
+        method="post"
+        onSubmit={(event) => {
+          if (!window.confirm("이 타임라인을 삭제할까요?")) event.preventDefault();
+        }}
+      >
+        <Button type="submit" name="intent" value="delete" size="sm" variant="danger-subtle" disabled={isDeleting}>
+          <TrashIcon className="size-4" aria-hidden="true" />
+          {isDeleting ? "삭제 중..." : "삭제"}
+        </Button>
+      </Form>
+    </>
+  ) : null;
+
+  const engagementActions = (
+    <>
+      {!demo && timeline.visibility === "public" ? (
+        <WalkthroughLikeButton
+          timelineUid={timeline.uid}
+          liked={engagement.liked}
+          likeCount={engagement.likeCount}
+          signedIn={signedIn}
+          canLike={canLike}
+        />
+      ) : null}
+      <WalkthroughShareButton url={detailUrl} title={timeline.title} iconOnly={stacked} />
+    </>
+  );
 
   return (
-    <Page
-      title="공략 타임라인 상세"
-      description={timeline.title}
-      contentWidth="full"
-      belowTitle={
-        <div className="lg:hidden">
-          <div className="relative overflow-hidden rounded-md border border-border bg-background px-3 py-3">
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 right-0 w-2/3 bg-contain bg-right bg-no-repeat opacity-70"
-              style={{ backgroundImage: `url(${bossImageUrl(timeline.bossUid)})` }}
-            />
-            <div className="relative">
-              <p className="font-semibold">{bossName ?? "보스 정보 확인 불가"}</p>
-              <div className="mt-3 space-y-3">
-                <TimelineConditionBadges timeline={timeline} />
-                <TimelineMetadata
-                  visibilitySummary={visibilitySummary}
-                  authorSummary={authorSummary}
-                  updatedAt={timeline.updatedAt}
-                  demo={demo}
-                />
+    <V2Page width="wide" onStackedChange={onStackedChange}>
+      <PageHeader
+        back={{ title: "공략/타임라인", to: "/timelines" }}
+        title={timeline.title}
+        meta={meta}
+        trailing={
+          stacked ? undefined : (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {ownerActions}
+              {engagementActions}
+            </div>
+          )
+        }
+      />
+      <PageMain>
+        <div className="flex flex-col gap-v2-section-gap">
+          {stacked ? (
+            <div className="flex flex-col gap-3">
+              <WalkthroughBossBanner bossUid={timeline.bossUid} bossName={bossName} />
+              <div className="flex flex-wrap items-center gap-2">
+                <WalkthroughConditions timeline={timeline} className="mr-auto" />
+                {ownerActions}
+                {engagementActions}
+              </div>
+              {hasTimeline ? openViewerButton(true) : null}
+            </div>
+          ) : null}
+          {actionData?.error ? <StatusNotice tone="danger">{actionData.error}</StatusNotice> : null}
+          {demo ? (
+            <StatusNotice tone="neutral" Icon={InformationCircleIcon} boxed>
+              실제 공략이 아닌 기능 안내용 예시예요.
+            </StatusNotice>
+          ) : null}
+
+          <section aria-labelledby="formation-title" className="flex flex-col gap-3">
+            <h2 id="formation-title" className="text-base font-semibold text-v2-fg">
+              편성
+            </h2>
+            {parties.map((party, partyIndex) => (
+              <WalkthroughPartyDetailCard
+                key={party.uid}
+                party={party}
+                partyIndex={partyIndex}
+                partySize={timeline.document.partySize}
+                studentsByUid={studentsByUid}
+                defaultTimelineExpanded={party.uid === firstTimelinePartyUid}
+              />
+            ))}
+          </section>
+
+          {timeline.body ? (
+            <article aria-label="본문">
+              <GuideBodyContent body={timeline.body} context={mentionContext} />
+            </article>
+          ) : null}
+
+          {!demo && !owner ? (
+            <div>
+              {signedIn ? (
+                <Form method="post">
+                  <Button type="submit" name="intent" value="clone" disabled={isCloning}>
+                    <DocumentDuplicateIcon className="size-4" aria-hidden="true" />
+                    복제해서 내 타임라인 만들기
+                  </Button>
+                </Form>
+              ) : (
+                <Link to="/signin" className={cn("text-sm text-v2-link hover:underline", v2FocusRing)}>
+                  로그인하면 내 타임라인으로 복제할 수 있어요.
+                </Link>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </PageMain>
+      <PageAside>
+        <PanelSheet panelId="info" title="공략 정보" Icon={InformationCircleIcon}>
+          <div className="flex flex-col gap-3">
+            <WalkthroughBossBanner bossUid={timeline.bossUid} bossName={bossName} />
+            <WalkthroughConditions timeline={timeline} />
+            <dl className="flex items-center justify-between gap-3 text-sm">
+              <dt className="text-v2-fg-tertiary">공개 범위</dt>
+              <dd className="font-medium text-v2-fg">{visibilityLabel(timeline.visibility)}</dd>
+            </dl>
+          </div>
+        </PanelSheet>
+        {hasTimeline ? (
+          <PanelSheet panelId="viewer" title="타임라인" Icon={ClockIcon}>
+            <div className="flex flex-col gap-3">
+              {openViewerButton(true)}
+              <div className="flex items-center gap-3">
+                <span className="rounded-md bg-v2-on-media p-1.5">
+                  <QRCodeSVG value={viewerUrl} size={72} level="M" aria-label="모바일 뷰어 접속 QR 코드" />
+                </span>
+                <span className="text-sm text-v2-fg-secondary">모바일에서 열기</span>
               </div>
             </div>
-          </div>
-        </div>
-      }
-      panels={[
-        {
-          title: "공략 정보",
-          Icon: InformationCircleIcon,
-          children: (
-            <PanelBody>
-              <div className="relative overflow-hidden rounded-md border border-border bg-background px-3 py-3">
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-y-0 right-0 w-2/3 bg-contain bg-right bg-no-repeat opacity-70"
-                  style={{ backgroundImage: `url(${bossImageUrl(timeline.bossUid)})` }}
-                />
-                <div className="relative">
-                  <p className="font-semibold">{bossName ?? "보스 정보 확인 불가"}</p>
-                </div>
-              </div>
-
-              <TimelineConditionBadges timeline={timeline} />
-              <TimelineMetadata
-                visibilitySummary={visibilitySummary}
-                authorSummary={authorSummary}
-                updatedAt={timeline.updatedAt}
-                demo={demo}
-              />
-
-              {owner ? (
-                <div className="space-y-2">
-                  {actionData?.error ? (
-                    <div role="alert">
-                      <Callout tone="destructive" title={actionData.error} />
-                    </div>
-                  ) : null}
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      to={`/timelines/${timeline.uid}/edit`}
-                      icon={PencilSquareIcon}
-                      text="수정"
-                      size="sm"
-                      fullWidth
-                    />
-                    <Form
-                      method="post"
-                      onSubmit={(event) => {
-                        if (!window.confirm("이 타임라인을 삭제할까요?")) event.preventDefault();
-                      }}
-                    >
-                      <div ref={deleteControlRef}>
-                        <Button
-                          type="submit"
-                          name="intent"
-                          value="delete"
-                          icon={TrashIcon}
-                          text={isDeleteSubmitting ? "삭제 중..." : "삭제"}
-                          size="sm"
-                          variant="danger-subtle"
-                          fullWidth
-                          disabled={isDeleteSubmitting}
-                        />
-                      </div>
-                    </Form>
-                  </div>
-                </div>
-              ) : null}
-            </PanelBody>
-          ),
-        },
-      ]}
-      belowPanels={<WalkthroughTimelineFeedbackButton signedIn={signedIn} />}
-      links={
-        latestBossTimelinePath
-          ? [
+          </PanelSheet>
+        ) : null}
+        {otherGuidesPath ? (
+          <AsideLinks
+            items={[
               {
+                key: "other-guides",
                 title: "다른 공략 보기",
-                description: "해당 보스의 다른 공략/타임라인 확인",
+                description: "같은 보스의 공략",
                 Icon: ListBulletIcon,
-                to: latestBossTimelinePath,
+                to: otherGuidesPath,
               },
-            ]
-          : undefined
-      }
-    >
-      <div className="space-y-4 py-4">
-        {demo ? (
-          <Callout
-            Icon={InformationCircleIcon}
-            title="공략 타임라인 데모 예시입니다"
-            description="실제 공략이 아닌 기능 안내용 예시입니다. 편성, 학생 성장도와 여러 종류의 타임라인 단계를 둘러보세요."
-            tone="info"
+            ]}
           />
         ) : null}
-        <section
-          className="flex flex-wrap items-start justify-between gap-3 rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-5"
-          aria-labelledby="timeline-viewer-actions"
-        >
-          <div className="min-w-0 flex-1">
-            <h2 id="timeline-viewer-actions" className="sr-only">
-              뷰어와 공유
-            </h2>
-            <WalkthroughTimelineViewerLauncher
-              items={items}
-              studentsByUid={studentsByUid}
-              viewerUrl={viewerUrl}
-              shareUrl={detailUrl}
-              shareTitle={timeline.title}
-            />
-            {timeline.description ? (
-              <div className="mt-3">
-                <h2 className="sr-only">공략 설명</h2>
-                <p className="whitespace-pre-wrap break-words text-sm leading-6">{timeline.description}</p>
-              </div>
-            ) : null}
+        {signedIn ? (
+          <div className="flex justify-end">
+            <Button variant="secondary" className="text-xs" onClick={() => setFeedbackOpen(true)}>
+              <ChatBubbleOvalLeftIcon className="size-4" aria-hidden="true" />
+              {FEEDBACK_TITLE}
+            </Button>
           </div>
-          <div
-            role="img"
-            aria-label="모바일 뷰어 접속 QR 코드"
-            className="hidden w-fit flex-col items-center gap-2 rounded-md bg-background p-2 text-center md:flex"
-          >
-            <QRCodeSVG value={viewerUrl} size={88} level="M" includeMargin aria-label="모바일 뷰어 접속 QR 코드" />
-            <span className="text-xs text-muted-foreground">모바일에서 열기</span>
-          </div>
-        </section>
-
-        <WalkthroughTimelineReadOnly
-          parties={timeline.document.parties}
-          partySize={timeline.document.partySize}
-          studentsByUid={studentsByUid}
-        />
-
-        <div className="flex flex-wrap gap-2">
-          {!demo && timeline.visibility === "public" ? (
-            <LikeButton
-              targetUid={timeline.uid}
-              action={`/api/timelines/${timeline.uid}/likes`}
-              liked={engagement.liked}
-              likeCount={engagement.likeCount}
-              signedIn={signedIn}
-              canLike={canLike}
-            />
-          ) : null}
-          {!demo && signedIn && !owner && (
-            <Form method="post">
-              <Button
-                type="submit"
-                name="intent"
-                value="clone"
-                icon={DocumentDuplicateIcon}
-                text="복제해서 내 타임라인 만들기"
-                disabled={navigation.state !== "idle"}
-              />
-            </Form>
-          )}
-          {!demo && !signedIn && (
-            <Link to="/signin" className="text-sm text-primary hover:underline">
-              로그인하면 내 타임라인으로 복제할 수 있어요.
-            </Link>
-          )}
-        </div>
-      </div>
-    </Page>
-  );
-}
-
-function TimelineConditionBadges({
-  timeline,
-}: {
-  timeline: Pick<WalkthroughTimelineRecord, "terrain" | "defenseType" | "maxDifficulty" | "isAuto">;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <AttributeBadge text={terrainLocale[timeline.terrain]} color={null} />
-      <AttributeBadge text={defenseTypeLocale[timeline.defenseType]} color={defenseTypeColor[timeline.defenseType]} />
-      <AttributeBadge text={difficultyLocale[timeline.maxDifficulty]} color={null} />
-      {timeline.isAuto ? (
-        <span className="inline-flex w-fit shrink-0 items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-semibold leading-none text-emerald-700 dark:text-emerald-300">
-          <BoltIcon className="size-3.5" aria-hidden="true" />
-          오토
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function TimelineMetadata({
-  visibilitySummary,
-  authorSummary,
-  updatedAt,
-  demo,
-}: {
-  visibilitySummary: ReactNode;
-  authorSummary: ReactNode;
-  updatedAt: Date;
-  demo: boolean;
-}) {
-  return (
-    <dl className="space-y-1.5 text-sm">
-      <div className="flex items-center justify-between gap-3">
-        <dt className="shrink-0 text-muted-foreground">공개 범위</dt>
-        <dd className="max-w-[70%] break-words text-right font-medium">{visibilitySummary}</dd>
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <dt className="shrink-0 text-muted-foreground">작성자</dt>
-        <dd className="max-w-[70%] break-words text-right font-medium">{authorSummary}</dd>
-      </div>
-      {!demo ? (
-        <div className="flex items-center justify-between gap-3">
-          <dt className="shrink-0 text-muted-foreground">수정일</dt>
-          <dd className="max-w-[70%] break-words text-right font-medium tabular-nums">
-            {formatInstant(updatedAt, { timeZone: "Asia/Seoul" })}
-          </dd>
-        </div>
-      ) : null}
-    </dl>
+        ) : null}
+      </PageAside>
+      <MobileActionBar
+        links={[
+          ...(otherGuidesPath
+            ? [{ key: "other-guides", title: "다른 공략", Icon: ListBulletIcon, to: otherGuidesPath }]
+            : []),
+          ...(signedIn
+            ? [
+                {
+                  key: "feedback",
+                  title: FEEDBACK_TITLE,
+                  Icon: ChatBubbleOvalLeftIcon,
+                  onClick: () => setFeedbackOpen(true),
+                },
+              ]
+            : []),
+        ]}
+      />
+      <FeedbackSheet
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        featureName="공략/타임라인"
+        feedbackType="walkthrough_timeline_feedback"
+      />
+      {viewer.portal}
+    </V2Page>
   );
 }

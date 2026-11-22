@@ -1,3 +1,5 @@
+import type { GuideBody } from "./guide-body";
+
 export const LEGACY_WALKTHROUGH_TIMELINE_SCHEMA_VERSION = 1 as const;
 export const WALKTHROUGH_TIMELINE_SCHEMA_VERSION = 2 as const;
 export const WALKTHROUGH_TIMELINE_LIMITS = {
@@ -98,7 +100,7 @@ export type WalkthroughTimelineRecord = {
   uid: string;
   userId: number;
   title: string;
-  description: string;
+  body: GuideBody | null;
   visibility: WalkthroughTimelineVisibility;
   isAuto: boolean;
   bossUid: string;
@@ -353,5 +355,94 @@ export function createEmptyWalkthroughTimelineDocument(
     partySize,
     context,
     parties: [],
+  };
+}
+
+// Strikers fill the front slots: four of a six-student party and six of a ten-student party.
+export function walkthroughStrikerSlotCount(partySize: WalkthroughTimelineDocument["partySize"]): number {
+  return partySize === 10 ? 6 : 4;
+}
+
+export function isWalkthroughStrikerSlot(slot: number, partySize: WalkthroughTimelineDocument["partySize"]): boolean {
+  return slot < walkthroughStrikerSlotCount(partySize);
+}
+
+// A party can start with at most one student fewer than it has.
+export function walkthroughStartingSkillLimit(partySize: WalkthroughTimelineDocument["partySize"]): number {
+  return partySize - 1;
+}
+
+export type WalkthroughSaveProblem =
+  | { field: "title" }
+  | { field: "boss" }
+  | { field: "parties" }
+  | { field: "party"; partyIndex: number; reason: "empty" | "no_striker" };
+
+// What keeps a guide from being saved: a title, a boss, and at least one party, where every party has a striker. The
+// growth values, the starting skill order, and the timeline are optional.
+export function walkthroughSaveProblems(input: {
+  title: string;
+  document: Pick<WalkthroughTimelineDocument, "partySize" | "context" | "parties">;
+}): WalkthroughSaveProblem[] {
+  const problems: WalkthroughSaveProblem[] = [];
+  if (!input.title.trim()) problems.push({ field: "title" });
+  if (!input.document.context.bossUid.trim()) problems.push({ field: "boss" });
+  if (input.document.parties.length === 0) problems.push({ field: "parties" });
+  input.document.parties.forEach((party, partyIndex) => {
+    const filled = party.units.filter((unit) => unit.studentUid);
+    if (filled.length === 0) {
+      problems.push({ field: "party", partyIndex, reason: "empty" });
+    } else if (!filled.some((unit) => isWalkthroughStrikerSlot(unit.slot, input.document.partySize))) {
+      problems.push({ field: "party", partyIndex, reason: "no_striker" });
+    }
+  });
+  return problems;
+}
+
+export function walkthroughSaveProblemMessage(problem: WalkthroughSaveProblem): string {
+  switch (problem.field) {
+    case "title":
+      return "제목을 입력해 주세요.";
+    case "boss":
+      return "보스를 선택해 주세요.";
+    case "parties":
+      return "파티를 추가해 주세요.";
+    case "party":
+      return problem.reason === "empty"
+        ? `파티 ${problem.partyIndex + 1}에 학생을 편성해 주세요.`
+        : `파티 ${problem.partyIndex + 1}에 스트라이커를 1명 이상 편성해 주세요.`;
+  }
+}
+
+// Adds a student to the end of the starting skill order, or takes them out of it. The order is full at the limit.
+export function toggleStartingSkillStudentUid(order: readonly string[], studentUid: string, limit: number): string[] {
+  if (order.includes(studentUid)) return order.filter((uid) => uid !== studentUid);
+  if (order.length >= limit) return [...order];
+  return [...order, studentUid];
+}
+
+// Moves a party between the six-student and ten-student layouts when the boss changes. Strikers keep their slots;
+// specials move with the striker count, and students that no longer fit are dropped along with their starting skill.
+export function resizeWalkthroughParty(
+  party: WalkthroughParty,
+  currentSize: WalkthroughTimelineDocument["partySize"],
+  size: WalkthroughTimelineDocument["partySize"],
+): WalkthroughParty {
+  if (currentSize === size) return party;
+  const remappedUnits = party.units.flatMap((unit) => {
+    if (size === 10) {
+      return [{ ...unit, slot: unit.slot < 4 ? unit.slot : unit.slot + 2 }];
+    }
+    if (unit.slot < 4) return [unit];
+    if (unit.slot >= 6 && unit.slot < 8) return [{ ...unit, slot: unit.slot - 2 }];
+    return [];
+  });
+  const selectedStudentUids = new Set(remappedUnits.flatMap((unit) => unit.studentUid ?? []));
+  return {
+    ...party,
+    units: remappedUnits,
+    startingSkillStudentUids: party.startingSkillStudentUids
+      .filter((uid) => selectedStudentUids.has(uid))
+      .slice(0, walkthroughStartingSkillLimit(size)),
   };
 }
