@@ -7,6 +7,8 @@ import {
   getRaidMaxScore,
   getRaidMaxTotalScore,
   getRaidRecordTotalScore,
+  parseRaidRecordScore,
+  parseRaidRecordTotalScore,
   RAID_RECORD_LIMITS,
   type RaidRecordDefenseType,
   type RaidRecordParty,
@@ -46,6 +48,7 @@ import {
   RAID_RECORD_SERVER_LABEL,
   RAID_RECORD_SERVER_SHORT_LABEL,
 } from "./raid-record-format";
+import { raidRecordRangeError } from "./raid-record-table-state";
 
 export type RaidRecordFormStudent = RaidPartyStudent & { released: boolean };
 
@@ -209,8 +212,8 @@ export function RaidRecordForm({
   for (const { defenseType, score } of enteredScores) {
     const maxDifficulty = season?.scoreDefenseTypes.find((entry) => entry.defenseType === defenseType)?.maxDifficulty;
     const maxScore = season ? getRaidMaxScore(season.boss.uid, maxDifficulty ?? null) : null;
-    // The same range the save checks, such as a score of 0.
-    if (score <= 0 || score > RAID_RECORD_LIMITS.maxScore) scoreErrors[defenseType] = "점수를 확인해 주세요.";
+    const rangeError = raidRecordRangeError(() => parseRaidRecordScore(score));
+    if (rangeError) scoreErrors[defenseType] = rangeError;
     else if (maxScore !== null && score > maxScore) {
       scoreErrors[defenseType] = `최대 점수(${formatRaidScore(maxScore)})보다 높아요.`;
     }
@@ -220,11 +223,10 @@ export function RaidRecordForm({
   const totalScoreError =
     totalScore === null
       ? null
-      : totalScore <= 0 || totalScore > RAID_RECORD_LIMITS.maxScore
-        ? "합산 점수를 확인해 주세요."
-        : maxTotalScore !== null && totalScore > maxTotalScore
+      : (raidRecordRangeError(() => parseRaidRecordTotalScore(totalScore)) ??
+        (maxTotalScore !== null && totalScore > maxTotalScore
           ? `최대 합산 점수(${formatRaidScore(maxTotalScore)})보다 높아요.`
-          : null;
+          : null));
   const hasScoreErrors = Object.keys(scoreErrors).length > 0;
   const rankError =
     rank === null ? "순위를 입력해 주세요." : rank > RAID_RECORD_LIMITS.maxRank ? "순위를 확인해 주세요." : null;

@@ -137,7 +137,7 @@ export function raidTableRowErrors(
   }
   if (draft.rank === null) errors.push({ field: "rank", message: "순위를 입력해 주세요." });
   else {
-    const rangeError = rangeErrorOf(() => parseRaidRecordRank(draft.rank));
+    const rangeError = raidRecordRangeError(() => parseRaidRecordRank(draft.rank));
     if (rangeError) errors.push({ field: "rank", message: rangeError });
   }
   return errors;
@@ -149,7 +149,7 @@ function scoreErrorOf(
   score: number,
   maxScores: Partial<Record<RaidRecordDefenseType, number | null>>,
 ): string | null {
-  const rangeError = rangeErrorOf(() => parseRaidRecordScore(score));
+  const rangeError = raidRecordRangeError(() => parseRaidRecordScore(score));
   if (rangeError) return rangeError;
   const maxScore = maxScores[defenseType];
   return typeof maxScore === "number" && score > maxScore ? `최대 점수(${maxScore.toLocaleString("ko-KR")})보다 높아요.` : null;
@@ -157,14 +157,16 @@ function scoreErrorOf(
 
 function totalScoreErrorOf(draft: RaidTableDraft, maxTotalScore: number | null): string | null {
   if (draft.totalScore === null) return null;
-  const rangeError = rangeErrorOf(() => parseRaidRecordTotalScore(draft.totalScore));
+  const rangeError = raidRecordRangeError(() => parseRaidRecordTotalScore(draft.totalScore));
   if (rangeError) return rangeError;
   return maxTotalScore !== null && draft.totalScore > maxTotalScore
     ? `최대 합산 점수(${maxTotalScore.toLocaleString("ko-KR")})보다 높아요.`
     : null;
 }
 
-function rangeErrorOf(parse: () => unknown): string | null {
+// The message of a domain parse function that rejects a value, or null when it accepts it. Screens check input with the
+// same parse functions as the save, so a value the screen accepts is never rejected on save.
+export function raidRecordRangeError(parse: () => unknown): string | null {
   try {
     parse();
     return null;
