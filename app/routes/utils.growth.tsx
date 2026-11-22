@@ -76,11 +76,25 @@ export default function GrowthLayout() {
   const [managedStudents, setManagedStudents] = useState(loaderData.managedStudents);
   const managedStudentListKey = loaderData.managedStudents.map((student) => student.uid).join(":");
   const syncedManagedStudentListKeyRef = useRef(managedStudentListKey);
+  const managedStudentPositionsKey = loaderData.managedStudents
+    .map((student) => `${student.uid}=${student.plannerPosition ?? ""}`)
+    .join(":");
+  const syncedManagedStudentPositionsKeyRef = useRef(managedStudentPositionsKey);
   const latestResourceRequirementsRef = useRef<GrowthResourceRequirementsByStudent>({});
 
   useEffect(() => {
-    if (syncedManagedStudentListKeyRef.current === managedStudentListKey) return;
+    if (syncedManagedStudentListKeyRef.current === managedStudentListKey) {
+      // The same students in another stored order, such as after a rejected order save: show the stored order.
+      if (syncedManagedStudentPositionsKeyRef.current === managedStudentPositionsKey) return;
+      syncedManagedStudentPositionsKeyRef.current = managedStudentPositionsKey;
+      const positions = new Map(loaderData.managedStudents.map((student) => [student.uid, student.plannerPosition]));
+      setManagedStudents((prev) =>
+        prev.map((student) => ({ ...student, plannerPosition: positions.get(student.uid) ?? null })),
+      );
+      return;
+    }
     syncedManagedStudentListKeyRef.current = managedStudentListKey;
+    syncedManagedStudentPositionsKeyRef.current = managedStudentPositionsKey;
     // Preserve per-row optimistic updates and resource results that may have resolved before this list sync.
     setManagedStudents(
       loaderData.managedStudents.map((student) => ({
@@ -88,7 +102,7 @@ export default function GrowthLayout() {
         resourceRequirements: latestResourceRequirementsRef.current[student.uid] ?? student.resourceRequirements,
       })),
     );
-  }, [loaderData.managedStudents, managedStudentListKey]);
+  }, [loaderData.managedStudents, managedStudentListKey, managedStudentPositionsKey]);
 
   const updateStudent = useCallback((next: GrowthStudent) => {
     setManagedStudents((prev) => {

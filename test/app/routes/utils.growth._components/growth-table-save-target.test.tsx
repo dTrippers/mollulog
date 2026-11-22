@@ -284,4 +284,141 @@ describe("growth table autosave", () => {
     expect(answers).toHaveLength(2);
     answers[1]({ ok: true });
   });
+
+  it("still sends a move waiting behind an order save after leaving the page", async () => {
+    const answers: Array<(value: unknown) => void> = [];
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/utils/growth/students",
+          action: () => new Promise((resolve) => answers.push(resolve)),
+          element: <ReorderablePlanner />,
+        },
+        { path: "/utils/resources/inventory", element: <p>재화 플래너</p> },
+      ],
+      { initialEntries: ["/utils/growth/students"] },
+    );
+    render(<RouterProvider router={router} />);
+
+    await move("테스트 학생 아래로");
+    await move("테스트 학생 위로");
+    await act(async () => {
+      await router.navigate("/utils/resources/inventory");
+    });
+    expect(screen.getByText("재화 플래너")).toBeTruthy();
+    expect(answers).toHaveLength(1);
+
+    await act(async () => {
+      answers[0]({ kind: "order", orderedStudentUids: [] });
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(answers).toHaveLength(2);
+    answers[1]({ kind: "order", orderedStudentUids: [] });
+  });
+
+  it("goes back to the last saved order when a later order is rejected", async () => {
+    const answers: Array<(value: unknown) => void> = [];
+    const onPositionsChange = jest.fn();
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/utils/growth/students",
+          action: () => new Promise((resolve) => answers.push(resolve)),
+          element: <ReorderablePlanner onPositionsChange={onPositionsChange} />,
+        },
+      ],
+      { initialEntries: ["/utils/growth/students"] },
+    );
+    render(<RouterProvider router={router} />);
+
+    await move("테스트 학생 아래로");
+    await move("테스트 학생 위로");
+    await act(async () => {
+      answers[0]({ kind: "order", orderedStudentUids: [] });
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    onPositionsChange.mockClear();
+    await act(async () => {
+      answers[1]({ error: "conflict" });
+      await jest.advanceTimersByTimeAsync(0);
+    });
+
+    // The first move was saved, so the screen returns to it rather than to the order before any move.
+    expect(onPositionsChange).toHaveBeenCalledWith({ "student-2": 0, "student-1": 1 });
+  });
+
+  it("keeps the retry of a failed sort save when an order save is rejected", async () => {
+    const answers: Array<(value: unknown) => void> = [];
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/utils/growth/students",
+          action: () => new Promise((resolve) => answers.push(resolve)),
+          element: <ReorderablePlanner sortOrder="name" />,
+        },
+      ],
+      { initialEntries: ["/utils/growth/students"] },
+    );
+    render(<RouterProvider router={router} />);
+    fireEvent.click(screen.getByRole("button", { name: "정렬 및 화면 설정" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "정렬" }), { target: { value: "manual" } });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(answers).toHaveLength(1);
+
+    await move("테스트 학생 아래로");
+    await act(async () => {
+      answers[0]({ error: "unavailable", retryable: true });
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(answers).toHaveLength(2);
+    await act(async () => {
+      answers[1]({ error: "conflict" });
+      await jest.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByRole("button", { name: "다시 시도" })).toBeTruthy();
+  });
 });
+
+function ReorderablePlanner({
+  sortOrder = "manual",
+  sortOrderStored = true,
+  onPositionsChange,
+}: {
+  sortOrder?: "manual" | "name";
+  sortOrderStored?: boolean;
+  onPositionsChange?: (positions: Record<string, number | null>) => void;
+}) {
+  const [students, setStudents] = useState([
+    { ...student, plannerPosition: 0 },
+    { ...student, uid: "student-2", name: "다른 학생", plannerPosition: 1 },
+  ]);
+  return (
+    <V2Page width="full">
+      <GrowthTable
+        students={students}
+        availableStudents={[]}
+        onStudentUpdate={() => {}}
+        writeMode="nullable"
+        stacked={false}
+        sortOrder={sortOrder}
+        sortOrderStored={sortOrderStored}
+        onPositionsChange={(positions) => {
+          onPositionsChange?.(positions);
+          setStudents((current) =>
+            current.map((row) => ({ ...row, plannerPosition: positions[row.uid] ?? row.plannerPosition })),
+          );
+        }}
+      />
+    </V2Page>
+  );
+}
+
+async function move(name: string) {
+  fireEvent.click(screen.getByRole("button", { name }));
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(0);
+  });
+}

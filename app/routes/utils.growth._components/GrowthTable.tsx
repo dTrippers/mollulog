@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useFetcher, useRevalidator } from "react-router";
+import { type SubmitTarget, useFetcher, useRevalidator } from "react-router";
 import { PageMain } from "~/components/v2/layout/PageMain";
 import { PageToolbar } from "~/components/v2/layout/PageToolbar";
 import { SaveToast } from "~/components/v2/primitives/SaveToast";
@@ -52,6 +52,11 @@ type GrowthTableProps = {
 };
 
 type PageSave = { kind: "sort"; sortOrder: GrowthSortOrder } | { kind: "order"; orderedUids: string[] };
+
+function pageSaveBody(save: PageSave): SubmitTarget {
+  if (save.kind === "sort") return { _intent: "sort", sortOrder: save.sortOrder };
+  return { _intent: "reorder", orderedStudentUids: save.orderedUids };
+}
 
 function isFailure(result: GrowthActionResult | undefined): result is Extract<GrowthActionResult, { error: string }> {
   return Boolean(result && "error" in result);
@@ -99,7 +104,7 @@ export default function GrowthTable({
   const pageFetcher = useFetcher<GrowthActionResult>();
   const addFetcher = useFetcher<GrowthActionResult>();
   const revalidator = useRevalidator();
-  const inFlightRef = useRef<{ save: PageSave; started: boolean } | null>(null);
+  const inFlightRef = useRef<{ save: PageSave; started: boolean; done: Promise<void> } | null>(null);
   const queuedRef = useRef<Partial<Record<PageSave["kind"], PageSave>>>({});
   const failedRef = useRef<Partial<Record<PageSave["kind"], PageSave>>>({});
   // The positions before the first order change the server has not confirmed, restored when it rejects the order.
@@ -111,14 +116,27 @@ export default function GrowthTable({
     const next = queuedRef.current.order ?? queuedRef.current.sort;
     if (!next) return;
     delete queuedRef.current[next.kind];
-    inFlightRef.current = { save: next, started: false };
-    pageFetcher.submit(
-      next.kind === "sort"
-        ? { _intent: "sort", sortOrder: next.sortOrder }
-        : { _intent: "reorder", orderedStudentUids: next.orderedUids },
-      GROWTH_ACTION_SUBMIT_OPTIONS,
-    );
+    inFlightRef.current = {
+      save: next,
+      started: false,
+      done: pageFetcher.submit(pageSaveBody(next), GROWTH_ACTION_SUBMIT_OPTIONS),
+    };
   }, [pageFetcher]);
+
+  // Leaving the page does not drop a change that waits behind a save in flight: it goes out after that save answers.
+  const pageFetcherRef = useRef(pageFetcher);
+  pageFetcherRef.current = pageFetcher;
+  useEffect(
+    () => () => {
+      const waiting = [queuedRef.current.order, queuedRef.current.sort].filter((save) => save !== undefined);
+      if (waiting.length === 0) return;
+      let chain = inFlightRef.current?.done ?? Promise.resolve();
+      for (const save of waiting) {
+        chain = chain.then(() => pageFetcherRef.current.submit(pageSaveBody(save), GROWTH_ACTION_SUBMIT_OPTIONS));
+      }
+    },
+    [],
+  );
 
   const submitPageSave = useCallback(
     (save: PageSave) => {
@@ -147,7 +165,10 @@ export default function GrowthTable({
       // The account now holds a sort choice, so the one this device kept before is no longer needed.
       if (save.kind === "sort") dropLegacySortOrder();
       if (save.kind === "order") {
-        if (!queuedRef.current.order) confirmedPositionsRef.current = null;
+        // A rejected later order goes back to this one, the order the server now holds.
+        confirmedPositionsRef.current = queuedRef.current.order
+          ? Object.fromEntries(save.orderedUids.map((uid, index) => [uid, index]))
+          : null;
         trackGoogleAnalyticsEvent("growth_plan_changed", { action: "reorder" });
       }
       setPageSaveFailed(Object.keys(failedRef.current).length > 0 ? "retryable" : null);
@@ -163,7 +184,8 @@ export default function GrowthTable({
         if (confirmedPositionsRef.current) onPositionsChange(confirmedPositionsRef.current);
         confirmedPositionsRef.current = null;
       }
-      setPageSaveFailed("final");
+      // A retryable failure of the other kind keeps its retry.
+      setPageSaveFailed(Object.keys(failedRef.current).length > 0 ? "retryable" : "final");
       revalidator.revalidate();
     }
     sendNextPageSave();
