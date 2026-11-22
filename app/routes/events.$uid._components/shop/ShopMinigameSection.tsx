@@ -684,7 +684,12 @@ function BoxGachaCard({ plan, config }: { plan: EventShopPlanContext; config: Mi
   const boxGacha = config.boxGacha ?? { status: "unavailable" as const };
   const playCount = plan.state.minigamePlayCount;
   const costs = plan.minigamePaymentCosts ?? [];
-  const rewards = plan.minigameRewards ?? [];
+  // The shop ledger adds box gacha rewards from the same calculation, so this row matches the shop result.
+  const startRound = plan.state.minigameStartRound;
+  const rewards = useMemo(
+    () => calculateMinigameRewards(config, playCount, startRound),
+    [config, playCount, startRound],
+  );
   const description = minigameDescription(config.minigameType);
   const boxes = useMemo(() => (boxGacha.status === "available" ? groupBoxGachaBoxes(boxGacha) : null), [boxGacha]);
   return (
@@ -693,13 +698,13 @@ function BoxGachaCard({ plan, config }: { plan: EventShopPlanContext; config: Mi
         <Stepper id={`${id}-count`} value={playCount} onChange={plan.actions.setMinigamePlayCount} />
       </LabeledRow>
       {description ? <p className="text-xs text-v2-fg-tertiary">{description}</p> : null}
-      {playCount > 0 && costs.length > 0 ? <BoxGachaRewardRow title={boxGachaLocale.costLabel} rewards={costs} /> : null}
+      {playCount > 0 && costs.length > 0 ? (
+        <BoxGachaRewardRow title={boxGachaLocale.costLabel} rewards={costs} />
+      ) : null}
       {playCount > 0 && rewards.length > 0 ? (
         <BoxGachaRewardRow title={boxGachaLocale.rewardLabel} rewards={rewards} />
       ) : null}
-      {boxGacha.status === "unavailable" ? null : (
-        <BoxGachaComposition boxes={boxes} />
-      )}
+      {boxGacha.status === "unavailable" ? null : <BoxGachaComposition boxes={boxes} />}
     </MinigameCard>
   );
 }
@@ -728,7 +733,9 @@ function BoxGachaRewardRow({ title, rewards }: { title: string; rewards: RewardI
 }
 
 function boxTabLabel(box: BoxGachaBox): string {
-  return box.repeatsFrom === null ? boxGachaLocale.roundsLabel(box.rounds) : boxGachaLocale.repeatsFromLabel(box.repeatsFrom);
+  return box.repeatsFrom === null
+    ? boxGachaLocale.roundsLabel(box.rounds)
+    : boxGachaLocale.repeatsFromLabel(box.repeatsFrom);
 }
 
 // One box's composition per distinct box. Collapsed by default; `boxes` is null when the source data is invalid.
@@ -736,7 +743,10 @@ function BoxGachaComposition({ boxes }: { boxes: BoxGachaBox[] | null }) {
   const bodyId = useId();
   const [expanded, setExpanded] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const tabs = useMemo(() => (boxes ?? []).map((box, index) => ({ id: String(index), label: boxTabLabel(box) })), [boxes]);
+  const tabs = useMemo(
+    () => (boxes ?? []).map((box, index) => ({ id: String(index), label: boxTabLabel(box) })),
+    [boxes],
+  );
   const box = boxes?.[selectedIndex] ?? boxes?.[0] ?? null;
   const ChevronIcon = expanded ? ChevronUpIcon : ChevronDownIcon;
   return (
@@ -775,7 +785,9 @@ function BoxGachaComposition({ boxes }: { boxes: BoxGachaBox[] | null }) {
                 </div>
                 <div className="flex gap-1.5">
                   <dt className="text-v2-fg-secondary">{boxGachaLocale.drawCountLabel}</dt>
-                  <dd className="font-semibold tabular-nums text-v2-fg">{boxGachaLocale.drawCountValue(box.drawCount)}</dd>
+                  <dd className="font-semibold tabular-nums text-v2-fg">
+                    {boxGachaLocale.drawCountValue(box.drawCount)}
+                  </dd>
                 </div>
                 <div className="flex gap-1.5">
                   <dt className="text-v2-fg-secondary">{boxGachaLocale.boxCostLabel}</dt>
