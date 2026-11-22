@@ -496,8 +496,14 @@ function PartySlots({
                 if (event.movementX !== 0 || event.movementY !== 0) setActiveIndex(index);
               }}
               onClick={() => pick(student.uid)}
-              // The bottom margin keeps a scrolled-to card above the form's save bar (about 118px from the bottom).
-              className="relative block w-full cursor-pointer scroll-mt-2 scroll-mb-32 rounded-md text-left"
+              // Scroll margins keep a scrolled-to card clear of the mobile header and of the form's save bar, which sits
+              // 0.75rem above the mobile navigation (safe area included) and is about 3rem tall; from lg it sits 1rem
+              // above the bottom edge.
+              className={cn(
+                "relative block w-full cursor-pointer rounded-md text-left",
+                "scroll-mt-[calc(var(--mobile-header-height)+0.5rem)] scroll-mb-[calc(var(--mobile-nav-height)+4.75rem)]",
+                "lg:scroll-mt-2 lg:scroll-mb-20",
+              )}
             >
               <StudentThumb
                 studentUid={student.uid}
