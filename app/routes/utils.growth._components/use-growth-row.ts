@@ -269,13 +269,20 @@ export function useGrowthRow({
   onStudentUpdate: (s: GrowthStudent) => void;
 }) {
   const fetcher = useFetcher<GrowthActionResult>();
-  const initialValues = useMemo(() => pickGrowthValues(student), [student]);
+  // Keyed by content, not by the student object: a move or a resource update hands the row a new object with the same
+  // values, and that must not resync the drafts or drop a pending tier save.
+  const growthValuesKey = JSON.stringify(pickGrowthValues(student));
+  const initialValues = useMemo(() => JSON.parse(growthValuesKey) as GrowthValues, [growthValuesKey]);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submittedRef = useRef<GrowthSubmission | null>(null);
   const growthRetryRef = useRef<GrowthSubmission | null>(null);
 
   const relationshipFetcher = useFetcher<GrowthActionResult>();
-  const initialRelationshipValues = useMemo(() => pickRelationshipValues(student), [student]);
+  const relationshipValuesKey = JSON.stringify(pickRelationshipValues(student));
+  const initialRelationshipValues = useMemo(
+    () => JSON.parse(relationshipValuesKey) as RelationshipValues,
+    [relationshipValuesKey],
+  );
   const relationshipSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const relationshipSubmittedRef = useRef<RelationshipSubmission | null>(null);
   const relationshipRetryRef = useRef<RelationshipSubmission | null>(null);

@@ -8,6 +8,7 @@ import { v2ButtonClassName } from "~/components/v2/primitives/Button";
 import { getLogger } from "~/lib/observability.server";
 import { socialMeta } from "~/lib/seo";
 import { loadDeferredGrowthPlannerData } from "./utils.growth._components/growth-data.server";
+import { mergeGrowthStudentUpdate } from "./utils.growth._components/growth-student-update";
 import type {
   GrowthLayoutContext,
   GrowthResourceRequirementsByStudent,
@@ -94,10 +95,7 @@ export default function GrowthLayout() {
       const idx = prev.findIndex((s) => s.uid === next.uid);
       if (idx === -1) return prev;
       const copy = prev.slice();
-      copy[idx] = {
-        ...next,
-        resourceRequirements: next.resourceRequirements ?? prev[idx].resourceRequirements,
-      };
+      copy[idx] = mergeGrowthStudentUpdate(prev[idx], next);
       return copy;
     });
   }, []);
@@ -152,6 +150,7 @@ export default function GrowthLayout() {
           </div>
         }
         // The Aside holds these links from 96rem; the stacked layout has them in the action bar.
+        trailingInline
         trailingClassName="hidden @min-[48rem]/page-available:block @min-[96rem]/page-available:hidden"
       />
       <Suspense fallback={null}>

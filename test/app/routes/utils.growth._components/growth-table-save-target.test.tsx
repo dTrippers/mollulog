@@ -3,6 +3,7 @@
 import "../../components/v2/layout/layout-test-polyfills";
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { V2Page } from "~/components/v2/layout";
 import GrowthTable from "~/routes/utils.growth._components/GrowthTable";
@@ -182,5 +183,48 @@ describe("growth table autosave", () => {
     fireEvent.pointerUp(document.body);
 
     expect(onPositionsChange).toHaveBeenCalledWith({ "student-2": 0, "student-1": 1 });
+  });
+  it("keeps a pending current tier when the row moves before the save answers", async () => {
+    let answerTier: (value: unknown) => void = () => {};
+    let moveRows: () => void = () => {};
+    function MovablePlanner() {
+      const [students, setStudents] = useState([student]);
+      moveRows = () => setStudents((current) => current.map((row) => ({ ...row, plannerPosition: 0 })));
+      return (
+        <V2Page width="full">
+          <GrowthTable
+            students={students}
+            availableStudents={[]}
+            onStudentUpdate={() => {}}
+            writeMode="nullable"
+            stacked={false}
+            sortOrder="manual"
+            sortOrderStored
+            onPositionsChange={() => {}}
+          />
+        </V2Page>
+      );
+    }
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/utils/growth/students",
+          action: () => new Promise((resolve) => (answerTier = resolve)),
+          element: <MovablePlanner />,
+        },
+      ],
+      { initialEntries: ["/utils/growth/students"] },
+    );
+    render(<RouterProvider router={router} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "테스트 학생 현재 3성" }));
+    fireEvent.click(screen.getByRole("button", { name: "4성" }));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    act(() => moveRows());
+
+    expect(screen.getByRole("button", { name: "테스트 학생 현재 4성" })).toBeTruthy();
+    answerTier({ kind: "studentUpdate", student: { ...student, tier: 4 } });
   });
 });
