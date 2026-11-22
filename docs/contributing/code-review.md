@@ -60,6 +60,12 @@ single owner for commands and claim-to-evidence mapping.
   selection cover the new item too? A loader that reads only what the saved
   selection names, such as account data for current favorites only, makes the
   screen calculate the new item from missing data until revalidation.
+- Does data the site sends to another service about a screen's state, such as
+  the chat member snapshot, come from the same merged sources as the screen, and
+  keep "not entered" apart from a calculation's default? A planner plan read
+  from stored event data alone misses targets set by favoriting and completions
+  stored as recruitment results, and eleph the calculation counts as 0 is not
+  0 held.
 - Does code that handles a PostgreSQL error, such as a unique violation, read it
   through `postgresUniqueConstraintName` (`app/lib/db.ts`)? Drizzle wraps driver
   errors in `DrizzleQueryError`, so the code and constraint are on its `cause`,

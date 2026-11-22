@@ -65,7 +65,8 @@ function checkInput(overrides: Partial<RecruitmentPlanCheckInput> = {}): Recruit
     scheduleItems: [eventA, eventB],
     options: toPyroxeneCalculationOptions(plannerOptions),
     collectedSourceKeys: [],
-    ownedSnapshot: null,
+    // Read when the resources were entered, before either event begins, with no owned students.
+    ownedSnapshot: { readAt: INPUT_AT, states: {} },
     ...overrides,
   };
 }
@@ -85,7 +86,7 @@ function timelineFor(input: RecruitmentPlanCheckInput) {
     input.collectedSourceKeys,
     undefined,
     input.resources.recruitmentStacks,
-    input.ownedSnapshot ?? undefined,
+    input.ownedSnapshot,
   );
 }
 
@@ -165,7 +166,6 @@ describe("buildRecruitmentPlanCheck", () => {
       ["event-b", { completed: false, expectedTrials: null, targetTiers: { [`${PICKUP_UID}-event-b`]: 9 } }],
     ]);
     const check = available(checkInput({ eventDataMap, ownedSnapshot }));
-    expect(check.ownedStatesAvailable).toBe(true);
 
     const [before, after] = check.events;
     // event-a began before the owned state was read, so it keeps the unowned start.
@@ -194,12 +194,31 @@ describe("buildRecruitmentPlanCheck", () => {
     ]);
   });
 
-  it("says when the owned state was unavailable and does not count eleph for a ★2 target", () => {
+  it("passes eleph the account has not entered as null and plans it as none", () => {
+    const ownedSnapshot: RecruitmentOwnedSnapshot = {
+      readAt: "2026-07-01T00:00:00.000Z",
+      states: { [`${PICKUP_UID}-event-b`]: { tier: 4, eleph: null } },
+    };
+    const eventDataMap = new Map<string, PyroxeneTimelineEventData>([
+      ["event-b", { completed: false, expectedTrials: null, targetTiers: { [`${PICKUP_UID}-event-b`]: 9 } }],
+    ]);
+    const target = available(checkInput({ eventDataMap, ownedSnapshot })).events.find(
+      (event) => event.eventUid === "event-b",
+    )?.targets[0];
+    // Owned ★4 with no eleph to ★9 lacks 620 eleph: the first copy gives 200, then five duplicates.
+    expect(target).toMatchObject({ owned: { tier: 4, eleph: null }, remainingEleph: 620, copies: 6 });
+  });
+
+  it("does not count eleph for a ★2 target", () => {
     const check = available(
       checkInput({ scheduleItems: [eventItem("event-c", "2026-07-02T00:00:00.000Z", "2026-07-09T00:00:00.000Z", 2)] }),
     );
-    expect(check.ownedStatesAvailable).toBe(false);
-    expect(check.events[0]?.targets[0]).toMatchObject({ owned: null, remainingEleph: null, copies: 1 });
+    expect(check.events[0]?.ownedApplied).toBe(true);
+    expect(check.events[0]?.targets[0]).toMatchObject({
+      owned: { tier: null, eleph: null },
+      remainingEleph: null,
+      copies: 1,
+    });
   });
 });
 

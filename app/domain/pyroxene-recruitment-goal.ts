@@ -26,10 +26,13 @@ export function isRecruitmentTargetTier(value: unknown): value is RecruitmentTar
   return RECRUITMENT_TARGET_TIERS.includes(value as RecruitmentTargetTier);
 }
 
-/** The account's current state of a pickup student. `tier` is null when the account does not own it. */
-export type RecruitmentOwnedState = { tier: number | null; eleph: number };
+/**
+ * The account's current state of a pickup student. `tier` is null when the account does not own it; `eleph` is
+ * null when the account has not entered the student's eleph, which the calculation counts as none.
+ */
+export type RecruitmentOwnedState = { tier: number | null; eleph: number | null };
 
-/** Owned states by student UID. A student without an entry is unowned and has no eleph. */
+/** Owned states by student UID. A student without an entry is unowned and has not entered eleph. */
 export type RecruitmentOwnedStates = Record<string, RecruitmentOwnedState>;
 
 /**
@@ -95,8 +98,8 @@ export function buildRecruitmentOwnedSnapshot(
   const states: RecruitmentOwnedStates = {};
   for (const studentUid of new Set(studentUids)) {
     const tier = ownedTiers[studentUid] ?? null;
-    const eleph = heldEleph[studentUid] ?? 0;
-    if (tier !== null || eleph > 0) states[studentUid] = { tier, eleph };
+    const eleph = Object.hasOwn(heldEleph, studentUid) ? heldEleph[studentUid] : null;
+    if (tier !== null || eleph !== null) states[studentUid] = { tier, eleph };
   }
   return { readAt, states };
 }
