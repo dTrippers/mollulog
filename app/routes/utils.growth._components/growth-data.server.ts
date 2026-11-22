@@ -199,7 +199,7 @@ async function loadGrowthPlannerCoreData(env: Env, userId: number): Promise<Grow
     managedStudents: managedStudentsData,
     availableStudents: Object.values(allStudentsMap)
       .filter((student) => !managedUids.has(student.uid))
-      .map((student) => ({ uid: student.uid, name: student.name }))
+      .map((student) => ({ uid: student.uid, name: student.name, altNames: student.altNames }))
       .sort((a, b) => (allStudentsMap[b.uid]?.order ?? -1) - (allStudentsMap[a.uid]?.order ?? -1)),
     allStudentsMap,
     studentGearDataMap,

@@ -56,6 +56,8 @@ export type GrowthStudent = {
 export type GrowthAvailableStudent = {
   uid: string;
   name: string;
+  // Other names the add search also matches, as in every student search.
+  altNames: string[];
 };
 
 export type GrowthLayoutLoaderData = {

@@ -1,5 +1,4 @@
 import { PlusIcon } from "@heroicons/react/16/solid";
-import hangul from "hangul-js";
 import { useEffect, useRef, useState } from "react";
 import { RoundStudentImage } from "~/components/v2/features/students/RoundStudentImage";
 import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
@@ -7,6 +6,7 @@ import { v2FocusRing } from "~/components/v2/layout/styles";
 import { Button } from "~/components/v2/primitives/Button";
 import { Popover } from "~/components/v2/primitives/Popover";
 import { SearchInput } from "~/components/v2/primitives/SearchInput";
+import { filterStudentByName } from "~/filters/student";
 import { cn } from "~/lib/utils";
 import type { GrowthAvailableStudent } from "./types";
 
@@ -27,9 +27,7 @@ export function GrowthAddStudent({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const trimmed = query.trim();
-  const matches = trimmed
-    ? availableStudents.filter((student) => hangul.search(student.name, trimmed) >= 0)
-    : availableStudents;
+  const matches = trimmed ? filterStudentByName(trimmed, availableStudents) : availableStudents;
 
   // The search field takes focus, not the first student of the list.
   useEffect(() => {
