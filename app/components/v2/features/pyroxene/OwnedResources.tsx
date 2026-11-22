@@ -122,6 +122,9 @@ export function OwnedResourcesDialog({
     setReceived(new Set(initialReceived));
   }, [open, initialValues, initialReceived]);
   const submittable = completeValues(values);
+  // Only a dialog that starts empty keeps a cleared field empty. Editing saved values keeps the usual behavior, where a
+  // cleared field becomes 0.
+  const requireEntry = initialValues === undefined;
 
   return (
     <PlannerDialog
@@ -163,8 +166,10 @@ export function OwnedResourcesDialog({
                 onValueChange={(value) =>
                   setValues((current) => ({ ...current, resources: { ...current.resources, [key]: value } }))
                 }
-                onEmpty={() =>
-                  setValues((current) => ({ ...current, resources: { ...current.resources, [key]: null } }))
+                onEmpty={
+                  requireEntry
+                    ? () => setValues((current) => ({ ...current, resources: { ...current.resources, [key]: null } }))
+                    : undefined
                 }
               />
             </div>
@@ -189,7 +194,11 @@ export function OwnedResourcesDialog({
                 onValueChange={(value) =>
                   setValues((current) => ({ ...current, stacks: { ...current.stacks, [scope]: value } }))
                 }
-                onEmpty={() => setValues((current) => ({ ...current, stacks: { ...current.stacks, [scope]: null } }))}
+                onEmpty={
+                  requireEntry
+                    ? () => setValues((current) => ({ ...current, stacks: { ...current.stacks, [scope]: null } }))
+                    : undefined
+                }
               />
             </div>
           </div>

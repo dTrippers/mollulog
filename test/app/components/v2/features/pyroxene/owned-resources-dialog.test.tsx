@@ -54,6 +54,29 @@ describe("OwnedResourcesDialog", () => {
     expect(dialogRenders).toBeLessThan(5);
   });
 
+  it("turns a cleared field into 0 when editing saved values", () => {
+    dialogRenders = 0;
+    const onSubmit = jest.fn();
+    render(
+      <OwnedResourcesDialog
+        open
+        title="보유 재화"
+        submitLabel="저장"
+        initialValues={values}
+        onClose={() => {}}
+        onSubmit={onSubmit}
+      />,
+    );
+    const pyroxene = screen.getByRole("spinbutton", { name: "청휘석" }) as HTMLInputElement;
+    fireEvent.change(pyroxene, { target: { value: "" } });
+    fireEvent.blur(pyroxene);
+    expect(pyroxene.value).toBe("0");
+    const submit = screen.getByRole("button", { name: "저장" }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+    expect(onSubmit).toHaveBeenCalledWith({ ...values, resources: { ...values.resources, pyroxene: 0 } }, new Set());
+  });
+
   it("starts every field empty without initial values, and saves only once every field is entered", () => {
     dialogRenders = 0;
     const onSubmit = jest.fn();
