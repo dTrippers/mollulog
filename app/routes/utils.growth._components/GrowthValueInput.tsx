@@ -15,6 +15,7 @@ export function GrowthValueInput({
   flowProps,
   onChange,
   leading,
+  maxText,
 }: {
   // The accessible name, such as "니코 목표 EX 스킬".
   label: string;
@@ -26,8 +27,13 @@ export function GrowthValueInput({
   onChange: (value: number | null) => void;
   // A decorative mark right before the number, such as the 인연 heart. The mark and the number center together.
   leading?: ReactNode;
+  // Shown instead of the number while the value is at the maximum and the field is not focused, such as "MAX" for a
+  // skill. A focused field shows the number for editing.
+  maxText?: string;
 }) {
   const [text, setText] = useState(value == null ? "" : String(value));
+  const [focused, setFocused] = useState(false);
+  const showsMaxText = maxText != null && !focused && value === max;
   useEffect(() => {
     setText(value == null ? "" : String(value));
   }, [value]);
@@ -46,9 +52,13 @@ export function GrowthValueInput({
       aria-label={label}
       // With the step buttons, an empty value stays blank as in 1.x, so a dash is not read as the − button beside it.
       placeholder={showSteps ? undefined : "–"}
-      value={text}
+      value={showsMaxText ? maxText : text}
       data-number-input-flow={flowProps["data-number-input-flow"]}
-      onFocus={flowProps.onFocus}
+      onFocus={(event) => {
+        setFocused(true);
+        flowProps.onFocus(event);
+      }}
+      onBlur={() => setFocused(false)}
       onKeyDown={flowProps.onKeyDown}
       onChange={(event) => {
         const raw = event.currentTarget.value;

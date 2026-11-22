@@ -50,6 +50,8 @@ export type GrowthReorderControls = {
 
 type FlowProps = () => NumberInputFlowNavigationInputProps;
 
+const SKILL_FIELD_KEYS: ReadonlySet<string> = new Set(["skillEx", "skillNormal", "skillEnhanced", "skillSub"]);
+
 // Cell widths in rem, shared by the column names, the field boxes, and the equipment part names so they line up.
 export function getCellWidthRem(cell: GrowthCell, showSteps: boolean): number {
   if (cell.kind === "tier") return 3.5;
@@ -140,6 +142,8 @@ function CellInput({ cell, side, context }: { cell: GrowthCell; side: GrowthRowS
       showSteps={showSteps}
       flowProps={flowProps()}
       onChange={(next) => row.handleFieldChange(key, next)}
+      // A skill at its highest level reads "MAX", as the profile's growth table shows it.
+      maxText={SKILL_FIELD_KEYS.has(definition.key) ? "MAX" : undefined}
     />
   );
 }
