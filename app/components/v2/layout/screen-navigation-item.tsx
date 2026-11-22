@@ -43,11 +43,11 @@ export function ScreenNavigationItemRenderer({
           v2FocusRing,
         )
       : cn(
-          "relative flex min-h-v2-row-min items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-sm v2-interaction-transition",
+          "relative flex min-h-v2-row-min items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-left text-sm v2-interaction-transition",
           item.active ? "bg-v2-inset font-semibold text-v2-fg" : "font-medium text-v2-fg-secondary",
           item.hiddenStacked && "v2-hidden-stacked",
           item.disabled
-            ? "cursor-not-allowed text-left text-v2-fg-disabled"
+            ? "cursor-not-allowed text-v2-fg-disabled"
             : item.active
               ? "cursor-pointer hover:bg-v2-inset hover:text-v2-fg"
               : "cursor-pointer hover:bg-v2-hover hover:text-v2-fg",
