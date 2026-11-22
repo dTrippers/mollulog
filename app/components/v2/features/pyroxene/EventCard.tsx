@@ -15,7 +15,6 @@ import { getBalanceRange, getPyroxeneEventStatus } from "~/domain/pyroxene-plann
 import {
   DEFAULT_RECRUITMENT_TARGET_TIER,
   RECRUITMENT_TARGET_TIERS,
-  type RecruitmentStacks,
   type RecruitmentTargetTier,
   type RecruitmentTargetTiers,
 } from "~/domain/pyroxene-recruitment-goal";
@@ -71,7 +70,6 @@ type EventCardProps = {
   eventData: PlannerEventData | undefined;
   defaultBasis: PyroxenePickupChance;
   recruitedStudentUids: ReadonlySet<string>;
-  currentStacks: RecruitmentStacks;
   canRecordCompletion: boolean;
   recordEditLink: string | undefined;
   selected: boolean;
@@ -268,7 +266,6 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
     eventData,
     defaultBasis,
     recruitedStudentUids,
-    currentStacks,
     canRecordCompletion,
     recordEditLink,
     selected,
@@ -311,18 +308,6 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
   const taggedFreePulls = getTaggedFreeRecruitmentPulls(event.tags);
   const freeLabel = taggedFreePulls > 0 ? taggedFreePulls : null;
   const ruleIsLegacy = event.recruitmentRuleSet !== "call_charge_v1";
-
-  const completionValues: OwnedResourceValues = {
-    resources: {
-      pyroxene: Math.max(0, entry.accumulatedResources.pyroxene),
-      oneTimeTicket: Math.max(0, entry.accumulatedResources.oneTimeTicket),
-      tenTimeTicket: Math.max(0, entry.accumulatedResources.tenTimeTicket),
-    },
-    stacks: {
-      ...currentStacks,
-      ...Object.fromEntries((plan?.stacks ?? []).map((stack) => [stack.scope, stack.after])),
-    },
-  };
 
   const tierStudent = tierPopover ? students.find((s) => s.uid === tierPopover.uid) : undefined;
   const tierStudentNames = tierStudent ? splitVisibleStudentName(tierStudent.name) : null;
@@ -417,7 +402,6 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         open={dialog === "complete"}
         title="모집 완료 기록"
         submitLabel="기록"
-        initialValues={completionValues}
         onClose={() => setDialog(null)}
         onSubmit={(values) => {
           handlers.onComplete(event.uid, values);

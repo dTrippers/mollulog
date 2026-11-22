@@ -2,7 +2,6 @@ import { ChevronDownIcon, ChevronUpIcon, TrashIcon } from "@heroicons/react/16/s
 import { type Ref, useId, useState } from "react";
 import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import type { PlannerIncomeRow, PlannerTimelineRow } from "~/domain/pyroxene-planner-view";
-import type { RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../../layout/styles";
 import { IconButton } from "../../primitives/IconButton";
@@ -172,7 +171,6 @@ export type PlannerScheduleProps = {
   eventDataMap: ReadonlyMap<string, PlannerEventData>;
   defaultBasis: PyroxenePickupChance;
   recruitedStudentUids: ReadonlySet<string>;
-  currentStacks: RecruitmentStacks;
   canRecordCompletion: boolean;
   // The 모집 기록 editor link of each completed event, by event uid.
   recordEditLinks: ReadonlyMap<string, string>;
@@ -191,7 +189,6 @@ export function PlannerSchedule({
   eventDataMap,
   defaultBasis,
   recruitedStudentUids,
-  currentStacks,
   canRecordCompletion,
   recordEditLinks,
   eventHandlers,
@@ -277,7 +274,6 @@ export function PlannerSchedule({
               eventData={eventDataMap.get(uid)}
               defaultBasis={defaultBasis}
               recruitedStudentUids={recruitedStudentUids}
-              currentStacks={currentStacks}
               canRecordCompletion={canRecordCompletion}
               recordEditLink={recordEditLinks.get(uid)}
               selected={selected}

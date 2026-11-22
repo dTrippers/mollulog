@@ -1419,7 +1419,6 @@ export default function PyroxenePlanner() {
             eventDataMap={eventDataMap}
             defaultBasis={options.event.pickupChance}
             recruitedStudentUids={recruitedStudentUids}
-            currentStacks={stacks}
             canRecordCompletion={Boolean(signedIn)}
             recordEditLinks={recordEditLinks}
             eventHandlers={{

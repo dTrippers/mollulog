@@ -25,6 +25,25 @@ export type ReceivableReward = { sourceKey: string; label: string; pyroxene: num
 const RESOURCE_ORDER: PyroxeneResourceKey[] = ["pyroxene", "tenTimeTicket", "oneTimeTicket"];
 const STACK_ORDER = ["regular", "limited"] as const;
 
+// The dialog's values while editing. A field left empty is null, and an empty field blocks saving.
+type DraftValues = {
+  resources: Record<PyroxeneResourceKey, number | null>;
+  stacks: Record<(typeof STACK_ORDER)[number], number | null>;
+};
+
+const EMPTY_DRAFT: DraftValues = {
+  resources: { pyroxene: null, oneTimeTicket: null, tenTimeTicket: null },
+  stacks: { regular: null, limited: null },
+};
+
+function completeValues(draft: DraftValues): OwnedResourceValues | null {
+  const { pyroxene, oneTimeTicket, tenTimeTicket } = draft.resources;
+  const { regular, limited } = draft.stacks;
+  if (pyroxene === null || oneTimeTicket === null || tenTimeTicket === null) return null;
+  if (regular === null || limited === null) return null;
+  return { resources: { pyroxene, oneTimeTicket, tenTimeTicket }, stacks: { regular, limited } };
+}
+
 /** Owned resources and stacks, read-only, as a list. */
 export function OwnedResourceList({ values }: { values: OwnedResourceValues }) {
   return (
@@ -64,7 +83,10 @@ export function formatInputAt(inputAt: Date | null): string {
 const NO_REWARDS: ReceivableReward[] = [];
 const NO_RECEIVED: readonly string[] = [];
 
-/** Edits resources and stacks. The completion record reuses it with the expected values filled in. */
+/**
+ * Edits resources and stacks. Without initial values every field starts empty, as in the completion record: the
+ * planner's expected values rarely match the game, so the user enters what the game shows.
+ */
 export function OwnedResourcesDialog({
   open,
   title,
@@ -82,7 +104,7 @@ export function OwnedResourcesDialog({
   title: string;
   submitLabel: string;
   description?: string;
-  initialValues: OwnedResourceValues;
+  initialValues?: OwnedResourceValues;
   // Rewards of started events still ahead in the schedule; the owned resources may already include them.
   rewards?: ReceivableReward[];
   initialReceived?: readonly string[];
@@ -91,14 +113,15 @@ export function OwnedResourcesDialog({
   onClose: () => void;
   onSubmit: (values: OwnedResourceValues, received: ReadonlySet<string>) => void;
 }) {
-  const [values, setValues] = useState(initialValues);
+  const [values, setValues] = useState<DraftValues>(initialValues ?? EMPTY_DRAFT);
   const [received, setReceived] = useState<ReadonlySet<string>>(new Set(initialReceived));
   const idPrefix = useId();
   useEffect(() => {
     if (!open) return;
-    setValues(initialValues);
+    setValues(initialValues ?? EMPTY_DRAFT);
     setReceived(new Set(initialReceived));
   }, [open, initialValues, initialReceived]);
+  const submittable = completeValues(values);
 
   return (
     <PlannerDialog
@@ -108,7 +131,11 @@ export function OwnedResourcesDialog({
       footer={
         <>
           <Button onClick={onClose}>취소</Button>
-          <Button variant="primary" disabled={saving} onClick={() => onSubmit(values, received)}>
+          <Button
+            variant="primary"
+            disabled={saving || submittable === null}
+            onClick={() => submittable && onSubmit(submittable, received)}
+          >
             {submitLabel}
           </Button>
         </>
@@ -131,10 +158,13 @@ export function OwnedResourcesDialog({
                 formatThousands
                 min={0}
                 step={key === "pyroxene" ? 120 : 1}
-                value={values.resources[key]}
+                value={values.resources[key] ?? ""}
                 aria-label={PYROXENE_RESOURCE_LABELS[key]}
                 onValueChange={(value) =>
                   setValues((current) => ({ ...current, resources: { ...current.resources, [key]: value } }))
+                }
+                onEmpty={() =>
+                  setValues((current) => ({ ...current, resources: { ...current.resources, [key]: null } }))
                 }
               />
             </div>
@@ -154,11 +184,12 @@ export function OwnedResourcesDialog({
                 showMax={false}
                 min={0}
                 max={MAX_RECRUITMENT_STACK}
-                value={values.stacks[scope]}
+                value={values.stacks[scope] ?? ""}
                 aria-label={RECRUITMENT_STACK_LABELS[scope]}
                 onValueChange={(value) =>
                   setValues((current) => ({ ...current, stacks: { ...current.stacks, [scope]: value } }))
                 }
+                onEmpty={() => setValues((current) => ({ ...current, stacks: { ...current.stacks, [scope]: null } }))}
               />
             </div>
           </div>

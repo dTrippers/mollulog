@@ -20,14 +20,22 @@ type NumberInputBaseProps = InputHTMLAttributes<HTMLInputElement> & {
 
 export type NumberInputProps = NumberInputBaseProps &
   (
-    | { grouped?: false; onValueChange?: never; showMin?: never; showMax?: never }
-    | { grouped: true; onValueChange: (value: number) => void; showMin?: boolean; showMax?: boolean }
+    | { grouped?: false; onValueChange?: never; onEmpty?: never; showMin?: never; showMax?: never }
+    | {
+        grouped: true;
+        onValueChange: (value: number) => void;
+        // Called instead of setting the minimum when the field is left empty, for a value the user must enter.
+        onEmpty?: () => void;
+        showMin?: boolean;
+        showMax?: boolean;
+      }
   );
 
 type GroupedNumberInputProps = NumberInputBaseProps & {
   showMin: boolean;
   showMax?: boolean;
   onValueChange: (value: number) => void;
+  onEmpty?: () => void;
 };
 
 // Height follows the input token: 1.75rem on every layout, the same as ToggleChip.
@@ -40,6 +48,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
     showMax,
     formatThousands = false,
     onValueChange,
+    onEmpty,
     className,
     ...props
   },
@@ -53,6 +62,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
         showMax={showMax}
         formatThousands={formatThousands}
         onValueChange={onValueChange}
+        onEmpty={onEmpty}
         className={className}
         ref={ref}
         {...props}
@@ -78,7 +88,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
 });
 
 const GroupedNumberInput = forwardRef<HTMLInputElement, GroupedNumberInputProps>(function GroupedNumberInput(
-  { warning = false, showMin, showMax, formatThousands = false, onValueChange, className, ...props },
+  { warning = false, showMin, showMax, formatThousands = false, onValueChange, onEmpty, className, ...props },
   ref,
 ) {
   const [draftValue, setDraftValue] = useState<string | null>(null);
@@ -114,12 +124,16 @@ const GroupedNumberInput = forwardRef<HTMLInputElement, GroupedNumberInputProps>
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextValue = parseInputValue(event);
     if (formatThousands) setDraftValue(event.currentTarget.value.replace(/\D/g, ""));
-    update(Number.isFinite(nextValue) ? nextValue : min);
+    if (Number.isFinite(nextValue)) update(nextValue);
+    else if (onEmpty) onEmpty();
+    else update(min);
     onChange?.(event);
   };
   const handleBlur = (event: FocusEvent<HTMLInputElement>) => {
     const nextValue = parseInputValue(event);
-    update(Number.isFinite(nextValue) ? nextValue : min);
+    if (Number.isFinite(nextValue)) update(nextValue);
+    else if (onEmpty) onEmpty();
+    else update(min);
     if (formatThousands) setDraftValue(null);
     onBlur?.(event);
   };
