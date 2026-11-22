@@ -21,6 +21,7 @@ import type {
   RaidRecordParty,
   RaidRecordRaidType,
   RaidRecordScore,
+  RaidRecordScoreMode,
   RaidRecordServer,
 } from "~/domain/raid-record";
 import type { SiteBannerPreset, SiteBannerScreen } from "~/domain/site-banner";
@@ -1613,6 +1614,8 @@ export const pgRaidRecordsTable = pgTable(
     raidType: text("raid_type").$type<RaidRecordRaidType>().notNull(),
     seasonIndex: integer("season_index").notNull(),
     scores: jsonb().$type<RaidRecordScore[]>().notNull(),
+    scoreMode: text("score_mode").$type<RaidRecordScoreMode>().notNull().default("defense_type"),
+    totalScore: integer("total_score"),
     rank: integer(),
     rankRecordedAt: exactTimestamptz("rank_recorded_at"),
     memo: text().notNull().default(""),

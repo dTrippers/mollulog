@@ -1,7 +1,7 @@
 import {
   computeRaidClearResult,
   getRaidRecordRankStatus,
-  getRaidRecordTotalScore,
+  getRaidRecordShownTotalScore,
   isRaidRecordRaidType,
   isRaidSeasonOngoing,
   isRaidSeasonStarted,
@@ -10,6 +10,7 @@ import {
   type RaidRecordDefenseType,
   type RaidRecordRaidType,
   type RaidRecordRankStatus,
+  type RaidRecordScoreMode,
   type RaidRecordServer,
   type RaidRecordSnapshot,
   RAID_RECORD_SERVERS,
@@ -52,10 +53,12 @@ export type RaidRecordScoreView = {
 export type RaidRecordRowView = {
   uid: string;
   season: RaidRecordSeasonView;
-  // One entry per scoring defense type of the season, in BAQL order.
+  scoreMode: RaidRecordScoreMode;
+  // One entry per scoring defense type of the season, in BAQL order. A record that shows its total has no score here:
+  // the scores it keeps are not shown.
   scores: RaidRecordScoreView[];
+  // The total the record shows: the total entered alone, or the sum of the scores.
   totalScore: number;
-  enteredCount: number;
   rank: number | null;
   rankStatus: RaidRecordRankStatus;
   // The confirmation time passed and the rank is still 잠정, so the owner can confirm it.
@@ -85,7 +88,8 @@ export function toRaidRecordRowView(
   season: RaidRecordSeason,
   now: UtcIsoString,
 ): RaidRecordRowView | null {
-  const scoreByDefenseType = new Map(record.scores.map((entry) => [entry.defenseType, entry]));
+  const shown = record.scoreMode === "defense_type" ? record.scores : [];
+  const scoreByDefenseType = new Map(shown.map((entry) => [entry.defenseType, entry]));
   const scores = season.scoreDefenseTypes.map(({ defenseType }): RaidRecordScoreView => {
     const entry = scoreByDefenseType.get(defenseType);
     const result = entry ? computeRaidClearResult(season.boss.uid, entry.score) : null;
@@ -103,9 +107,9 @@ export function toRaidRecordRowView(
   return {
     uid: record.uid,
     season: toRaidRecordSeasonView(season, now),
+    scoreMode: record.scoreMode,
     scores,
-    totalScore: getRaidRecordTotalScore(record.scores),
-    enteredCount: record.scores.length,
+    totalScore: getRaidRecordShownTotalScore(record),
     rank: record.rank,
     rankStatus,
     canConfirmRank:
@@ -250,10 +254,13 @@ export async function loadRaidRecordFormData(
 // Table
 // ---------------------------------------------------------------------------------------------------------------------
 
-// The saved values a table row starts from.
+// The saved values a table row starts from. The table is the owner's, so it holds both the scores and the total, whichever
+// the record shows, and keeps the other when the row switches.
 export type RaidRecordTableRecordView = {
   uid: string;
-  scores: RaidRecordScoreView[];
+  scoreMode: RaidRecordScoreMode;
+  scores: { defenseType: RaidRecordDefenseType; score: number }[];
+  totalScore: number | null;
   rank: number | null;
   rankStatus: RaidRecordRankStatus;
   // The record's version when the table read it, so the save can tell a change made elsewhere since.
@@ -302,9 +309,18 @@ export async function loadRaidRecordTable(
       const row = record ? toRaidRecordRowView(record, season, now) : null;
       return {
         season: toRaidRecordSeasonView(season, now),
-        record: row
-          ? { uid: row.uid, scores: row.scores, rank: row.rank, rankStatus: row.rankStatus, updatedAt: row.updatedAt }
-          : null,
+        record:
+          record && row
+            ? {
+                uid: row.uid,
+                scoreMode: record.scoreMode,
+                scores: record.scores.map(({ defenseType, score }) => ({ defenseType, score })),
+                totalScore: record.totalScore,
+                rank: row.rank,
+                rankStatus: row.rankStatus,
+                updatedAt: row.updatedAt,
+              }
+            : null,
         unavailableRecordUid: record && !row ? record.uid : null,
       };
     });
@@ -318,7 +334,9 @@ export async function loadRaidRecordTable(
 // What the season chart's "내 점수" shows about the signed-in Sensei's record of the season.
 export type RaidChartRecordView = {
   uid: string;
+  // Every score the record keeps, also while it shows its total: the chart's input shows the score it saved.
   scores: { defenseType: RaidRecordDefenseType; score: number }[];
+  // The total the record shows.
   totalScore: number;
   rank: number | null;
   rankStatus: RaidRecordRankStatus;
@@ -348,7 +366,7 @@ export function toRaidChartRecordView(record: RaidRecord, season: Pick<RaidRecor
   return {
     uid: record.uid,
     scores: record.scores.map(({ defenseType, score }) => ({ defenseType, score })),
-    totalScore: getRaidRecordTotalScore(record.scores),
+    totalScore: getRaidRecordShownTotalScore(record),
     rank: record.rank,
     rankStatus: getRaidRecordRankStatus(record, season.rankConfirmAt),
     scoreOnly: isScoreOnlyRaidRecord(record),

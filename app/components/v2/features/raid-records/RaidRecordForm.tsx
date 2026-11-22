@@ -3,7 +3,9 @@ import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useStat
 import { Link, useFetcher, useNavigate } from "react-router";
 import {
   computeRaidClearResult,
+  defaultRaidRecordScoreMode,
   getRaidMaxScore,
+  getRaidMaxTotalScore,
   getRaidRecordTotalScore,
   RAID_RECORD_LIMITS,
   type RaidRecordDefenseType,
@@ -11,6 +13,7 @@ import {
   type RaidRecordRaidType,
   type RaidRecordRankStatus,
   type RaidRecordScore,
+  type RaidRecordScoreMode,
   type RaidRecordServer,
   type RaidRecordSnapshot,
 } from "~/domain/raid-record";
@@ -58,7 +61,9 @@ export type RaidRecordFormMode =
       season: RaidSeasonSelectOption;
       record: {
         uid: string;
+        scoreMode: RaidRecordScoreMode;
         scores: RaidRecordScore[];
+        totalScore: number | null;
         rank: number | null;
         rankStatus: RaidRecordRankStatus;
         memo: string;
@@ -66,7 +71,7 @@ export type RaidRecordFormMode =
       };
     };
 
-export type RaidRecordFormErrorField = "season" | "score" | "rank" | "memo" | "parties" | "form";
+export type RaidRecordFormErrorField = "season" | "score" | "totalScore" | "rank" | "memo" | "parties" | "form";
 
 export type RaidRecordFormActionData = {
   ok: false;
@@ -78,7 +83,10 @@ export type RaidRecordFormSubmission = {
   server: RaidRecordServer;
   raidType: RaidRecordRaidType;
   seasonIndex: number;
+  scoreMode: RaidRecordScoreMode;
+  // Both are sent whichever the record shows, so the other is kept.
   scores: { defenseType: RaidRecordDefenseType; score: number }[];
+  totalScore: number | null;
   rank: number | null;
   memo: string;
   parties: RaidRecordParty[];
@@ -137,6 +145,14 @@ export function RaidRecordForm({
   const [scores, setScores] = useState<ScoreDraft>(() =>
     mode.kind === "edit" ? Object.fromEntries(mode.record.scores.map((entry) => [entry.defenseType, entry.score])) : {},
   );
+  const [totalScore, setTotalScore] = useState<number | null>(mode.kind === "edit" ? mode.record.totalScore : null);
+  const initialScoreMode = (option: RaidSeasonSelectOption | null): RaidRecordScoreMode =>
+    option ? defaultRaidRecordScoreMode(option.raidType, option.ongoing) : "defense_type";
+  const [scoreMode, setScoreMode] = useState<RaidRecordScoreMode>(() =>
+    mode.kind === "edit" ? mode.record.scoreMode : initialScoreMode(season),
+  );
+  // A new record's score mode follows the chosen season until the Sensei picks one.
+  const [scoreModeChosen, setScoreModeChosen] = useState(mode.kind === "edit");
   const [rank, setRank] = useState<number | null>(mode.kind === "edit" ? mode.record.rank : null);
   const [memo, setMemo] = useState(mode.kind === "edit" ? mode.record.memo : "");
   const [parties, setParties] = useState<RaidFormParty[]>(() =>
@@ -156,6 +172,8 @@ export function RaidRecordForm({
   const chooseSeason = (next: RaidSeasonSelectOption | null) => {
     setSeason(next);
     setScores({});
+    setTotalScore(null);
+    if (!scoreModeChosen) setScoreMode(initialScoreMode(next));
     setActiveDefenseType(null);
     if (next) setParties((current) => partiesForSeason(current, next));
   };
@@ -193,23 +211,43 @@ export function RaidRecordForm({
     const maxScore = season ? getRaidMaxScore(season.boss.uid, maxDifficulty ?? null) : null;
     if (score > RAID_RECORD_LIMITS.maxScore) scoreErrors[defenseType] = "점수를 확인해 주세요.";
     else if (maxScore !== null && score > maxScore) {
-      scoreErrors[defenseType] = `이 시즌에서 달성할 수 있는 최대 점수(${formatRaidScore(maxScore)})보다 높아요.`;
+      scoreErrors[defenseType] = `최대 점수(${formatRaidScore(maxScore)})보다 높아요.`;
     }
   }
-  const missingScore = season !== null && enteredScores.length === 0;
+  const showsTotal = season?.raidType === "elimination" && scoreMode === "total";
+  const maxTotalScore = season ? getRaidMaxTotalScore(season.boss.uid, season.scoreDefenseTypes) : null;
+  const totalScoreError =
+    totalScore === null
+      ? null
+      : totalScore > RAID_RECORD_LIMITS.maxScore
+        ? "합산 점수를 확인해 주세요."
+        : maxTotalScore !== null && totalScore > maxTotalScore
+          ? `최대 합산 점수(${formatRaidScore(maxTotalScore)})보다 높아요.`
+          : null;
+  const hasScoreErrors = Object.keys(scoreErrors).length > 0;
   const rankError =
     rank === null ? "순위를 입력해 주세요." : rank > RAID_RECORD_LIMITS.maxRank ? "순위를 확인해 주세요." : null;
+  // Only the side on screen is checked. A value left on the other side that would not save is left out of the save.
   const localErrors = {
     season: season === null ? "시즌을 골라 주세요." : null,
-    score: missingScore
-      ? raidType === "elimination"
-        ? "방어 타입 점수를 하나 이상 입력해 주세요."
-        : "점수를 입력해 주세요."
-      : null,
+    score:
+      season === null || showsTotal
+        ? null
+        : enteredScores.length === 0
+          ? raidType === "elimination"
+            ? "방어 타입 점수를 하나 이상 입력해 주세요."
+            : "점수를 입력해 주세요."
+          : null,
+    totalScore: !showsTotal
+      ? null
+      : totalScore === null
+        ? "합산 점수를 입력해 주세요."
+        : totalScoreError,
     rank: rankError,
   };
   const hasLocalError =
-    Boolean(localErrors.season || localErrors.score || localErrors.rank) || Object.keys(scoreErrors).length > 0;
+    Boolean(localErrors.season || localErrors.score || localErrors.totalScore || localErrors.rank) ||
+    (!showsTotal && hasScoreErrors);
 
   // A server error stays until the field it names changes.
   const [serverError, setServerError] = useState<RaidRecordFormActionData["error"] | null>(null);
@@ -229,7 +267,9 @@ export function RaidRecordForm({
       server: season.server,
       raidType: season.raidType,
       seasonIndex: season.seasonIndex,
-      scores: enteredScores,
+      scoreMode: season.raidType === "elimination" ? scoreMode : "defense_type",
+      scores: enteredScores.filter(({ defenseType }) => scoreErrors[defenseType] === undefined),
+      totalScore: season.raidType === "elimination" && totalScoreError === null ? totalScore : null,
       rank,
       memo,
       parties: raidFormPartiesToSubmit(parties),
@@ -237,7 +277,7 @@ export function RaidRecordForm({
     fetcher.submit(submission, { method: "post", encType: "application/json" });
   };
 
-  const showError = (field: "season" | "score" | "rank") => (attempted ? localErrors[field] : null);
+  const showError = (field: "season" | "score" | "totalScore" | "rank") => (attempted ? localErrors[field] : null);
   const serverErrorFor = (field: RaidRecordFormErrorField, defenseType?: RaidRecordDefenseType) =>
     serverError &&
     serverError.field === field &&
@@ -248,6 +288,12 @@ export function RaidRecordForm({
   const setScore = (defenseType: RaidRecordDefenseType, value: number | null) => {
     setScores((current) => ({ ...current, [defenseType]: value }));
     clearServerError("score");
+  };
+  const changeScoreMode = (next: RaidRecordScoreMode) => {
+    setScoreMode(next);
+    setScoreModeChosen(true);
+    clearServerError("score");
+    clearServerError("totalScore");
   };
 
   const partiesOf = (defenseType: RaidRecordDefenseType) => parties.filter((party) => party.defenseType === defenseType);
@@ -353,18 +399,55 @@ export function RaidRecordForm({
               </FormRow>
             ) : (
               <FormRow label="점수">
-                <EliminationScores
-                  season={season}
-                  scores={scores}
-                  scoreErrors={attempted ? scoreErrors : {}}
-                  serverErrorFor={(defenseType) => serverErrorFor("score", defenseType)}
-                  parties={parties}
-                  studentsByUid={partyContext.studentsByUid}
-                  stacked={stacked}
-                  onChange={setScore}
-                  onShowParties={showParties}
-                />
-                <FieldMessage message={attempted ? localErrors.score : null} />
+                <div className="flex min-w-0 flex-col gap-2.5">
+                  <SegmentedControl
+                    label="점수 입력 방식"
+                    value={scoreMode}
+                    onChange={changeScoreMode}
+                    options={[
+                      { value: "defense_type", label: "방어 타입별" },
+                      { value: "total", label: "합산 점수" },
+                    ]}
+                    className="self-start"
+                  />
+                  {showsTotal ? (
+                    <div>
+                      <DigitsInput
+                        id={ids.score}
+                        aria-label="합산 점수"
+                        value={totalScore}
+                        onValueChange={(value) => {
+                          setTotalScore(value);
+                          clearServerError("totalScore");
+                        }}
+                        placeholder="합산 점수 입력"
+                        invalid={Boolean(showError("totalScore") || serverErrorFor("totalScore") || serverErrorFor("score"))}
+                        aria-describedby={`${ids.score}-hint`}
+                        containerClassName="w-full max-w-[13.75rem]"
+                      />
+                      <div id={`${ids.score}-hint`}>
+                        <FieldMessage
+                          message={showError("totalScore") ?? serverErrorFor("totalScore") ?? serverErrorFor("score")}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <EliminationScores
+                        season={season}
+                        scores={scores}
+                        scoreErrors={attempted ? scoreErrors : {}}
+                        serverErrorFor={(defenseType) => serverErrorFor("score", defenseType)}
+                        parties={parties}
+                        studentsByUid={partyContext.studentsByUid}
+                        stacked={stacked}
+                        onChange={setScore}
+                        onShowParties={showParties}
+                      />
+                      <FieldMessage message={(attempted ? localErrors.score : null) ?? serverErrorFor("totalScore")} />
+                    </>
+                  )}
+                </div>
               </FormRow>
             )}
             <FormRow label="순위" labelFor={ids.rank}>
@@ -697,11 +780,6 @@ function EliminationScores({
         <span className="pr-2.5 text-right text-[0.9375rem] font-semibold text-v2-fg tabular-nums">
           {entered.length > 0 ? formatRaidScore(total) : "–"}
         </span>
-        {entered.length > 0 && entered.length < entries.length ? (
-          <span className="col-span-2 text-xs text-v2-fg-tertiary tabular-nums">
-            {entered.length}/{entries.length} 입력
-          </span>
-        ) : null}
       </div>
     </div>
   );

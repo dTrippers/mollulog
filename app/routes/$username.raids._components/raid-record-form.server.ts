@@ -12,6 +12,8 @@ import {
   normalizeRaidRecordScores,
   parseRaidRecordParties,
   parseRaidRecordRank,
+  parseRaidRecordScoreMode,
+  parseRaidRecordTotalScore,
   type RaidRecord,
   type RaidRecordDefenseType,
   type RaidRecordScoreInput,
@@ -25,6 +27,7 @@ import {
   getRaidRecordStudentInfo,
   RaidRecordScoreAboveMaxError,
   RaidRecordSeasonConflictError,
+  RaidRecordTotalScoreAboveMaxError,
   raidRecordSeasonRules,
   updateRaidRecord,
 } from "~/models/raid-record";
@@ -112,11 +115,22 @@ export async function handleRaidRecordFormAction({
   }
   const rules = raidRecordSeasonRules(season);
 
+  // The scores and the total are both kept, whichever the record shows; only the shown one is required.
+  const scoreMode = parseField("score", () => parseRaidRecordScoreMode(body.scoreMode, raidType));
+  if ("error" in scoreMode) return scoreMode.error;
   const scores = parseField("score", () =>
     normalizeRaidRecordScores(Array.isArray(body.scores) ? (body.scores as RaidRecordScoreInput[]) : [], rules),
   );
   if ("error" in scores) return scores.error;
-  if (scores.value.length === 0) {
+  const totalScore = parseField("totalScore", () => parseRaidRecordTotalScore(body.totalScore));
+  if ("error" in totalScore) return totalScore.error;
+  if (raidType !== "elimination" && totalScore.value !== null) {
+    return failure("totalScore", "합산 점수는 대결전 기록에만 입력할 수 있어요.");
+  }
+  if (scoreMode.value === "total" && totalScore.value === null) {
+    return failure("totalScore", "합산 점수를 입력해 주세요.");
+  }
+  if (scoreMode.value === "defense_type" && scores.value.length === 0) {
     return failure("score", raidType === "elimination" ? "방어 타입 점수를 하나 이상 입력해 주세요." : "점수를 입력해 주세요.");
   }
   const rank = parseField("rank", () => parseRaidRecordRank(body.rank));
@@ -135,7 +149,14 @@ export async function handleRaidRecordFormAction({
   const parties = parseField("parties", () => parseRaidRecordParties(body.parties, rules, studentInfo));
   if ("error" in parties) return parties.error;
 
-  const values = { scores: scores.value, rank: rank.value, memo: memo.value, parties: parties.value };
+  const values = {
+    scoreMode: scoreMode.value,
+    scores: scores.value,
+    totalScore: totalScore.value,
+    rank: rank.value,
+    memo: memo.value,
+    parties: parties.value,
+  };
   try {
     if (existing) {
       const updated = await updateRaidRecord(env, userId, existing.uid, season, values, { ctx });
@@ -145,6 +166,7 @@ export async function handleRaidRecordFormAction({
     }
   } catch (error) {
     if (error instanceof RaidRecordScoreAboveMaxError) return failure("score", error.message, 400, error.defenseType);
+    if (error instanceof RaidRecordTotalScoreAboveMaxError) return failure("totalScore", error.message);
     if (error instanceof RaidRecordSeasonConflictError) return failure("season", error.message, 409);
     if (error instanceof InvalidRaidRecordError) return failure("form", error.message);
     logger.error("Raid record save failed", error, { server, raidType, seasonIndex });

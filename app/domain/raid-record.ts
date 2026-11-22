@@ -139,13 +139,24 @@ export type RaidRecordScore = {
   score: number;
 };
 
+// Which score a record shows. "defense_type" shows the score of each defense type, and their sum is the total;
+// "total" shows a total score entered alone, for a 대결전 season whose scores per defense type the Sensei does not know
+// (the game keeps only the total and the rank of a past season). A record keeps both values whichever it shows, so
+// switching back restores the other, and the season chart can save a defense type's score to a record that shows its
+// total. A 총력전 record always shows its one score.
+export const RAID_RECORD_SCORE_MODES = ["defense_type", "total"] as const;
+export type RaidRecordScoreMode = (typeof RAID_RECORD_SCORE_MODES)[number];
+
 export type RaidRecord = {
   uid: string;
   userId: number;
   server: RaidRecordServer;
   raidType: RaidRecordRaidType;
   seasonIndex: number;
+  scoreMode: RaidRecordScoreMode;
   scores: RaidRecordScore[];
+  // The total entered alone. Always set while the record shows it; kept, but not shown, after switching away.
+  totalScore: number | null;
   rank: number | null;
   rankRecordedAt: string | null;
   memo: string;
@@ -173,6 +184,15 @@ export function isRaidRecordDefenseType(value: unknown): value is RaidRecordDefe
   return RAID_RECORD_DEFENSE_TYPES.some((defenseType) => defenseType === value);
 }
 
+export function isRaidRecordScoreMode(value: unknown): value is RaidRecordScoreMode {
+  return RAID_RECORD_SCORE_MODES.some((mode) => mode === value);
+}
+
+// A new 대결전 record of a season that has ended starts with the total alone: that is what the game still shows.
+export function defaultRaidRecordScoreMode(raidType: RaidRecordRaidType, ongoing: boolean): RaidRecordScoreMode {
+  return raidType === "elimination" && !ongoing ? "total" : "defense_type";
+}
+
 // BAQL names the Korean server's schedules "gl".
 export function raidRecordServerRegion(server: RaidRecordServer): "gl" | "jp" {
   return server === "kr" ? "gl" : "jp";
@@ -180,6 +200,17 @@ export function raidRecordServerRegion(server: RaidRecordServer): "gl" | "jp" {
 
 export function getRaidRecordTotalScore(scores: readonly Pick<RaidRecordScore, "score">[]): number {
   return scores.reduce((sum, entry) => sum + entry.score, 0);
+}
+
+// The total a record shows: the total entered alone, or the sum of the defense types' scores.
+export function getRaidRecordShownTotalScore(
+  record: Pick<RaidRecord, "scoreMode" | "scores" | "totalScore">,
+): number {
+  if (record.scoreMode === "total") {
+    if (record.totalScore === null) throw new InvalidRaidRecordError("저장된 합산 점수를 읽지 못했어요.");
+    return record.totalScore;
+  }
+  return getRaidRecordTotalScore(record.scores);
 }
 
 type SeasonPeriod = { startAt: string; endAt: string | null };
@@ -224,8 +255,16 @@ export function getRaidRecordRankStatus(
 
 // A record saved from the season chart holds a score alone. Only such a record may be removed by clearing the chart's
 // score input; one with a rank, memo, or party is removed only from its edit screen.
-export function isScoreOnlyRaidRecord(record: Pick<RaidRecord, "rank" | "memo" | "parties">): boolean {
-  return record.rank === null && record.memo.trim() === "" && record.parties.every((party) => party.units.length === 0);
+// A record that shows its total alone was entered with a rank, so it is never one.
+export function isScoreOnlyRaidRecord(
+  record: Pick<RaidRecord, "scoreMode" | "rank" | "memo" | "parties">,
+): boolean {
+  return (
+    record.scoreMode === "defense_type" &&
+    record.rank === null &&
+    record.memo.trim() === "" &&
+    record.parties.every((party) => party.units.length === 0)
+  );
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -285,6 +324,22 @@ export function getRaidMaxScore(bossUid: string, maxDifficulty: string | null): 
   return difficultyFloorScore(difficulty, timeClass) + RAID_TIME_SCORE_PER_SECOND[difficulty] * (RAID_ROOM_TIME_MS / 1000);
 }
 
+// The highest total the season allows: the sum of each defense type's maximum. Null when any of them is unknown, so a
+// valid total is never rejected on missing data.
+export function getRaidMaxTotalScore(
+  bossUid: string,
+  defenseTypes: readonly { maxDifficulty: string | null }[],
+): number | null {
+  if (defenseTypes.length === 0) return null;
+  let total = 0;
+  for (const { maxDifficulty } of defenseTypes) {
+    const maxScore = getRaidMaxScore(bossUid, maxDifficulty);
+    if (maxScore === null) return null;
+    total += maxScore;
+  }
+  return total;
+}
+
 export function formatRaidClearTime(clearTimeMs: number): string {
   const totalMs = Math.max(0, Math.round(clearTimeMs));
   const minutes = Math.floor(totalMs / 60_000);
@@ -333,6 +388,25 @@ export function parseRaidRecordScore(value: unknown): number | null {
     throw new InvalidRaidRecordError("점수를 확인해 주세요.");
   }
   return parsed;
+}
+
+export function parseRaidRecordTotalScore(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(String(value).replace(/[,\s]/g, ""));
+  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > RAID_RECORD_LIMITS.maxScore) {
+    throw new InvalidRaidRecordError("합산 점수를 확인해 주세요.");
+  }
+  return parsed;
+}
+
+// Reads the score mode a form or table sent. Only a 대결전 record can show its total alone.
+export function parseRaidRecordScoreMode(value: unknown, raidType: RaidRecordRaidType): RaidRecordScoreMode {
+  if (value === undefined || value === null) return "defense_type";
+  if (!isRaidRecordScoreMode(value)) throw new InvalidRaidRecordError("점수 입력 방식을 확인해 주세요.");
+  if (value === "total" && raidType !== "elimination") {
+    throw new InvalidRaidRecordError("합산 점수는 대결전 기록에만 입력할 수 있어요.");
+  }
+  return value;
 }
 
 export function parseRaidRecordRank(value: unknown): number | null {
@@ -510,6 +584,24 @@ export function readStoredRaidRecordParties(value: unknown): RaidRecordParty[] {
       }),
     };
   });
+}
+
+// Reads a stored score mode and total. A record that shows a total it does not have is an explicit failure.
+export function readStoredRaidRecordTotal(
+  scoreMode: unknown,
+  totalScore: unknown,
+  raidType: RaidRecordRaidType,
+): { scoreMode: RaidRecordScoreMode; totalScore: number | null } {
+  if (!isRaidRecordScoreMode(scoreMode) || (scoreMode === "total" && raidType !== "elimination")) {
+    throw new InvalidRaidRecordError("저장된 점수 입력 방식을 읽지 못했어요.");
+  }
+  if (totalScore !== null && (typeof totalScore !== "number" || !Number.isInteger(totalScore))) {
+    throw new InvalidRaidRecordError("저장된 합산 점수를 읽지 못했어요.");
+  }
+  if (scoreMode === "total" && totalScore === null) {
+    throw new InvalidRaidRecordError("저장된 합산 점수를 읽지 못했어요.");
+  }
+  return { scoreMode, totalScore };
 }
 
 export function readStoredRaidRecordScores(value: unknown): RaidRecordScore[] {

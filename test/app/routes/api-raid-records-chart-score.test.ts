@@ -43,7 +43,9 @@ const savedRecord: RaidRecord = {
   server: "kr",
   raidType: "elimination",
   seasonIndex: 35,
+  scoreMode: "defense_type",
   scores: [{ defenseType: "heavy", score: 40_000_000 }],
+  totalScore: null,
   rank: null,
   rankRecordedAt: null,
   memo: "",
@@ -140,12 +142,10 @@ describe("api.raid-records.chart-score", () => {
   });
 
   it("returns a validation message as a 400 and hides other failures behind a 500", async () => {
-    mockApplyChartScore.mockRejectedValueOnce(
-      new InvalidRaidRecordError("이 시즌에서 달성할 수 있는 최대 점수(40,348,000)보다 높아요."),
-    );
+    mockApplyChartScore.mockRejectedValueOnce(new InvalidRaidRecordError("최대 점수(40,348,000)보다 높아요."));
     await expect(callAction(validBody)).resolves.toEqual({
       status: 400,
-      body: { ok: false, message: "이 시즌에서 달성할 수 있는 최대 점수(40,348,000)보다 높아요." },
+      body: { ok: false, message: "최대 점수(40,348,000)보다 높아요." },
     });
 
     mockApplyChartScore.mockRejectedValueOnce(new Error("connection reset by peer"));

@@ -34,6 +34,7 @@ import {
   RaidRecordScoreAboveMaxError,
   RaidRecordSeasonConflictError,
   RaidRecordTableScoresAboveMaxError,
+  RaidRecordTotalScoreAboveMaxError,
 } from "~/models/raid-record";
 import { handleRaidRecordFormAction } from "~/routes/$username.raids._components/raid-record-form.server";
 import { handleRaidRecordTableAction } from "~/routes/$username.raids._components/raid-record-table.server";
@@ -68,7 +69,9 @@ function record(seasonIndex: number, uid: string): RaidRecord {
     server: "kr",
     raidType: "elimination",
     seasonIndex,
+    scoreMode: "defense_type",
     scores: [{ defenseType: "heavy", score: 40_000_000 }],
+    totalScore: null,
     rank: 1200,
     rankRecordedAt: "2026-02-01T00:00:00.000Z",
     memo: "",
@@ -140,6 +143,36 @@ describe("raid record table action", () => {
       [35, "record-35", [{ defenseType: "heavy", score: 41_000_000 }], 1100],
       [34, null, [{ defenseType: "elastic", score: 39_000_000 }], 900],
     ]);
+    // A row without a score mode shows its scores, as before the total existed.
+    expect(rows.map((row) => [row.scoreMode, row.totalScore])).toEqual([
+      ["defense_type", null],
+      ["defense_type", null],
+    ]);
+  });
+
+  it("saves a row that shows its total alone, and asks for the total it shows", async () => {
+    await expect(
+      submit(
+        tableBody([
+          { seasonIndex: 34, recordUid: null, scoreMode: "total", scores: [], totalScore: "90,000,000", rank: 900 },
+        ]),
+      ),
+    ).resolves.toMatchObject({ status: 302 });
+    expect(mockSaveTable.mock.calls[0][2][0]).toMatchObject({ scoreMode: "total", scores: [], totalScore: 90_000_000 });
+
+    await expect(
+      submit(
+        tableBody([{ seasonIndex: 34, recordUid: null, scoreMode: "total", scores: [], totalScore: null, rank: 900 }]),
+      ),
+    ).resolves.toEqual({
+      status: 400,
+      body: {
+        ok: false,
+        message: null,
+        rowErrors: [{ seasonIndex: 34, field: "totalScore", message: "합산 점수를 입력해 주세요." }],
+      },
+    });
+    expect(mockSaveTable).toHaveBeenCalledTimes(1);
   });
 
   it("returns every row error at once and saves nothing", async () => {
@@ -233,13 +266,13 @@ describe("raid record table action", () => {
             seasonIndex: 35,
             field: "score",
             defenseType: "heavy",
-            message: "이 시즌에서 달성할 수 있는 최대 점수(40,348,000)보다 높아요.",
+            message: "최대 점수(40,348,000)보다 높아요.",
           },
           {
             seasonIndex: 34,
             field: "score",
             defenseType: "elastic",
-            message: "이 시즌에서 달성할 수 있는 최대 점수(40,000,000)보다 높아요.",
+            message: "최대 점수(40,000,000)보다 높아요.",
           },
         ],
       },
@@ -315,9 +348,62 @@ describe("raid record form action", () => {
       env,
       USER_ID,
       season(34),
-      { scores: [{ defenseType: "heavy", score: 40_000_000 }], rank: 1200, memo: "메모", parties: [] },
+      {
+        scoreMode: "defense_type",
+        scores: [{ defenseType: "heavy", score: 40_000_000 }],
+        totalScore: null,
+        rank: 1200,
+        memo: "메모",
+        parties: [],
+      },
       { ctx },
     );
+  });
+
+  it("saves a total shown alone together with the scores it keeps", async () => {
+    await expect(
+      submit(
+        saveBody({
+          scoreMode: "total",
+          totalScore: "90,000,000",
+          scores: [{ defenseType: "heavy", score: 40_000_000 }],
+        }),
+      ),
+    ).resolves.toMatchObject({ status: 302 });
+    expect(mockCreate.mock.calls[0][3]).toMatchObject({
+      scoreMode: "total",
+      scores: [{ defenseType: "heavy", score: 40_000_000 }],
+      totalScore: 90_000_000,
+    });
+
+    // A record that shows its total needs no score per defense type.
+    await expect(submit(saveBody({ scoreMode: "total", totalScore: 90_000_000, scores: [] }))).resolves.toMatchObject({
+      status: 302,
+    });
+  });
+
+  it("asks for the total a record shows, and checks it against the sum of the maximums", async () => {
+    await expect(submit(saveBody({ scoreMode: "total", totalScore: null }))).resolves.toEqual({
+      status: 400,
+      body: { ok: false, error: { field: "totalScore", message: "합산 점수를 입력해 주세요." } },
+    });
+    await expect(submit(saveBody({ scoreMode: "total", totalScore: 0 }))).resolves.toEqual({
+      status: 400,
+      body: { ok: false, error: { field: "totalScore", message: "합산 점수를 확인해 주세요." } },
+    });
+    await expect(submit(saveBody({ scoreMode: "bogus" }))).resolves.toEqual({
+      status: 400,
+      body: { ok: false, error: { field: "score", message: "점수 입력 방식을 확인해 주세요." } },
+    });
+    // The season's two torment defense types top out at 40,348,000 each.
+    mockCreate.mockRejectedValueOnce(new RaidRecordTotalScoreAboveMaxError(80_696_000));
+    await expect(submit(saveBody({ scoreMode: "total", totalScore: 80_696_001 }))).resolves.toEqual({
+      status: 400,
+      body: {
+        ok: false,
+        error: { field: "totalScore", message: "최대 합산 점수(80,696,000)보다 높아요." },
+      },
+    });
   });
 
   it("names the field each error belongs to", async () => {
@@ -353,7 +439,7 @@ describe("raid record form action", () => {
         ok: false,
         error: {
           field: "score",
-          message: "이 시즌에서 달성할 수 있는 최대 점수(40,348,000)보다 높아요.",
+          message: "최대 점수(40,348,000)보다 높아요.",
           defenseType: "heavy",
         },
       },

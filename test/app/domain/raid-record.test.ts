@@ -2,10 +2,13 @@ import { describe, expect, it } from "@jest/globals";
 import {
   computeRaidClearResult,
   countRaidRankTiers,
+  defaultRaidRecordScoreMode,
   formatRaidClearTime,
   getRaidMaxScore,
+  getRaidMaxTotalScore,
   getRaidRankConfirmAt,
   getRaidRecordRankStatus,
+  getRaidRecordShownTotalScore,
   getRaidRecordTotalScore,
   InvalidRaidRecordError,
   isRaidSeasonOngoing,
@@ -16,11 +19,14 @@ import {
   parseRaidRecordParties,
   parseRaidRecordRank,
   parseRaidRecordScore,
+  parseRaidRecordScoreMode,
+  parseRaidRecordTotalScore,
   type RaidRecordSeasonRules,
   type RaidRecordStudentInfo,
   raidRankTier,
   readStoredRaidRecordParties,
   readStoredRaidRecordScores,
+  readStoredRaidRecordTotal,
 } from "~/domain/raid-record";
 
 const eliminationRules: RaidRecordSeasonRules = {
@@ -87,9 +93,16 @@ describe("raid record seasons", () => {
   });
 
   it("counts a record as score-only when it has no rank, memo, or student", () => {
-    const record = { rank: null, memo: "  ", parties: [{ defenseType: "heavy" as const, units: [] }] };
+    const record = {
+      scoreMode: "defense_type" as const,
+      rank: null,
+      memo: "  ",
+      parties: [{ defenseType: "heavy" as const, units: [] }],
+    };
 
     expect(isScoreOnlyRaidRecord(record)).toBe(true);
+    // A record that shows its total alone was entered with a rank on a form.
+    expect(isScoreOnlyRaidRecord({ ...record, scoreMode: "total" })).toBe(false);
     expect(isScoreOnlyRaidRecord({ ...record, rank: 1 })).toBe(false);
     expect(isScoreOnlyRaidRecord({ ...record, memo: "메모" })).toBe(false);
     expect(
@@ -404,6 +417,66 @@ describe("stored raid record values", () => {
     expectInvalid(
       () => readStoredRaidRecordScores([{ defenseType: "heavy", score: "1" }]),
       "저장된 점수를 읽지 못했어요.",
+    );
+  });
+});
+
+describe("raid record total score", () => {
+  it("starts a new 대결전 record of an ended season with the total alone", () => {
+    expect(defaultRaidRecordScoreMode("elimination", false)).toBe("total");
+    expect(defaultRaidRecordScoreMode("elimination", true)).toBe("defense_type");
+    expect(defaultRaidRecordScoreMode("total_assault", false)).toBe("defense_type");
+  });
+
+  it("shows the total entered alone, or the sum of the scores", () => {
+    const scores = [
+      { defenseType: "heavy" as const, score: 40_000_000 },
+      { defenseType: "light" as const, score: 30_000_000 },
+    ];
+    expect(getRaidRecordShownTotalScore({ scoreMode: "defense_type", scores, totalScore: 99_000_000 })).toBe(
+      70_000_000,
+    );
+    expect(getRaidRecordShownTotalScore({ scoreMode: "total", scores, totalScore: 99_000_000 })).toBe(99_000_000);
+    expect(() => getRaidRecordShownTotalScore({ scoreMode: "total", scores, totalScore: null })).toThrow(
+      InvalidRaidRecordError,
+    );
+  });
+
+  it("caps the total at the sum of the defense types' maximums, and not at all when one is unknown", () => {
+    // Hod (4 minutes): torment tops out at 40,348,000.
+    expect(getRaidMaxTotalScore("hod", [{ maxDifficulty: "torment" }, { maxDifficulty: "torment" }])).toBe(80_696_000);
+    expect(getRaidMaxTotalScore("hod", [{ maxDifficulty: "torment" }, { maxDifficulty: null }])).toBeNull();
+    expect(getRaidMaxTotalScore("a-new-boss", [{ maxDifficulty: "torment" }])).toBeNull();
+    expect(getRaidMaxTotalScore("hod", [])).toBeNull();
+  });
+
+  it("parses a total and a score mode, and allows the total alone only on a 대결전 record", () => {
+    expect(parseRaidRecordTotalScore("90,000,000")).toBe(90_000_000);
+    expect(parseRaidRecordTotalScore("")).toBeNull();
+    expect(() => parseRaidRecordTotalScore(0)).toThrow("합산 점수를 확인해 주세요.");
+    expect(parseRaidRecordScoreMode(undefined, "elimination")).toBe("defense_type");
+    expect(parseRaidRecordScoreMode("total", "elimination")).toBe("total");
+    expect(() => parseRaidRecordScoreMode("total", "total_assault")).toThrow(
+      "합산 점수는 대결전 기록에만 입력할 수 있어요.",
+    );
+    expect(() => parseRaidRecordScoreMode("sum", "elimination")).toThrow("점수 입력 방식을 확인해 주세요.");
+  });
+
+  it("fails on a stored total it cannot read", () => {
+    expect(readStoredRaidRecordTotal("defense_type", null, "elimination")).toEqual({
+      scoreMode: "defense_type",
+      totalScore: null,
+    });
+    expect(readStoredRaidRecordTotal("total", 90_000_000, "elimination")).toEqual({
+      scoreMode: "total",
+      totalScore: 90_000_000,
+    });
+    expect(() => readStoredRaidRecordTotal("total", null, "elimination")).toThrow("저장된 합산 점수를 읽지 못했어요.");
+    expect(() => readStoredRaidRecordTotal("total", 1, "total_assault")).toThrow(
+      "저장된 점수 입력 방식을 읽지 못했어요.",
+    );
+    expect(() => readStoredRaidRecordTotal("sum", null, "elimination")).toThrow(
+      "저장된 점수 입력 방식을 읽지 못했어요.",
     );
   });
 });

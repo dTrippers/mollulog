@@ -6,10 +6,12 @@ import {
   type RaidRecordParty,
   type RaidRecordRaidType,
   type RaidRecordScore,
+  type RaidRecordScoreMode,
   type RaidRecordServer,
   isScoreOnlyRaidRecord,
   readStoredRaidRecordParties,
   readStoredRaidRecordScores,
+  readStoredRaidRecordTotal,
 } from "~/domain/raid-record";
 import { postgresUniqueConstraintName } from "~/lib/db";
 import { normalizeInstant } from "~/lib/date-time";
@@ -30,7 +32,9 @@ export type RaidRecordSeasonKey = {
 };
 
 export type RaidRecordValues = {
+  scoreMode: RaidRecordScoreMode;
   scores: RaidRecordScore[];
+  totalScore: number | null;
   rank: number | null;
   rankRecordedAt: string | null;
   memo: string;
@@ -53,6 +57,7 @@ function toDomain(row: RaidRecordRow): RaidRecord {
     server: row.server,
     raidType: row.raidType,
     seasonIndex: row.seasonIndex,
+    ...readStoredRaidRecordTotal(row.scoreMode, row.totalScore, row.raidType),
     scores: readStoredRaidRecordScores(row.scores),
     rank: row.rank,
     rankRecordedAt: row.rankRecordedAt === null ? null : normalizeInstant(row.rankRecordedAt),
@@ -231,7 +236,7 @@ export async function deletePostgresRaidRecord(
 export type RaidRecordBatchRow = {
   key: RaidRecordSeasonKey;
   current: { uid: string; updatedAt: string } | null;
-  values: Pick<RaidRecordValues, "scores" | "rank" | "rankRecordedAt">;
+  values: Pick<RaidRecordValues, "scoreMode" | "scores" | "totalScore" | "rank" | "rankRecordedAt">;
 };
 
 export class RaidRecordBatchStaleError extends Error {
@@ -299,7 +304,7 @@ export type RaidRecordChartScoreResult =
   | { kind: "kept"; record: RaidRecord | null };
 
 // The season chart's "내 점수" saves one defense type's score. A season with no record gains a record with the score
-// alone. Clearing the score removes it only from a record that holds nothing but scores, and removes that record once it
+// alone. A record that shows its total keeps showing it: the score is saved to it without being shown. Clearing the score removes it only from a record that holds nothing but scores, and removes that record once it
 // has no score left.
 export async function applyPostgresRaidRecordChartScore(
   env: Pick<Env, "HYPERDRIVE">,
@@ -355,7 +360,9 @@ function applyChartScoreOnce(
               uid: nanoid(12),
               userId,
               ...key,
+              scoreMode: "defense_type",
               scores: [savedEntry],
+              totalScore: null,
               rank: null,
               rankRecordedAt: null,
               memo: "",

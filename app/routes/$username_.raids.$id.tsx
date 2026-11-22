@@ -109,6 +109,8 @@ export default function RaidRecordDetail() {
                   <span className="text-base font-semibold text-v2-fg tabular-nums">{formatRaidScore(row.totalScore)}</span>
                   <ClearResult difficulty={row.scores[0]?.difficulty ?? null} clearTimeMs={row.scores[0]?.clearTimeMs ?? null} />
                 </span>
+              ) : row.scoreMode === "total" ? (
+                <span className="text-base font-semibold text-v2-fg tabular-nums">{formatRaidScore(row.totalScore)}</span>
               ) : (
                 <span className="flex flex-col gap-1">
                   {row.scores.map((entry) => (
