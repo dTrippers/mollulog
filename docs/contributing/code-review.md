@@ -48,6 +48,9 @@ single owner for commands and claim-to-evidence mapping.
   names its route action explicitly. Without one, React Router posts it to
   whichever page is current when it is sent, so a Sensei who leaves the page
   first loses the edit.
+- Does a component that copies loader data into state still show revalidated
+  data? Copy only what the screen edits locally, and refresh the copy whenever
+  the loader data changes, not only when its list of keys does.
 - Does code that handles a PostgreSQL error, such as a unique violation, read it
   through `postgresUniqueConstraintName` (`app/lib/db.ts`)? Drizzle wraps driver
   errors in `DrizzleQueryError`, so the code and constraint are on its `cause`,
