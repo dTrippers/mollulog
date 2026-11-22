@@ -33,7 +33,7 @@ describe("shop v2 result area", () => {
   it("offers sign-in for account saving in a separate note", () => {
     const markup = renderToStaticMarkup(createElement(ShopSignInNote));
 
-    expect(markup).toContain("로그인하면 계정 저장·보유 학생 반영");
+    expect(markup).toContain("로그인하면 계정 저장·모집한 학생 반영");
     expect(markup).toContain(">로그인</button>");
   });
 
