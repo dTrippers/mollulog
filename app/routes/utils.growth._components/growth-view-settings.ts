@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import { type GrowthSortOrder, isGrowthSortOrder } from "./growth-sort";
+import { type GrowthSortOrder, isGrowthSortOrder } from "~/domain/growth-planner";
 
 const GROWTH_VIEW_SETTINGS_STORAGE_KEY = "mollulog::growth::view-settings";
 
+// Per-device view settings. The sort choice is stored per account (planner state); this object held it before, and
+// a value left here is read once so the account can take it over.
 export type GrowthViewSettings = {
-  sortOrder: GrowthSortOrder;
   showNumberInputShortcuts: boolean;
 };
 
 export const DEFAULT_GROWTH_VIEW_SETTINGS: GrowthViewSettings = {
-  sortOrder: "planner-newest",
   showNumberInputShortcuts: true,
 };
 
@@ -20,7 +20,6 @@ export function normalizeGrowthViewSettings(value: unknown): GrowthViewSettings 
 
   const settings = value as Partial<Record<keyof GrowthViewSettings, unknown>>;
   return {
-    sortOrder: isGrowthSortOrder(settings.sortOrder) ? settings.sortOrder : DEFAULT_GROWTH_VIEW_SETTINGS.sortOrder,
     showNumberInputShortcuts:
       typeof settings.showNumberInputShortcuts === "boolean"
         ? settings.showNumberInputShortcuts
@@ -28,21 +27,32 @@ export function normalizeGrowthViewSettings(value: unknown): GrowthViewSettings 
   };
 }
 
-function readStoredGrowthViewSettings(): GrowthViewSettings {
+/** The sort choice this device stored before it moved to the account, or null. */
+export function readLegacyGrowthSortOrder(value: unknown): GrowthSortOrder | null {
+  if (!value || typeof value !== "object") return null;
+  const sortOrder = (value as { sortOrder?: unknown }).sortOrder;
+  return isGrowthSortOrder(sortOrder) && sortOrder !== "manual" ? sortOrder : null;
+}
+
+function readStoredValue(): unknown {
   try {
     const saved = localStorage.getItem(GROWTH_VIEW_SETTINGS_STORAGE_KEY);
-    return saved ? normalizeGrowthViewSettings(JSON.parse(saved)) : DEFAULT_GROWTH_VIEW_SETTINGS;
+    return saved ? JSON.parse(saved) : null;
   } catch {
-    return DEFAULT_GROWTH_VIEW_SETTINGS;
+    return null;
   }
 }
 
+// The third value is the legacy sort choice: undefined until the stored settings are read, then the choice or null.
 export function useGrowthViewSettings() {
   const [settings, setSettings] = useState<GrowthViewSettings>(DEFAULT_GROWTH_VIEW_SETTINGS);
+  const [legacySortOrder, setLegacySortOrder] = useState<GrowthSortOrder | null | undefined>(undefined);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setSettings(readStoredGrowthViewSettings());
+    const stored = readStoredValue();
+    setSettings(normalizeGrowthViewSettings(stored));
+    setLegacySortOrder(readLegacyGrowthSortOrder(stored));
     setHydrated(true);
   }, []);
 
@@ -56,5 +66,5 @@ export function useGrowthViewSettings() {
     }
   }, [hydrated, settings]);
 
-  return [settings, setSettings] as const;
+  return [settings, setSettings, legacySortOrder] as const;
 }

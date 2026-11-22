@@ -7,6 +7,7 @@ import {
 } from "~/db/postgres/planner-states";
 import { type ApPlannerState, normalizeApPlannerState } from "~/domain/ap-planner";
 import type { EventShopState } from "~/domain/event-shop-state";
+import { DEFAULT_GROWTH_SORT_ORDER, type GrowthSortOrder, isGrowthSortOrder } from "~/domain/growth-planner";
 import {
   type JankenPlannerEntry,
   normalizeJankenPlannerProgress,
@@ -91,6 +92,36 @@ export async function updateApPlannerState<T>(
       if (state !== null && normalized === null) throw new Error("AP 플래너 내용을 확인해주세요.");
       return { document: { ...currentDocument, ap: normalized }, result };
     },
+    { ...options, retryable: true },
+  );
+}
+
+/** The growth planner's sort choice, or the default order when the Sensei has not picked one. */
+export async function getGrowthPlannerSortOrder(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  options: PlannerStateDatabaseOptions = {},
+): Promise<{ sortOrder: GrowthSortOrder; stored: boolean }> {
+  const growth = (await getPlannerState(env, userId, options)).growth;
+  return growth
+    ? { sortOrder: growth.sortOrder, stored: true }
+    : { sortOrder: DEFAULT_GROWTH_SORT_ORDER, stored: false };
+}
+
+export async function saveGrowthPlannerSortOrder(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  sortOrder: GrowthSortOrder,
+  options: PlannerStateDatabaseOptions = {},
+): Promise<GrowthSortOrder> {
+  if (!isGrowthSortOrder(sortOrder)) throw new Error("Invalid growth planner sort order.");
+  return updatePostgresPlannerStateDocument(
+    env,
+    userId,
+    async (_transaction, currentDocument) => ({
+      document: { ...currentDocument, growth: { sortOrder } },
+      result: sortOrder,
+    }),
     { ...options, retryable: true },
   );
 }

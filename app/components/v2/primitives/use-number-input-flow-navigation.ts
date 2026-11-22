@@ -38,11 +38,14 @@ type RectMetrics = NumberInputFlowNavigationRect & {
 const SAME_ROW_EPSILON = 1;
 
 // `enterMovesDown` makes Enter move to the cell below, the way a spreadsheet does, for screens that are a table of
-// entries rather than a form Enter would submit.
+// entries rather than a form Enter would submit. `tabMovesBetweenInputs` makes Tab and Shift+Tab go to the next and
+// previous member of the flow in document order, past the step buttons between them; past the last member Tab leaves
+// the flow as usual.
 export function useNumberInputFlowNavigation({
   selectOnFocus = true,
   enterMovesDown = false,
-}: { selectOnFocus?: boolean; enterMovesDown?: boolean } = {}) {
+  tabMovesBetweenInputs = false,
+}: { selectOnFocus?: boolean; enterMovesDown?: boolean; tabMovesBetweenInputs?: boolean } = {}) {
   const gridId = useId();
 
   const selectInputValue = useCallback(
@@ -75,7 +78,22 @@ export function useNumberInputFlowNavigation({
       },
       onKeyDown: (event) => {
         onKeyDown?.(event);
-        if (event.defaultPrevented || disabled || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        if (event.defaultPrevented || disabled || event.metaKey || event.ctrlKey || event.altKey) {
+          return;
+        }
+
+        if (tabMovesBetweenInputs && event.key === "Tab") {
+          const targetInput = findTabTarget(event.currentTarget, gridId, event.shiftKey ? -1 : 1);
+          if (!targetInput) {
+            return;
+          }
+          event.preventDefault();
+          targetInput.focus();
+          selectInputValue(targetInput);
+          return;
+        }
+
+        if (event.shiftKey) {
           return;
         }
 
@@ -94,7 +112,7 @@ export function useNumberInputFlowNavigation({
         selectInputValue(targetInput);
       },
     }),
-    [gridId, selectInputValue, enterMovesDown],
+    [gridId, selectInputValue, enterMovesDown, tabMovesBetweenInputs],
   );
 
   return { getInputProps };
@@ -135,6 +153,20 @@ function getDirection(key: string): NumberInputFlowDirection | null {
     default:
       return null;
   }
+}
+
+function findTabTarget(currentInput: HTMLElement, gridId: string, step: -1 | 1): HTMLElement | null {
+  const inputs = Array.from(currentInput.ownerDocument.querySelectorAll<HTMLElement>("[data-number-input-flow]")).filter(
+    (input) =>
+      input.dataset.numberInputFlow === gridId &&
+      !(input as HTMLInputElement).disabled &&
+      input.getClientRects().length > 0,
+  );
+  const currentIndex = inputs.indexOf(currentInput);
+  if (currentIndex === -1) {
+    return null;
+  }
+  return inputs[currentIndex + step] ?? null;
 }
 
 function findNavigationTarget(

@@ -4,10 +4,12 @@ import { PlannerStateRevisionConflictError } from "~/db/postgres/planner-states"
 import { type PlannerStateDocumentV1, projectPlannerStateDocument } from "~/domain/planner-state";
 import {
   getEventShopPlannerState,
+  getGrowthPlannerSortOrder,
   getPlannerState,
   getPyroxenePlannerState,
   isPlannerStateRevisionConflictError,
   PLANNER_STATE_REVISION_CONFLICT_MESSAGE,
+  saveGrowthPlannerSortOrder,
   saveJankenPlannerEntry,
   updateApPlannerState,
 } from "~/models/planner-state";
@@ -66,6 +68,31 @@ describe("planner state model", () => {
     const document = await getPlannerState(env, 7, options);
     expect(document.jankenProgress["shop-1"]).toEqual(entry);
     expect(document.pyroxene).toBeDefined();
+  });
+
+  it("stores the growth planner sort choice and preserves the other sections", async () => {
+    const client = createClient();
+    const options = { createClient: () => client as unknown as Client };
+    const before = await getPlannerState(env, 7, options);
+
+    expect(await getGrowthPlannerSortOrder(env, 7, options)).toEqual({ sortOrder: "planner-newest", stored: false });
+    await saveGrowthPlannerSortOrder(env, 7, "manual", options);
+
+    expect(await getGrowthPlannerSortOrder(env, 7, options)).toEqual({ sortOrder: "manual", stored: true });
+    const document = await getPlannerState(env, 7, options);
+    expect(document.pyroxene).toEqual(before.pyroxene);
+    expect(document.eventShops).toEqual(before.eventShops);
+  });
+
+  it("rejects an unknown stored growth sort choice instead of falling back", async () => {
+    const client = createClient();
+    const row = client.tables.planner_states?.[0];
+    if (!row) throw new Error("Expected a planner state row");
+    row.document = { ...(row.document as PlannerStateDocumentV1), growth: { sortOrder: "unknown" } };
+
+    await expect(
+      getGrowthPlannerSortOrder(env, 7, { createClient: () => client as unknown as Client }),
+    ).rejects.toThrow("Unable to read planner state document");
   });
 
   it("identifies revision conflicts and exports the shared message", () => {

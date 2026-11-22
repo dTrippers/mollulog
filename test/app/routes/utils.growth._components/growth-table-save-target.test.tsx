@@ -4,6 +4,7 @@ import "../../components/v2/layout/layout-test-polyfills";
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
+import { V2Page } from "~/components/v2/layout";
 import GrowthTable from "~/routes/utils.growth._components/GrowthTable";
 import type { GrowthStudent } from "~/routes/utils.growth._components/types";
 
@@ -32,11 +33,26 @@ if (typeof globalThis.Headers === "undefined") {
   Object.assign(globalThis, { Headers: HeadersStub });
 }
 
+// jsdom has no PointerEvent; the drag reads `button` and `pointerId` from it.
+class PointerEventStub extends MouseEvent {
+  readonly pointerId: number;
+
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init);
+    this.pointerId = init.pointerId ?? 1;
+  }
+}
+
+if (typeof globalThis.PointerEvent === "undefined") {
+  Object.assign(globalThis, { PointerEvent: PointerEventStub });
+}
+
 const student: GrowthStudent = {
   uid: "student-1",
   name: "테스트 학생",
   order: 1,
   plannerCreatedAt: null,
+  plannerPosition: null,
   isRecruited: true,
   released: true,
   hasGear: false,
@@ -96,7 +112,20 @@ describe("growth table autosave", () => {
         {
           path: "/utils/growth/students",
           action: recordAction,
-          element: <GrowthTable students={[student]} availableStudents={[]} onStudentUpdate={() => {}} writeMode="nullable" />,
+          element: (
+            <V2Page width="full">
+              <GrowthTable
+                students={[student]}
+                availableStudents={[]}
+                onStudentUpdate={() => {}}
+                writeMode="nullable"
+                stacked={false}
+                sortOrder="planner-newest"
+                sortOrderStored
+                onPositionsChange={() => {}}
+              />
+            </V2Page>
+          ),
         },
         { path: "/utils/resources/inventory", action: recordAction, element: <p>재화 플래너</p> },
       ],
@@ -115,5 +144,43 @@ describe("growth table autosave", () => {
     });
 
     expect(actionPaths).toEqual(["/utils/growth/students"]);
+  });
+
+  it("saves a dragged manual order when the pointer is released away from the handle", async () => {
+    // Moving the dragged rows in the DOM releases the handle's pointer capture, so the release lands elsewhere.
+    const onPositionsChange = jest.fn();
+    const older = { ...student, uid: "student-2", name: "다른 학생", plannerCreatedAt: "2026-07-01T00:00:00.000Z" };
+    const newer = { ...student, plannerCreatedAt: "2026-07-02T00:00:00.000Z" };
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/utils/growth/students",
+          action: () => ({ kind: "order", orderedStudentUids: [] }),
+          element: (
+            <V2Page width="full">
+              <GrowthTable
+                students={[newer, older]}
+                availableStudents={[]}
+                onStudentUpdate={() => {}}
+                writeMode="nullable"
+                stacked={false}
+                sortOrder="manual"
+                sortOrderStored
+                onPositionsChange={onPositionsChange}
+              />
+            </V2Page>
+          ),
+        },
+      ],
+      { initialEntries: ["/utils/growth/students"] },
+    );
+    render(<RouterProvider router={router} />);
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "테스트 학생 순서 옮기기" }), { button: 0 });
+    // jsdom has no layout, so every block's middle is at 0 and the pointer below it places the student last.
+    fireEvent.pointerMove(document.body, { clientY: 10 });
+    fireEvent.pointerUp(document.body);
+
+    expect(onPositionsChange).toHaveBeenCalledWith({ "student-2": 0, "student-1": 1 });
   });
 });

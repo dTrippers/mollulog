@@ -1,6 +1,7 @@
 import type { ApPlannerState } from "~/domain/ap-planner";
 import { DEFAULT_CARD_FLIP_STRATEGY } from "~/domain/event-shop";
 import { type EventShopState, normalizeEventShopState } from "~/domain/event-shop-state";
+import type { GrowthPlannerState } from "~/domain/growth-planner";
 import type { GuestPyroxeneResources } from "~/domain/guest-pyroxene-planner";
 import {
   normalizePyroxenePlannerOptions,
@@ -82,6 +83,8 @@ export type PlannerStateDocumentV1 = {
   eventShops: Record<string, EventShopState>;
   jankenProgress: JankenPlannerProgress;
   ap: ApPlannerState | null;
+  // The student growth planner's sort choice. Absent until the Sensei picks one; the default order applies meanwhile.
+  growth?: GrowthPlannerState;
 };
 
 /** Sort planner records by event time while keeping same-time insertion order stable. */

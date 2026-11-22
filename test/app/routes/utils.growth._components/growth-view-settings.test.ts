@@ -2,27 +2,24 @@ import { describe, expect, it } from "@jest/globals";
 import {
   DEFAULT_GROWTH_VIEW_SETTINGS,
   normalizeGrowthViewSettings,
+  readLegacyGrowthSortOrder,
 } from "~/routes/utils.growth._components/growth-view-settings";
 
 describe("growth planner view settings", () => {
-  it("keeps valid stored settings", () => {
-    expect(
-      normalizeGrowthViewSettings({
-        sortOrder: "name",
-        showNumberInputShortcuts: false,
-      }),
-    ).toEqual({
-      sortOrder: "name",
+  it("keeps a valid stored setting", () => {
+    expect(normalizeGrowthViewSettings({ sortOrder: "name", showNumberInputShortcuts: false })).toEqual({
       showNumberInputShortcuts: false,
     });
   });
 
-  it("falls back per invalid setting", () => {
-    expect(
-      normalizeGrowthViewSettings({
-        sortOrder: "unknown",
-        showNumberInputShortcuts: "false",
-      }),
-    ).toEqual(DEFAULT_GROWTH_VIEW_SETTINGS);
+  it("falls back for an invalid setting", () => {
+    expect(normalizeGrowthViewSettings({ showNumberInputShortcuts: "false" })).toEqual(DEFAULT_GROWTH_VIEW_SETTINGS);
+  });
+
+  it("reads the sort choice stored on the device before it moved to the account", () => {
+    expect(readLegacyGrowthSortOrder({ sortOrder: "name", showNumberInputShortcuts: true })).toBe("name");
+    expect(readLegacyGrowthSortOrder({ sortOrder: "unknown" })).toBeNull();
+    expect(readLegacyGrowthSortOrder({ showNumberInputShortcuts: true })).toBeNull();
+    expect(readLegacyGrowthSortOrder(null)).toBeNull();
   });
 });

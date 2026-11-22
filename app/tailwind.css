@@ -1153,7 +1153,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
     display: none;
   }
 
-  [data-v2-layout]:has(> .v2-aside) {
+  [data-v2-layout]:has(> .v2-aside:not([data-reveal="extra-wide"])) {
     grid-template-columns: var(--v2-aside-w) minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas:
@@ -1163,7 +1163,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
     column-gap: var(--spacing-v2-column-gap);
   }
 
-  [data-v2-layout][data-toolbar-span="full"]:has(> .v2-aside) {
+  [data-v2-layout][data-toolbar-span="full"]:has(> .v2-aside:not([data-reveal="extra-wide"])) {
     grid-template-rows: auto auto auto minmax(0, 1fr);
     grid-template-areas:
       "header header"
@@ -1172,18 +1172,18 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
       "aside main";
   }
 
-  [data-v2-layout][data-width="reading"]:has(> .v2-aside) {
+  [data-v2-layout][data-width="reading"]:has(> .v2-aside:not([data-reveal="extra-wide"])) {
     grid-template-columns: var(--v2-aside-w) minmax(0, 48rem);
   }
 
-  [data-v2-layout]:has(> .v2-aside):has(> .v2-toolbar[data-stacked-only="true"]) {
+  [data-v2-layout]:has(> .v2-aside:not([data-reveal="extra-wide"])):has(> .v2-toolbar[data-stacked-only="true"]) {
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       "header header"
       "aside main";
   }
 
-  [data-v2-layout]:has(> .v2-aside):has(.v2-header[data-stacked-only="true"]) {
+  [data-v2-layout]:has(> .v2-aside:not([data-reveal="extra-wide"])):has(.v2-header[data-stacked-only="true"]) {
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       "aside toolbar"
@@ -1206,7 +1206,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
     display: none;
   }
 
-  .v2-aside {
+  .v2-aside:not([data-reveal="extra-wide"]) {
     display: flex;
   }
 
@@ -1224,6 +1224,23 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
     position: sticky;
     top: 0;
     z-index: 20;
+  }
+}
+
+/* An Aside that opts into "extra-wide" (PageAside revealAt) joins the page only from 96rem of page-available width. */
+@container page-available (width >= 96rem) {
+  [data-v2-layout]:has(> .v2-aside[data-reveal="extra-wide"]) {
+    grid-template-columns: var(--v2-aside-w) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "header header"
+      "aside toolbar"
+      "aside main";
+    column-gap: var(--spacing-v2-column-gap);
+  }
+
+  .v2-aside[data-reveal="extra-wide"] {
+    display: flex;
   }
 }
 
