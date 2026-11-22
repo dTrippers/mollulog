@@ -77,7 +77,7 @@ export function Segmented<T extends string>({
               full && "flex-1",
               selected
                 ? "bg-v2-elevated font-semibold text-v2-fg"
-                : "font-medium text-v2-fg-secondary hover:text-v2-fg",
+                : "font-medium text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
               v2FocusRing,
             )}
           >

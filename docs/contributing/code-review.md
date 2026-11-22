@@ -44,7 +44,13 @@ single owner for commands and claim-to-evidence mapping.
   not with the last saved one, and keeps a waiting save, its status, and its
   retry per target, so no input is dropped and one target's success does not
   hide another's failure. Its state lives in a component that a loading state
-  does not unmount.
+  does not unmount. A save sent later than the input, such as after a delay,
+  names its route action explicitly. Without one, React Router posts it to
+  whichever page is current when it is sent, so a Sensei who leaves the page
+  first loses the edit.
+- Does a component that copies loader data into state still show revalidated
+  data? Copy only what the screen edits locally, and refresh the copy whenever
+  the loader data changes, not only when its list of keys does.
 - Does code that handles a PostgreSQL error, such as a unique violation, read it
   through `postgresUniqueConstraintName` (`app/lib/db.ts`)? Drizzle wraps driver
   errors in `DrizzleQueryError`, so the code and constraint are on its `cause`,
@@ -76,7 +82,10 @@ single owner for commands and claim-to-evidence mapping.
   including empty and fallback states. A child route's `meta` replaces its
   parent's, so a fallback branch cannot rely on the parent's tags.
 - Is intent-based action branching verified on the server?
-- Is the boundary between route-local and shared UI intact?
+- Is the boundary between route-local and shared UI intact? A shared component
+  that takes a `className` sets what a caller may override through classes, not
+  an inline `style`: an inline value beats every class, so a caller's own size
+  or cap stops working.
 - Is an image that fills a frame sized only by `aspect-ratio` pinned to the
   frame (`absolute inset-0`) instead of relying on `height: 100%`? Inside a
   table cell, WebKit resolves that percentage to the image's natural height, and

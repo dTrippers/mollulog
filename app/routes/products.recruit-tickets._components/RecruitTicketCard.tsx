@@ -93,7 +93,7 @@ export function RecruitTicketCard({ card, timeZone, now }: RecruitTicketCardProp
               type="button"
               aria-label={`외 ${hiddenCount}명 보기`}
               onClick={() => setExpanded(true)}
-              className="flex aspect-[5/6] w-14 cursor-pointer items-center justify-center rounded-md bg-v2-inset text-sm font-medium text-v2-fg-secondary tabular-nums hover:bg-v2-filled-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus sm:w-16"
+              className="flex aspect-[5/6] w-14 cursor-pointer items-center justify-center rounded-md bg-v2-inset text-sm font-medium text-v2-fg-secondary tabular-nums hover:bg-v2-filled-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus sm:w-16 v2-interaction-transition"
             >
               +{hiddenCount}
             </button>

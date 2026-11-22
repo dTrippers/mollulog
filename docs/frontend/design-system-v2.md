@@ -34,7 +34,8 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `bg-v2-elevated` | `oklch(1 0 0)` | `oklch(0.36 0 0)` | Dialogs. Brighter than surface in dark mode |
 | `v2-floating-inverse` (utility) | `oklch(0.22 0.015 255 / 92%)` | `oklch(0.94 0.01 255 / 92%)` | Inverse floating surface: `PageActionBar` and toasts, a capsule in the inverse lightness of the page (dark over the light theme, light over the dark theme). The utility sets the surface and maps the v2 text, fill, divider, accent, and status tokens inside it to the `--v2-inverse-*` set, so `Button` variants and `StatusNotice` work unchanged. Inside it, `danger-subtle` is a red tint with red text from the same hue (`oklch(0.33 0.09 25)` with `oklch(0.78 0.128 22.1)` light, `oklch(0.885 0.05 30)` with `oklch(0.46 0.18 28)` dark). Text contrast is 4.5:1 or higher with the surface composited over black and over white (measured) |
 | `bg-v2-popover-surface` | `rgb(255 255 255 / 94%)` | `rgb(24 24 24 / 94%)` | Floating surface in the page lightness: popovers, menus, the mobile action bar, the tab hint, and chart tooltips |
-| `ring-v2-popover-divider`, `border-v2-popover-divider` | `rgb(0 0 0 / 18%)` | `rgb(255 255 255 / 22%)` | Quick-view outline and action divider |
+| `border-v2-popover-divider` | `rgb(0 0 0 / 18%)` | `rgb(255 255 255 / 22%)` | Action divider inside a floating surface |
+| `shadow-v2-popover` | `0 10px 15px -3px` and `0 4px 6px -4px` in `rgb(0 0 0 / 10%)` | same offsets in `rgb(0 0 0 / 40%)` | Separates a popover, menu, or tooltip on `bg-v2-popover-surface` from the content below. These have no border or ring |
 | `bg-v2-nav` | `oklch(0.945 0 0)` | `oklch(0.205 0 0)` | Shared navigation shell surface. Tertiary-label contrast: 4.69:1 light, 8.95:1 dark; offset focus-ring contrast: 3.20:1 light, 6.79:1 dark (measured) |
 | `bg-v2-nav-active` | `oklch(0.89 0 0)` | `oklch(0.30 0 0)` | Selected navigation row and collapsed active group |
 | `bg-v2-unread`, `text-v2-on-unread` | `oklch(0.577 0.245 27.325)` / `oklch(1 0 0)` | `oklch(0.704 0.191 22.216)` / `oklch(0.205 0 0)` | Navigation attention dots (new content, operator-highlighted menus) and count pills. Pill text contrast: 4.76:1 light, 6.19:1 dark (measured) |
@@ -58,7 +59,7 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `bg-v2-hover` | `oklch(0.205 0 0 / 5%)` | `oklch(1 0 0 / 7%)` | Transparent hover fill for unfilled rows and controls; overlay on filled controls |
 | `bg-v2-filled-hover` | `oklch(0.94 0 0)` | `oklch(0.37 0 0)` | Opaque hover fill for inset buttons and rows |
 | `border-v2-control-border` | `oklch(0.968 0 0)` | `oklch(0.388 0 0)` | Idle boundary for text inputs, selects, textareas, and grouped inputs. The value is the former 40% border over `bg-v2-surface`, made opaque; do not add an opacity modifier. Not for cards, buttons, or region separation. |
-| `border-v2-control-border-strong`, `ring-v2-control-border-strong` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Focused input boundary (paired with the focus ring), hover boundary, popover ring, and the upload drop zone. |
+| `border-v2-control-border-strong`, `ring-v2-control-border-strong` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Focused input boundary (paired with the focus ring), hover boundary, and the upload drop zone. |
 | `bg-v2-switch-off` | `oklch(0.64 0 0)` | `oklch(0.56 0 0)` | Switch off-track fill (3:1 against surface). Not for text or input borders. |
 | `ring-v2-focus`, `outline-v2-focus` | `var(--v2-accent)` | `var(--v2-accent)` | Focus ring, 2px with 2px offset (3:1 or higher) |
 | `text-v2-success` | `oklch(0.527 0.154 150.069)` | `oklch(0.792 0.209 151.711)` | Confirmed pill text and completed icons |
@@ -215,10 +216,10 @@ UI copy uses these terms for these game and product concepts. Add a term here on
 
 - Density is two separate judgments. Controls stay compact (see `min-h-v2-control-min` and `min-h-v2-input-min`); do not enlarge them. Space between elements is generous enough that a block with many elements does not look cramped; when it does, add space between elements or quiet secondary ones, not larger controls.
 - UI that appears and disappears, such as a save status, never sits in the layout flow, where it pushes the content below it. Use an overlay: autosave status uses `primitives/SaveToast`.
-- An element that floats over content, such as a floating action bar, toolbar, toast, menu, popover, or tooltip, uses a translucent surface with a backdrop blur, so it reads as a layer above the content without hiding it. Use the floating surface tokens with `backdrop-blur-md`; do not make a new opaque floating surface. A dialog panel is excluded: its backdrop already separates it from the page.
+- An element that floats over content, such as a floating action bar, toolbar, toast, menu, popover, or tooltip, uses a translucent surface with a backdrop blur, so it reads as a layer above the content without hiding it. Use the floating surface tokens with `backdrop-blur-md`; do not make a new opaque floating surface. A popover, menu, or tooltip has no border or ring; `shadow-v2-popover` separates it from the content. A dialog panel is excluded: its backdrop already separates it from the page.
 - Group with spacing and surfaces, not borders. Borders, outlines, rings, and dividers are not used by default; separate things with spacing, surface fills, lightness steps, and shadow. Do not add a border to a card, section, button, chip, badge, list item, or floating surface, and do not add one to raise contrast.
 - Items in a list have no borders between them; keep a divider only where it separates a different kind of row, such as the row that adds a goal. A total row is not a different kind of row: set it apart with spacing and weight, not a line above it.
-- A border, outline, ring, or divider appears only where this guide names it: the input boundary (`border-v2-control-border`, and `-strong` on focus or hover), the bordered field for values of one domain (below), the focus ring, the popover ring, the quick-view outline and its action divider, the upload drop zone, the recognized-cell marker over a screenshot, the 내 학생 row's hairline ring, the `SectionTabs` underline, row and column lines in a data table, timeline lines, the divider before a different kind of row, and the scanner review's compact row actions. Any other one is a departure the owner approves first. A border in existing code is not a precedent.
+- A border, outline, ring, or divider appears only where this guide names it: the input boundary (`border-v2-control-border`, and `-strong` on focus or hover), the bordered field for values of one domain (below), the focus ring, the quick-view outline and its action divider, the upload drop zone, the recognized-cell marker over a screenshot, the 내 학생 row's hairline ring, the `SectionTabs` underline, row and column lines in a data table, timeline lines, the divider before a different kind of row, and the scanner review's compact row actions. Any other one is a departure the owner approves first. A border in existing code is not a precedent.
 - One page uses one content width. Sections, banners, and notices in Main share the same maximum width, so their edges line up.
 - Elements of the same kind keep one width and even spacing whatever their number: three tier targets do not stretch to fill a row, and a column of owned currencies is evenly spaced.
 - Text from game data, such as an event title, keeps its own line breaks. Do not split a short title onto two lines to fill a layout.
@@ -237,7 +238,10 @@ UI copy uses these terms for these game and product concepts. Add a term here on
   - `ease-v2-exit` `cubic-bezier(0.3, 0, 1, 1)`: leaving (accelerate).
   - `ease-v2-standard` `cubic-bezier(0.2, 0, 0, 1)`: movement within the screen.
 - Exit is one step shorter than enter. For example, a popover enters with `base` and `enter`, and exits with `fast` and `exit`.
-- Animate only `transform` and `opacity`.
+- Animate only `transform` and `opacity`, except hover and press feedback, which may also transition colors and filter.
+- Every pressable element (button, link, row, chip, thumbnail) changes on hover and press over `duration-v2-fast` with `ease-v2-standard`. Hover never moves or resizes an element: no scale and no translate.
+- An element whose look is an image or a solid fill (a thumbnail, a `primary` or `danger` button) lowers its opacity on hover. An unfilled control or row keeps its hover fill (`bg-v2-hover`, `bg-v2-filled-hover`) or text color change.
+- Put the `v2-interaction-transition` utility (defined in `tailwind.css`) on the element whose style changes: the element itself, a `group-hover` child, or the pseudo-element that carries the hover fill (`before:v2-interaction-transition`). A link that underlines on hover keeps the underline and fades its color in (`underline decoration-transparent hover:decoration-current`), because an underline cannot fade in on its own.
 - Put `transform` animation inside `motion-safe:`.
 - Under `prefers-reduced-motion: reduce`, the v2 base and slow durations become 120ms, and only fades remain. The 1.x `mllg-*` keyframes and view transitions are unchanged and are not overridden.
 - Motion belongs to the 2.0 components, not to pages.
@@ -273,6 +277,7 @@ On those files, the guard rejects:
 - imports of 1.x components, resolved by path, including relative paths that reach the same directories;
 - Tailwind color utilities that are not `v2-` tokens: palette hues such as `red-500`, `white`, `black`, 1.x semantic colors such as `bg-card` and `text-muted-foreground`, and arbitrary color values;
 - `duration-<number>` and arbitrary durations, `ease-linear`, `ease-in`, `ease-out`, `ease-in-out`, and arbitrary easings;
+- hover variants of `scale`, `translate`, `rotate`, and `skew`;
 - literal colors in CSS or inline styles (`#hex`, `oklch(`, `rgb(`, `hsl(`), literal millisecond or second durations, and `cubic-bezier(`.
 - 1.x color variables, including through `var()` or the `prefix-(--name)` shorthand (for example `bg-[var(--card)]`, `bg-(--card)`, or `color: var(--muted-foreground)`). Only `v2-` tokens and non-color variables are allowed.
 

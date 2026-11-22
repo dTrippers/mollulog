@@ -36,14 +36,14 @@ export function ScreenNavigationItemRenderer({
   const className =
     orientation === "horizontal"
       ? cn(
-          "relative flex min-h-v2-row-min shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm whitespace-nowrap hover:bg-v2-hover",
+          "relative flex min-h-v2-row-min shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm whitespace-nowrap hover:bg-v2-hover v2-interaction-transition",
           item.active ? "v2-tab-active font-semibold text-v2-fg" : "font-medium text-v2-fg-secondary",
           item.hiddenStacked && "v2-hidden-stacked",
           item.disabled && "cursor-not-allowed text-v2-fg-disabled hover:bg-transparent",
           v2FocusRing,
         )
       : cn(
-          "relative flex min-h-v2-row-min items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-sm transition-colors duration-v2-fast",
+          "relative flex min-h-v2-row-min items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-sm v2-interaction-transition",
           item.active ? "bg-v2-inset font-semibold text-v2-fg" : "font-medium text-v2-fg-secondary",
           item.hiddenStacked && "v2-hidden-stacked",
           item.disabled

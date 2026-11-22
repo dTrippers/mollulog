@@ -46,7 +46,7 @@ export default function StudentGradingTimeline({
                 {isCurrentUser ? (
                   <span className="block truncate text-sm leading-[1.43] font-medium text-v2-fg">나의 평가</span>
                 ) : (
-                  <Link to={`/@${grading.user.username}`} className="block truncate text-sm leading-[1.43] font-medium text-v2-fg hover:underline">
+                  <Link to={`/@${grading.user.username}`} className="block truncate text-sm leading-[1.43] font-medium text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition">
                     @{grading.user.username}
                   </Link>
                 )}

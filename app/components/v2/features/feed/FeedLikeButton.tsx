@@ -57,8 +57,8 @@ export function FeedLikeButton({
       aria-label={`좋아요 ${likeCount}개`}
       aria-pressed={liked}
       className={cn(
-        "-ml-1.5 inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-[0.8125rem] tabular-nums hover:bg-v2-hover",
-        liked ? "text-v2-fg" : "text-v2-fg-tertiary hover:text-v2-fg",
+        "-ml-1.5 inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-[0.8125rem] tabular-nums hover:bg-v2-hover v2-interaction-transition",
+        liked ? "text-v2-fg" : "text-v2-fg-tertiary hover:text-v2-fg v2-interaction-transition",
         v2FocusRing,
       )}
     >

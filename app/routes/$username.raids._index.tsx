@@ -352,7 +352,7 @@ function RaidRecordRow({
       <Link
         to={to}
         aria-labelledby={titleId}
-        className={cn("absolute inset-0 z-[1] rounded-lg hover:bg-v2-hover", v2FocusRing)}
+        className={cn("absolute inset-0 z-[1] rounded-lg hover:bg-v2-hover v2-interaction-transition", v2FocusRing)}
       />
       <div className="pointer-events-none relative z-[2] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3.5 @min-[40rem]:grid-cols-[minmax(0,1fr)_10rem_11rem_1.25rem]">
         <div className="col-span-2 flex min-w-0 flex-col gap-0.5 @min-[40rem]:col-span-1">

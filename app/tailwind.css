@@ -163,6 +163,14 @@
   color: var(--v2-inverse-fg);
 }
 
+/* Hover and press feedback on a 2.0 pressable element: color, fill, and opacity change over the fast duration. It never
+   animates size or position. */
+@utility v2-interaction-transition {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, filter;
+  transition-duration: var(--transition-duration-v2-fast);
+  transition-timing-function: var(--ease-v2-standard);
+}
+
 @utility popover-surface {
   @apply floating-surface rounded-lg border border-border bg-floating/90 text-floating-foreground shadow-lg shadow-black/10 backdrop-blur-sm dark:bg-floating/80 dark:shadow-black/30;
 }
@@ -604,6 +612,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-viz-tier-9: var(--v2-viz-tier-9);
   --background-image-v2-ai-gradient: linear-gradient(135deg, var(--v2-ai-from), var(--v2-ai-to));
   --shadow-v2-ai-glow: 0 0 1.25rem var(--v2-ai-glow);
+  --shadow-v2-popover: 0 10px 15px -3px var(--v2-popover-shadow), 0 4px 6px -4px var(--v2-popover-shadow);
   --animate-v2-ai-working: v2-ai-working 2s ease-in-out infinite;
 }
 
@@ -697,6 +706,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-inverse-danger-subtle: oklch(0.33 0.09 25);
   --v2-inverse-danger-solid: oklch(0.586 0.201 26.79);
   --v2-popover-divider: rgb(0 0 0 / 18%);
+  --v2-popover-shadow: rgb(0 0 0 / 10%);
   --v2-backdrop: oklch(0 0 0 / 30%);
   --v2-highlight: color-mix(in srgb, var(--v2-accent) 16%, transparent);
   --v2-ai-from: oklch(0.623 0.214 259.815);
@@ -814,6 +824,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-inverse-danger-subtle: oklch(0.885 0.05 30);
   --v2-inverse-danger-solid: oklch(0.552 0.205 24.53);
   --v2-popover-divider: rgb(255 255 255 / 22%);
+  --v2-popover-shadow: rgb(0 0 0 / 40%);
   --v2-backdrop: oklch(0 0 0 / 55%);
   --v2-highlight: color-mix(in srgb, var(--v2-accent) 20%, transparent);
   --v2-ai-from: oklch(0.707 0.165 254.624);
@@ -1315,21 +1326,6 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   scroll-margin-top: 1rem;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .v2-featured-banner:hover .v2-featured-cue > svg {
-    animation: v2-featured-cue-nudge calc(var(--transition-duration-v2-slow) * 2) var(--ease-v2-enter) 1;
-  }
-}
-
-@keyframes v2-featured-cue-nudge {
-  0%,
-  100% {
-    transform: none;
-  }
-  40% {
-    transform: translateY(2px);
-  }
-}
 
 @keyframes v2-panel-in {
   from {

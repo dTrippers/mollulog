@@ -269,6 +269,8 @@ const literalDuration = /\b\d+(?:\.\d+)?(?:ms|s)\b/;
 const cubicBezier = /cubic-bezier\(/;
 const utilityDuration = /(?<![\w-])duration-(?:\d|\[)/;
 const utilityEase = /(?<![\w-])ease-(?:linear|in|out|in-out|\[)/;
+// Hover feedback never moves or resizes an element (Motion in design-system-v2.md).
+const hoverMotion = /(?:^|[\s"'`:])(?:group-|peer-)?hover:(?:[\w-]+:)*-?(?:scale|translate|rotate|skew)-/;
 const importSpecifier = /(?:\bfrom\s+|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)["']([^"']+)["']/g;
 // 1.x color variables (semantic names, `--color-<hue>-<shade>`, white, black) referenced through var().
 // Also matches the Tailwind 4 shorthand `prefix-(--name)` and `prefix-(color:--name)`.
@@ -306,7 +308,7 @@ function hasStyleViolation(line: string): boolean {
   if (colorLiteral.test(line) || literalDuration.test(line) || cubicBezier.test(line)) {
     return true;
   }
-  if (colorVariable.test(line) || utilityDuration.test(line) || utilityEase.test(line)) {
+  if (colorVariable.test(line) || utilityDuration.test(line) || utilityEase.test(line) || hoverMotion.test(line)) {
     return true;
   }
   return [...line.matchAll(utilityValue)].some(([, value]) => isForbiddenColor(value));
@@ -378,6 +380,10 @@ const styleViolationFixtures: [string, string][] = [
   ["components/v2/features/Fixture.tsx", `<p className="text-[color:rebeccapurple]" />`],
   ["components/v2/features/Fixture.tsx", `<div className="bg-(--card)" />`],
   ["components/v2/features/Fixture.tsx", `<div className="bg-(color:--muted)" />`],
+  ["components/v2/features/Fixture.tsx", `<a className="hover:scale-105" />`],
+  ["components/v2/features/Fixture.tsx", `<a className="[@media(hover:hover)_and_(pointer:fine)]:hover:scale-105" />`],
+  ["components/v2/features/Fixture.tsx", `<svg className="group-hover:translate-x-0.5" />`],
+  ["routes/fixture.tsx", `<a className="hover:-translate-y-0.5" />`],
 ];
 
 const allowedFixtures: [string, string][] = [
@@ -400,10 +406,12 @@ const allowedFixtures: [string, string][] = [
   ["components/v2/features/Fixture.tsx", `<p className="text-[13px] border-[1.5px]" />`],
   ["components/v2/features/Fixture.tsx", `<div className="bg-[url(/a.png)]" />`],
   ["components/v2/features/Fixture.tsx", `<div className="border-[thin] bg-[transparent]" />`],
+  ["components/v2/features/Fixture.tsx", `<a className="hover:opacity-80 v2-interaction-transition" />`],
+  ["components/v2/features/Fixture.tsx", `<svg className="motion-safe:transition-transform group-open:rotate-180" />`],
 ];
 
 describe("design system 2.0 source guard", () => {
-  it("keeps 2.0 files off 1.x components and non-v2 colors, durations, and easings", () => {
+  it("keeps 2.0 files off 1.x components, non-v2 colors, durations, and easings, and hover motion", () => {
     expect(findGuardViolations()).toEqual([]);
   });
 

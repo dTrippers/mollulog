@@ -470,7 +470,7 @@ export default function StudentDetail() {
               <section>
                 <div className="mb-2 flex min-h-7 items-center justify-between gap-2">
                   <h2 className="text-base leading-[1.4] font-semibold text-v2-fg">학생 평가 요약</h2>
-                  <Link to={`/students/${student.uid}/gradings`} className="inline-flex min-h-7 shrink-0 items-center rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg">
+                  <Link to={`/students/${student.uid}/gradings`} className="inline-flex min-h-7 shrink-0 items-center rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition">
                     전체 평가 보기
                   </Link>
                 </div>
@@ -495,7 +495,7 @@ export default function StudentDetail() {
           <Link
             to={`/students/${student.uid}/statistics`}
             {...getV2LinkTransitionProps("crossfade")}
-            className="inline-flex min-h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg"
+            className="inline-flex min-h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition"
           >
             상세 통계 보기<ArrowRightIcon className="size-3.5" aria-hidden="true" />
           </Link>

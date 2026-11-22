@@ -84,7 +84,7 @@ export function ShopSection({
             aria-controls={bodyId}
             onClick={() => setExpanded((value) => !value)}
             className={cn(
-              "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-md px-v2-row-x text-left hover:bg-v2-hover",
+              "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-md px-v2-row-x text-left hover:bg-v2-hover v2-interaction-transition",
               v2FocusRing,
             )}
           >

@@ -73,7 +73,7 @@ function usePickupCountHelp() {
       aria-expanded={openFrom === ref}
       onClick={() => setOpenFrom((prev) => (prev === ref ? null : ref))}
       className={cn(
-        "size-[1.125rem] shrink-0 cursor-pointer items-center justify-center rounded-sm bg-v2-inset text-v2-fg-tertiary hover:bg-v2-filled-hover",
+        "size-[1.125rem] shrink-0 cursor-pointer items-center justify-center rounded-sm bg-v2-inset text-v2-fg-tertiary hover:bg-v2-filled-hover v2-interaction-transition",
         v2FocusRing,
         className,
       )}

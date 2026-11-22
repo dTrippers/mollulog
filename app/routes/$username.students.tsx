@@ -913,7 +913,7 @@ export default function UserPage() {
                 label="필터 및 정렬"
                 onClose={() => setFilterPopoverOpen(false)}
                 returnFocusRef={filterTriggerRef}
-                className="max-h-[70dvh] w-80 overflow-y-auto"
+                className="max-h-[min(70dvh,var(--v2-popover-room,100dvh))] w-80 overflow-y-auto"
               >
                 <StudentsFilterBody state={filter} onChange={setFilter} />
               </Popover>
@@ -1220,8 +1220,8 @@ function ViewSwitch({
           onClick={() => onChange(key)}
           className={cn(
             "inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-md px-3 text-xs font-medium",
-            view === key ? "bg-v2-surface text-v2-fg shadow-sm" : "text-v2-fg-secondary hover:bg-v2-hover",
-            "disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-transparent",
+            view === key ? "bg-v2-surface text-v2-fg shadow-sm" : "text-v2-fg-secondary hover:bg-v2-hover v2-interaction-transition",
+            "disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-transparent v2-interaction-transition",
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
           )}
         >

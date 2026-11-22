@@ -47,6 +47,14 @@ function isRetryableActionError(actionData: GrowthActionResult | undefined): boo
   return Boolean(actionData && "error" in actionData && actionData.retryable === true);
 }
 
+// A save scheduled before the Sensei leaves the page still runs after navigation. Without an explicit
+// action, React Router would post it to whichever page is current by then.
+const GROWTH_ACTION_SUBMIT_OPTIONS = {
+  action: "/utils/growth/students",
+  method: "post",
+  encType: "application/json",
+} as const;
+
 const fieldDefinitions = [
   { key: "level", targetKey: "targetLevel", label: "학생 Lv", min: 1, max: 90, group: null },
   {
@@ -575,7 +583,7 @@ function GrowthRow({
     } else {
       Object.assign(payload, next.values, { targetTier: next.targetTier });
     }
-    fetcher.submit(payload, { method: "post", encType: "application/json" });
+    fetcher.submit(payload, GROWTH_ACTION_SUBMIT_OPTIONS);
   };
 
   const submitRelationship = (submitted: RelationshipSubmission) => {
@@ -605,7 +613,7 @@ function GrowthRow({
       relationshipSubmittedRef.current = null;
       return;
     }
-    relationshipFetcher.submit(payload, { method: "post", encType: "application/json" });
+    relationshipFetcher.submit(payload, GROWTH_ACTION_SUBMIT_OPTIONS);
   };
 
   const submitTier = (tier: number) => {
@@ -614,7 +622,7 @@ function GrowthRow({
     tierSubmittedRef.current = { id, tier };
     tierFetcher.submit(
       { _intent: "tier", _submissionId: id, studentUid: student.uid, tier },
-      { method: "post", encType: "application/json" },
+      GROWTH_ACTION_SUBMIT_OPTIONS,
     );
   };
 
@@ -624,7 +632,7 @@ function GrowthRow({
     enrollSubmittedRef.current = { id };
     enrollFetcher.submit(
       { _intent: "enroll", _submissionId: id, studentUid: student.uid },
-      { method: "post", encType: "application/json" },
+      GROWTH_ACTION_SUBMIT_OPTIONS,
     );
   };
 
@@ -634,7 +642,7 @@ function GrowthRow({
     removeSubmittedRef.current = { id };
     removeFetcher.submit(
       { _intent: "remove", _submissionId: id, studentUid: student.uid },
-      { method: "post", encType: "application/json" },
+      GROWTH_ACTION_SUBMIT_OPTIONS,
     );
   };
   const requestResourceRequirements = useCallback(() => {
@@ -643,7 +651,7 @@ function GrowthRow({
     resourceRequirementsSubmittedRef.current = { id: submissionId };
     resourceRequirementsFetcher.submit(
       { _intent: "resourceRequirements", _submissionId: submissionId, studentUid: student.uid },
-      { method: "post", encType: "application/json" },
+      GROWTH_ACTION_SUBMIT_OPTIONS,
     );
   }, [resourceRequirementsFetcher, student.uid]);
 
@@ -1569,7 +1577,7 @@ function AddStudentControl({
           const studentUid = Array.isArray(value) ? value[0] : value;
           if (!studentUid) return;
 
-          fetcher.submit({ _intent: "add", studentUid }, { method: "post", encType: "application/json" });
+          fetcher.submit({ _intent: "add", studentUid }, GROWTH_ACTION_SUBMIT_OPTIONS);
           setSelectKey((key) => key + 1);
         }}
       />

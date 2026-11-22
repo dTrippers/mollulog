@@ -83,7 +83,7 @@ function StudentsTile({
     <Link
       to={`/@${username}/students`}
       aria-label={`모집한 학생 ${recruitedCount}명 보기`}
-      className={cn(tileClassName, "transition-colors hover:bg-v2-hover")}
+      className={cn(tileClassName, "hover:bg-v2-hover v2-interaction-transition")}
     >
       <TileHeading>모집한 학생</TileHeading>
       <p className="text-2xl leading-[1.2] font-bold text-v2-fg tabular-nums">
@@ -163,7 +163,7 @@ function RecordsTile({ username, records }: { username: string; records: Profile
 
   const { summary } = records;
   return (
-    <Link to={`/@${username}/pickups`} className={cn(tileClassName, "transition-colors hover:bg-v2-hover")}>
+    <Link to={`/@${username}/pickups`} className={cn(tileClassName, "hover:bg-v2-hover v2-interaction-transition")}>
       <TileHeading>모집 기록</TileHeading>
       {summary.recordCount === 0 ? (
         <p className="text-sm text-v2-fg-secondary">아직 모집 기록이 없어요</p>
