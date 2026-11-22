@@ -703,7 +703,9 @@ function StackedStudentCard({
         <div className="mt-2 flex flex-col gap-1.5">
           {(["current", "target"] as const).map((side) => (
             <div key={side}>
-              <div className="flex items-start gap-2">
+              {/* On a narrow phone the fields keep their width and 모두 최대 moves to the next line, so it never
+                  overlaps a field. */}
+              <div className="flex flex-wrap items-start gap-x-2 gap-y-1.5">
                 <span
                   className="shrink-0 text-xs leading-7 text-v2-fg-secondary"
                   style={{ width: `${STACKED_LABEL_COLUMN_REM}rem` }}
@@ -715,7 +717,7 @@ function StackedStudentCard({
                     <EnrollPrompt student={student} row={row} />
                   </div>
                 ) : (
-                  <div className="flex min-w-0 flex-1 items-start gap-2">
+                  <div className="flex shrink-0 items-start gap-2">
                     {groups.map((group) => (
                       <div key={group.key}>
                         <FieldBox group={group} side={side} context={context} />
