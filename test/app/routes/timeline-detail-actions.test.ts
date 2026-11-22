@@ -48,7 +48,7 @@ describe("walkthrough timeline detail delete action", () => {
     );
 
     expect(response).toMatchObject({
-      data: { error: "타임라인을 삭제하지 못했어요. 잠시 후 다시 시도해주세요." },
+      data: { error: "타임라인을 삭제하지 못했어요." },
       init: { status: 500 },
     });
     expect(JSON.stringify(response)).not.toContain("password=secret");

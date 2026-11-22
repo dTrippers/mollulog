@@ -14,11 +14,17 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 // The viewer window keeps the 1.x timeline viewer until MLLG-73 redesigns it (see v2GuardExceptions).
-import { flattenTimelineParties, useWalkthroughViewerWindow } from "~/components/features/walkthrough-timeline/useWalkthroughViewerWindow";
+import {
+  flattenTimelineParties,
+  useWalkthroughViewerWindow,
+} from "~/components/features/walkthrough-timeline/useWalkthroughViewerWindow";
 import { FeedbackSheet } from "~/components/v2/features/feedback/FeedbackSheet";
 import { GuideBodyContent } from "~/components/v2/features/walkthroughs/GuideBodyContent";
 import type { GuideMentionContext } from "~/components/v2/features/walkthroughs/GuideMentionChip";
-import { WalkthroughBossBanner, WalkthroughConditions } from "~/components/v2/features/walkthroughs/WalkthroughConditions";
+import {
+  WalkthroughBossBanner,
+  WalkthroughConditions,
+} from "~/components/v2/features/walkthroughs/WalkthroughConditions";
 import {
   WalkthroughLikeButton,
   WalkthroughShareButton,
@@ -120,12 +126,10 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     });
   const latestBossSchedule = bossSchedules[0] ?? null;
   const bossName = latestBossSchedule?.raidBoss.name ?? null;
-  const referencedStudents = [...walkthroughReferencedStudentUids(timeline.document, timeline.body)].flatMap(
-    (uid) => {
-      const student = students[uid];
-      return student ? [toWalkthroughRouteStudent(student)] : [];
-    },
-  );
+  const referencedStudents = [...walkthroughReferencedStudentUids(timeline.document, timeline.body)].flatMap((uid) => {
+    const student = students[uid];
+    return student ? [toWalkthroughRouteStudent(student)] : [];
+  });
   return {
     timeline,
     engagement: engagementByUid[timeline.uid] ?? { liked: false, likeCount: 0 },
@@ -188,7 +192,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
         operation: "delete",
         userId: currentUser.id,
       });
-      return data<ActionData>({ error: "타임라인을 삭제하지 못했어요. 잠시 후 다시 시도해주세요." }, { status: 500 });
+      return data<ActionData>({ error: "타임라인을 삭제하지 못했어요." }, { status: 500 });
     }
   }
   throw routeError(400, "timeline.invalid_action", "지원하지 않는 요청이에요.");
@@ -227,7 +231,10 @@ export default function WalkthroughTimelineDetailPage() {
     [students],
   );
   const viewerStudents = useMemo(
-    () => Object.fromEntries(students.map((student) => [student.uid, { name: student.name, equipments: student.equipments }])),
+    () =>
+      Object.fromEntries(
+        students.map((student) => [student.uid, { name: student.name, equipments: student.equipments }]),
+      ),
     [students],
   );
   const parties = useMemo(
@@ -274,8 +281,7 @@ export default function WalkthroughTimelineDetailPage() {
           v2FocusRing,
         )}
       >
-        <ArrowTopRightOnSquareIcon className="size-4" aria-hidden="true" />
-        새 창에서 열기
+        <ArrowTopRightOnSquareIcon className="size-4" aria-hidden="true" />새 창에서 열기
       </a>
       <Button
         variant="primary"
@@ -285,7 +291,24 @@ export default function WalkthroughTimelineDetailPage() {
         <ArrowTopRightOnSquareIcon className="size-4" aria-hidden="true" />
         {viewer.mode ? "뷰어로 돌아가기" : "새 창에서 열기"}
       </Button>
-      {viewer.error ? <StatusNotice tone="danger">{viewer.error}</StatusNotice> : null}
+      {viewer.error ? (
+        <StatusNotice
+          tone="danger"
+          action={
+            // The plain viewer page is the way in when the browser refuses a picture-in-picture or popup window.
+            <a
+              href={viewerUrl}
+              target="_blank"
+              rel="noopener"
+              className={cn("text-sm font-medium text-v2-link hover:underline", v2FocusRing)}
+            >
+              일반 뷰어 열기
+            </a>
+          }
+        >
+          {viewer.error}
+        </StatusNotice>
+      ) : null}
     </>
   );
 

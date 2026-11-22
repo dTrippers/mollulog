@@ -142,7 +142,9 @@ export function WalkthroughPartyEditorCard({
           slotScrimLabel={(unit) =>
             unit.snapshot.tier !== undefined ? <TierBandLabel tier={unit.snapshot.tier} /> : undefined
           }
-          slotScrimAriaLabel={(unit) => (unit.snapshot.tier !== undefined ? tierMeaning(unit.snapshot.tier) : undefined)}
+          slotScrimAriaLabel={(unit) =>
+            unit.snapshot.tier !== undefined ? tierMeaning(unit.snapshot.tier) : undefined
+          }
           slotBadge={(unit) => {
             const order = startingOrder(unit.studentUid);
             return order !== null ? <StartingSkillBadge order={order} /> : null;

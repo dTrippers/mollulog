@@ -28,7 +28,15 @@ describe("parseGuideBody", () => {
       },
       {
         type: "bulletList",
-        content: [{ type: "listItem", content: [paragraph("항목"), { type: "orderedList", content: [{ type: "listItem", content: [paragraph("하위")] }] }] }],
+        content: [
+          {
+            type: "listItem",
+            content: [
+              paragraph("항목"),
+              { type: "orderedList", content: [{ type: "listItem", content: [paragraph("하위")] }] },
+            ],
+          },
+        ],
       },
       { type: "orderedList", attrs: { start: 3 }, content: [{ type: "listItem", content: [paragraph("셋")] }] },
       { type: "horizontalRule" },
@@ -72,24 +80,37 @@ describe("parseGuideBody", () => {
 
   it.each([
     ["an unknown node", doc({ type: "codeBlock", content: [{ type: "text", text: "x" }] })],
-    ["an unknown mark", doc({ type: "paragraph", content: [{ type: "text", text: "x", marks: [{ type: "italic" }] }] })],
+    [
+      "an unknown mark",
+      doc({ type: "paragraph", content: [{ type: "text", text: "x", marks: [{ type: "italic" }] }] }),
+    ],
     ["a heading level other than 2", doc({ type: "heading", attrs: { level: 1 }, content: [] })],
-    ["an unknown mention kind", doc({ type: "paragraph", content: [{ type: "mention", attrs: { kind: "user", id: "1" } }] })],
-    ["a mention without an id", doc({ type: "paragraph", content: [{ type: "mention", attrs: { kind: "party", id: "" } }] })],
+    [
+      "an unknown mention kind",
+      doc({ type: "paragraph", content: [{ type: "mention", attrs: { kind: "user", id: "1" } }] }),
+    ],
+    [
+      "a mention without an id",
+      doc({ type: "paragraph", content: [{ type: "mention", attrs: { kind: "party", id: "" } }] }),
+    ],
     ["an empty list", doc({ type: "bulletList", content: [] })],
     ["a document of another type", { type: "paragraph", content: [] }],
   ])("rejects %s", (_name, body) => {
     expect(() => parseGuideBody(body)).toThrow(InvalidGuideBodyError);
   });
 
-  it.each(["javascript:alert(1)", "data:text/html,x", "/relative", "mailto:a@example.com"])(
-    "rejects the link %s",
-    (href) => {
-      expect(() =>
-        parseGuideBody(doc({ type: "paragraph", content: [{ type: "text", text: "x", marks: [{ type: "link", attrs: { href } }] }] })),
-      ).toThrow("본문의 링크 주소를 확인해 주세요.");
-    },
-  );
+  it.each([
+    "javascript:alert(1)",
+    "data:text/html,x",
+    "/relative",
+    "mailto:a@example.com",
+  ])("rejects the link %s", (href) => {
+    expect(() =>
+      parseGuideBody(
+        doc({ type: "paragraph", content: [{ type: "text", text: "x", marks: [{ type: "link", attrs: { href } }] }] }),
+      ),
+    ).toThrow("본문의 링크 주소를 확인해 주세요.");
+  });
 
   it("rejects a video id that is not a YouTube id", () => {
     expect(() => parseGuideBody(doc({ type: "youtube", attrs: { videoId: "../embed" } }))).toThrow(
@@ -100,9 +121,9 @@ describe("parseGuideBody", () => {
   it("limits the text length, counting a mention or a video as one character", () => {
     const limit = GUIDE_BODY_LIMITS.characters;
     expect(parseGuideBody(doc(paragraph("가".repeat(limit))))).not.toBeNull();
-    expect(() => parseGuideBody(doc(paragraph("가".repeat(limit)), { type: "youtube", attrs: { videoId: "dQw4w9WgXcQ" } }))).toThrow(
-      "본문은 20,000자까지 쓸 수 있어요.",
-    );
+    expect(() =>
+      parseGuideBody(doc(paragraph("가".repeat(limit)), { type: "youtube", attrs: { videoId: "dQw4w9WgXcQ" } })),
+    ).toThrow("본문은 20,000자까지 쓸 수 있어요.");
   });
 
   it("limits list depth", () => {

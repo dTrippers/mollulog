@@ -121,10 +121,10 @@ export function WalkthroughPartyThumbs({
     );
   };
   return (
-    <div role="group" aria-label={label} className="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-3 sm:gap-x-4">
+    <fieldset aria-label={label} className="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-3 sm:gap-x-4">
       {strikers.length > 0 ? <ul className="flex flex-wrap gap-1.5 sm:gap-2">{strikers.map(renderThumb)}</ul> : null}
       {specials.length > 0 ? <ul className="flex flex-wrap gap-1.5 sm:gap-2">{specials.map(renderThumb)}</ul> : null}
-    </div>
+    </fieldset>
   );
 }
 
@@ -146,11 +146,7 @@ export function PartyFaceStack({
     <span aria-hidden="true" className="inline-flex shrink-0 items-center">
       {uids.map((uid, index) => (
         <span key={uid} className={cn("inline-flex rounded-full", index > 0 && (size === "xs" ? "-ml-1.5" : "-ml-2"))}>
-          <RoundStudentImage
-            studentUid={uid}
-            size="sm"
-            className={size === "xs" ? "size-[1.125rem]" : undefined}
-          />
+          <RoundStudentImage studentUid={uid} size="sm" className={size === "xs" ? "size-[1.125rem]" : undefined} />
         </span>
       ))}
     </span>
@@ -213,7 +209,11 @@ export function TimelineActionSequence({
           <span key={index} className="inline-flex min-w-0 items-center gap-1.5">
             {index > 0 ? <ChevronRightIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" /> : null}
             {action.studentUid ? (
-              <span role="img" aria-label={actionAccessibleName(action, studentsByUid)} className="inline-flex items-center gap-1">
+              <span
+                role="img"
+                aria-label={actionAccessibleName(action, studentsByUid)}
+                className="inline-flex items-center gap-1"
+              >
                 <span
                   className={cn(
                     "inline-flex items-center",
@@ -289,7 +289,9 @@ export function WalkthroughTimelineSteps({
             </span>
             <TimelineActionSequence actions={step.actions} studentsByUid={studentsByUid} />
             {step.note?.trim() ? (
-              <span className="col-start-2 text-xs break-words text-v2-fg-secondary sm:col-start-auto">{step.note}</span>
+              <span className="col-start-2 text-xs break-words text-v2-fg-secondary sm:col-start-auto">
+                {step.note}
+              </span>
             ) : (
               <span className="hidden sm:block" />
             )}

@@ -41,7 +41,13 @@ const chipClassName =
 // The look of a mention, shared by the body on the detail page and the editor. A party is its first faces and name on
 // the accent tint; a student is one face and the name on the inset fill; a target that no longer exists is its own
 // muted state with no faces.
-export function GuideMentionChipFace({ target, expanded = false }: { target: WalkthroughMentionTarget; expanded?: boolean }) {
+export function GuideMentionChipFace({
+  target,
+  expanded = false,
+}: {
+  target: WalkthroughMentionTarget;
+  expanded?: boolean;
+}) {
   const label = walkthroughMentionTargetLabel(target);
   if (target.kind === "missing") {
     return <span className={cn(chipClassName, "bg-v2-inset pl-2 font-medium text-v2-fg-tertiary")}>{label}</span>;
@@ -61,7 +67,9 @@ export function GuideMentionChipFace({ target, expanded = false }: { target: Wal
     );
   }
   return (
-    <span className={cn(chipClassName, "pl-0.5", expanded ? "bg-v2-filled-hover text-v2-fg" : "bg-v2-inset text-v2-fg")}>
+    <span
+      className={cn(chipClassName, "pl-0.5", expanded ? "bg-v2-filled-hover text-v2-fg" : "bg-v2-inset text-v2-fg")}
+    >
       <RoundStudentImage studentUid={target.studentUid} size="sm" className="size-4" />
       <span>{label}</span>
     </span>
@@ -97,7 +105,13 @@ export function GuideMentionChip({
       >
         <GuideMentionChipFace target={target} expanded={open} />
       </button>
-      <Popover open={open} label={label} onClose={() => setOpen(false)} returnFocusRef={triggerRef} className="w-auto max-w-[min(26rem,calc(100vw-2rem))]">
+      <Popover
+        open={open}
+        label={label}
+        onClose={() => setOpen(false)}
+        returnFocusRef={triggerRef}
+        className="w-auto max-w-[min(26rem,calc(100vw-2rem))]"
+      >
         <div id={panelId}>
           {target.kind === "party" ? (
             <PartyPreview target={target} context={context} onNavigate={() => setOpen(false)} />

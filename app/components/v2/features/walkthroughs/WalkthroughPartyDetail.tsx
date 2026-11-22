@@ -14,7 +14,9 @@ export function walkthroughPartyAnchorId(party: Pick<WalkthroughParty, "uid">): 
 
 function hasGrowthDetails(party: WalkthroughParty): boolean {
   return party.units.some(
-    (unit) => unit.studentUid && Object.entries(unit.snapshot ?? {}).some(([field, value]) => field !== "tier" && value !== undefined),
+    (unit) =>
+      unit.studentUid &&
+      Object.entries(unit.snapshot ?? {}).some(([field, value]) => field !== "tier" && value !== undefined),
   );
 }
 
@@ -38,8 +40,8 @@ export function WalkthroughPartyDetailCard({
   const growthId = useId();
   const timelineId = useId();
   const title = walkthroughPartyLabel(partyIndex);
-  const filledUnits = party.units.filter(
-    (unit): unit is typeof unit & { studentUid: string } => Boolean(unit.studentUid),
+  const filledUnits = party.units.filter((unit): unit is typeof unit & { studentUid: string } =>
+    Boolean(unit.studentUid),
   );
   return (
     <section
@@ -50,7 +52,12 @@ export function WalkthroughPartyDetailCard({
       <h3 id={`${timelineId}-title`} className="text-sm font-semibold text-v2-fg">
         {title}
       </h3>
-      <WalkthroughPartyThumbs party={party} partySize={partySize} studentsByUid={studentsByUid} label={`${title} 편성`} />
+      <WalkthroughPartyThumbs
+        party={party}
+        partySize={partySize}
+        studentsByUid={studentsByUid}
+        label={`${title} 편성`}
+      />
       {hasGrowthDetails(party) ? (
         <div className="-mt-1 flex min-w-0 flex-col gap-2">
           <button
@@ -65,7 +72,7 @@ export function WalkthroughPartyDetailCard({
           >
             성장도 자세히 보기
             <ChevronDownIcon
-              className={cn("size-4 v2-interaction-transition", growthOpen && "rotate-180")}
+              className={cn("size-4 motion-safe:transition-transform duration-v2-base ease-v2-standard", growthOpen && "rotate-180")}
               aria-hidden="true"
             />
           </button>
@@ -97,7 +104,10 @@ export function WalkthroughPartyDetailCard({
               aria-expanded={timelineOpen}
               aria-controls={timelineId}
               onClick={() => setTimelineOpen((open) => !open)}
-              className={cn("ml-auto [&_svg]:v2-interaction-transition", timelineOpen && "[&_svg]:rotate-180")}
+              className={cn(
+                "ml-auto [&_svg]:duration-v2-base [&_svg]:ease-v2-standard [&_svg]:motion-safe:transition-transform",
+                timelineOpen && "[&_svg]:rotate-180",
+              )}
             />
           </div>
           <div id={timelineId} hidden={!timelineOpen}>

@@ -79,7 +79,11 @@ export function walkthroughUnitsFromSlots(slots: readonly (RaidFormUnit | null)[
   slots.forEach((unit, slot) => {
     if (!unit) return;
     const snapshot = toSnapshot(unit.snapshot);
-    units.push(Object.keys(snapshot).length > 0 ? { slot, studentUid: unit.studentUid, snapshot } : { slot, studentUid: unit.studentUid });
+    units.push(
+      Object.keys(snapshot).length > 0
+        ? { slot, studentUid: unit.studentUid, snapshot }
+        : { slot, studentUid: unit.studentUid },
+    );
     if (unit.baseline) baselines[unit.studentUid] = unit.baseline;
   });
   return { units, baselines };

@@ -168,6 +168,7 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     const usingFiles = tsxFiles.filter((file) => motionUtility.test(readFileSync(join(componentRoot, file), "utf8")));
     expect(usingFiles.sort()).toEqual([
       "features/students/FilterGroupDisclosure.tsx",
+      "features/walkthroughs/WalkthroughPartyDetail.tsx",
       "layout/PanelSheet.tsx",
       "primitives/Popover.tsx",
       "primitives/Select.tsx",

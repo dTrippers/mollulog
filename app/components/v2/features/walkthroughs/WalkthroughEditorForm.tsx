@@ -1,12 +1,24 @@
-import { ArrowUturnLeftIcon, ArrowUturnRightIcon, ChatBubbleOvalLeftIcon, ExclamationCircleIcon, PlusIcon } from "@heroicons/react/16/solid";
-import { Component, lazy, type ReactNode, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { useBlocker, useNavigation, useSubmit } from "react-router";
 import {
-  type GuideBody,
-  InvalidGuideBodyError,
-  isGuideBodyEmpty,
-  parseGuideBody,
-} from "~/domain/guide-body";
+  ArrowUturnLeftIcon,
+  ArrowUturnRightIcon,
+  ChatBubbleOvalLeftIcon,
+  ExclamationCircleIcon,
+  PlusIcon,
+} from "@heroicons/react/16/solid";
+import {
+  Component,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useBlocker, useNavigation, useSubmit } from "react-router";
+import { type GuideBody, InvalidGuideBodyError, isGuideBodyEmpty, parseGuideBody } from "~/domain/guide-body";
 import type { RaidRecordSnapshot } from "~/domain/raid-record";
 import {
   isWalkthroughTimelineVisibility,
@@ -80,7 +92,9 @@ const VISIBILITY_OPTIONS: { value: WalkthroughTimelineVisibility; label: string 
 function plainTextBody(text: string): GuideBody | null {
   const body: GuideBody = {
     type: "doc",
-    content: text.split("\n").map((line) => (line ? { type: "paragraph", content: [{ type: "text", text: line }] } : { type: "paragraph" })),
+    content: text
+      .split("\n")
+      .map((line) => (line ? { type: "paragraph", content: [{ type: "text", text: line }] } : { type: "paragraph" })),
   };
   return isGuideBodyEmpty(body) ? null : body;
 }
@@ -227,6 +241,8 @@ export function WalkthroughEditorForm({
   );
   const hasChanges = JSON.stringify(current) !== initialJson.current;
 
+  // The draft is read once, when the page opens.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: initialValue is the loader value of this visit
   useEffect(() => {
     try {
       const draft = readDraft(draftStorageKey, initialValue);
@@ -247,8 +263,6 @@ export function WalkthroughEditorForm({
     } finally {
       setDraftReady(true);
     }
-    // The draft is read once, when the page opens.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: initialValue is the loader value of this visit
   }, [draftStorageKey]);
 
   useEffect(() => {
@@ -260,7 +274,11 @@ export function WalkthroughEditorForm({
     const timeout = window.setTimeout(() => {
       try {
         if (!hasChanges) localStorage.removeItem(draftStorageKey);
-        else localStorage.setItem(draftStorageKey, JSON.stringify({ version: DRAFT_VERSION, savedAt: Date.now(), ...current }));
+        else
+          localStorage.setItem(
+            draftStorageKey,
+            JSON.stringify({ version: DRAFT_VERSION, savedAt: Date.now(), ...current }),
+          );
       } catch {
         // Storage can be full or unavailable; the editor still works without a draft.
       }
@@ -555,26 +573,24 @@ export function WalkthroughEditorForm({
             </h2>
             {draftReady ? (
               <BodyEditorBoundary>
-              <Suspense fallback={<Skeleton className="h-60 w-full rounded-lg" />}>
-                <GuideBodyEditor
-                  key={bodyRevision}
-                  initialValue={body}
-                  context={mentionContext}
-                  students={students}
-                  labelledBy={bodyHeadingId}
-                  onChange={(value) => {
-                    setBody(isGuideBodyEmpty(value) ? null : value);
-                    setBodyError(null);
-                  }}
-                />
-              </Suspense>
+                <Suspense fallback={<Skeleton className="h-60 w-full rounded-lg" />}>
+                  <GuideBodyEditor
+                    key={bodyRevision}
+                    initialValue={body}
+                    context={mentionContext}
+                    students={students}
+                    labelledBy={bodyHeadingId}
+                    onChange={(value) => {
+                      setBody(isGuideBodyEmpty(value) ? null : value);
+                      setBodyError(null);
+                    }}
+                  />
+                </Suspense>
               </BodyEditorBoundary>
             ) : (
               <Skeleton className="h-60 w-full rounded-lg" />
             )}
-            {bodyError ? (
-              <StatusNotice tone="danger">{bodyError}</StatusNotice>
-            ) : null}
+            {bodyError ? <StatusNotice tone="danger">{bodyError}</StatusNotice> : null}
           </section>
 
           <div className="flex justify-end">

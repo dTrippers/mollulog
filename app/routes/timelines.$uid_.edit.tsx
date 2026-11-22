@@ -65,7 +65,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       timelineUid: params.uid,
       userId: currentUser.id,
     });
-    return data<ActionData>({ error: "타임라인을 저장하지 못했어요. 잠시 후 다시 시도해주세요." }, { status: 500 });
+    return data<ActionData>({ error: "타임라인을 저장하지 못했어요." }, { status: 500 });
   }
 };
 

@@ -166,14 +166,14 @@ export function parseWalkthroughFormData(formData: FormData): WalkthroughTimelin
     body = rawBody ? JSON.parse(rawBody) : null;
   } catch (error) {
     if (error instanceof SyntaxError || error instanceof InvalidWalkthroughTimelineDocumentError) {
-      throw new ActionValidationError("입력값을 확인해주세요.");
+      throw new ActionValidationError("입력값을 확인해 주세요.");
     }
     throw error;
   }
   const visibility = String(formData.get("visibility") ?? "private");
-  if (!isWalkthroughTimelineVisibility(visibility)) throw new ActionValidationError("공개 범위를 확인해주세요.");
+  if (!isWalkthroughTimelineVisibility(visibility)) throw new ActionValidationError("공개 범위를 확인해 주세요.");
   const rawIsAuto = formData.get("isAuto");
-  if (rawIsAuto !== "true" && rawIsAuto !== "false") throw new ActionValidationError("오토 여부를 확인해주세요.");
+  if (rawIsAuto !== "true" && rawIsAuto !== "false") throw new ActionValidationError("오토 여부를 확인해 주세요.");
   return {
     title: String(formData.get("title") ?? ""),
     body,

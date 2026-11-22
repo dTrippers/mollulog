@@ -24,6 +24,9 @@ jest.mock("~/db/postgres/walkthrough-timelines", () => ({
   getPostgresWalkthroughTimeline: jest.fn(),
   updatePostgresWalkthroughTimelineWithCommunityPost: jest.fn(),
 }));
+jest.mock("~/models/student", () => ({
+  getAllStudentsMap: jest.fn(async () => ({ "student-1": { name: "시로코" } })),
+}));
 jest.mock("~/lib/observability.server", () => ({
   getLogger: () => logger,
 }));
@@ -55,7 +58,7 @@ function actionArgs(request: Request, params: Record<string, string> = {}) {
 function validFields(overrides: Record<string, string> = {}) {
   return {
     title: "공략",
-    description: "설명",
+    body: JSON.stringify({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "설명" }] }] }),
     visibility: "public",
     isAuto: "false",
     document: JSON.stringify(document),
@@ -76,20 +79,39 @@ describe("walkthrough timeline create action", () => {
     const response = await createAction(actionArgs(requestWithForm(validFields({ isAuto: "true" }))));
 
     expect(response).toMatchObject({ status: 302 });
-    expect(mockCreateTimeline).toHaveBeenCalledWith(env, 7, expect.objectContaining({ isAuto: true }), { ctx });
+    expect(mockCreateTimeline).toHaveBeenCalledWith(
+      env,
+      7,
+      expect.objectContaining({
+        body: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "설명" }] }] },
+      }),
+      expect.any(Function),
+      { ctx },
+    );
+    const studentName = mockCreateTimeline.mock.calls[0]?.[3];
+    expect(studentName?.("student-1")).toBe("시로코");
+    expect(mockCreateTimeline).toHaveBeenCalledWith(
+      env,
+      7,
+      expect.objectContaining({ isAuto: true }),
+      expect.any(Function),
+      {
+        ctx,
+      },
+    );
   });
 
   it("rejects an invalid auto declaration instead of treating it as unmarked", async () => {
     const response = await createAction(actionArgs(requestWithForm(validFields({ isAuto: "yes" }))));
 
-    expect(response).toMatchObject({ data: { error: "오토 여부를 확인해주세요." }, init: { status: 400 } });
+    expect(response).toMatchObject({ data: { error: "오토 여부를 확인해 주세요." }, init: { status: 400 } });
     expect(mockCreateTimeline).not.toHaveBeenCalled();
   });
 
   it("keeps validation errors actionable as 400 responses", async () => {
     const response = await createAction(actionArgs(requestWithForm(validFields({ visibility: "invalid" }))));
 
-    expect(response).toMatchObject({ data: { error: "공개 범위를 확인해주세요." }, init: { status: 400 } });
+    expect(response).toMatchObject({ data: { error: "공개 범위를 확인해 주세요." }, init: { status: 400 } });
     expect(mockCreateTimeline).not.toHaveBeenCalled();
     expect(logger.error).not.toHaveBeenCalled();
   });
@@ -101,7 +123,7 @@ describe("walkthrough timeline create action", () => {
     const response = await createAction(actionArgs(requestWithForm(validFields())));
 
     expect(response).toMatchObject({
-      data: { error: "타임라인을 저장하지 못했어요. 잠시 후 다시 시도해주세요." },
+      data: { error: "타임라인을 저장하지 못했어요." },
       init: { status: 500 },
     });
     expect(JSON.stringify(response)).not.toContain("password=secret");
@@ -120,9 +142,16 @@ describe("walkthrough timeline edit action", () => {
     );
 
     expect(response).toMatchObject({ status: 302 });
-    expect(mockUpdateTimeline).toHaveBeenCalledWith(env, "timeline-1", 7, expect.objectContaining({ isAuto: true }), {
-      ctx,
-    });
+    expect(mockUpdateTimeline).toHaveBeenCalledWith(
+      env,
+      "timeline-1",
+      7,
+      expect.objectContaining({ isAuto: true }),
+      expect.any(Function),
+      {
+        ctx,
+      },
+    );
   });
 
   it("keeps validation errors actionable as 400 responses", async () => {
@@ -130,7 +159,7 @@ describe("walkthrough timeline edit action", () => {
       actionArgs(requestWithForm(validFields({ visibility: "invalid" })), { uid: "timeline-1" }),
     );
 
-    expect(response).toMatchObject({ data: { error: "공개 범위를 확인해주세요." }, init: { status: 400 } });
+    expect(response).toMatchObject({ data: { error: "공개 범위를 확인해 주세요." }, init: { status: 400 } });
     expect(mockUpdateTimeline).not.toHaveBeenCalled();
     expect(logger.error).not.toHaveBeenCalled();
   });
@@ -142,7 +171,7 @@ describe("walkthrough timeline edit action", () => {
     const response = await editAction(actionArgs(requestWithForm(validFields()), { uid: "timeline-1" }));
 
     expect(response).toMatchObject({
-      data: { error: "타임라인을 저장하지 못했어요. 잠시 후 다시 시도해주세요." },
+      data: { error: "타임라인을 저장하지 못했어요." },
       init: { status: 500 },
     });
     expect(JSON.stringify(response)).not.toContain("password=secret");

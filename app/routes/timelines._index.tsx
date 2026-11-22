@@ -180,7 +180,8 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   return {
     guides,
     demo,
-    demoBossName: bosses.find((boss) => boss.uid === DEMO_WALKTHROUGH_TIMELINE.bossUid)?.name ?? DEMO_WALKTHROUGH_BOSS_NAME,
+    demoBossName:
+      bosses.find((boss) => boss.uid === DEMO_WALKTHROUGH_TIMELINE.bossUid)?.name ?? DEMO_WALKTHROUGH_BOSS_NAME,
     filters,
     engagementByUid,
     bosses,
@@ -193,10 +194,10 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 function FilterGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div role="group" aria-label={title} className="space-y-2">
-      <p className="text-xs font-semibold text-v2-fg-tertiary">{title}</p>
+    <fieldset className="min-w-0">
+      <legend className="mb-2 text-xs font-semibold text-v2-fg-tertiary">{title}</legend>
       <div className="flex flex-wrap gap-1.5">{children}</div>
-    </div>
+    </fieldset>
   );
 }
 

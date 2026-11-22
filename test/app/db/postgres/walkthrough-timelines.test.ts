@@ -350,7 +350,14 @@ describe("PostgreSQL walkthrough timelines", () => {
     const options = { createClient: () => client };
 
     await expect(
-      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, { ...input, visibility }, studentName, options),
+      updatePostgresWalkthroughTimelineWithCommunityPost(
+        env,
+        "timeline-1",
+        10,
+        { ...input, visibility },
+        studentName,
+        options,
+      ),
     ).rejects.toThrow('update "community_posts"');
 
     const sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));

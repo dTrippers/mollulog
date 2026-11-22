@@ -1,11 +1,4 @@
-import {
-  BoldIcon,
-  LinkIcon,
-  ListBulletIcon,
-  MinusIcon,
-  NumberedListIcon,
-  PlayIcon,
-} from "@heroicons/react/16/solid";
+import { BoldIcon, LinkIcon, ListBulletIcon, MinusIcon, NumberedListIcon, PlayIcon } from "@heroicons/react/16/solid";
 import { mergeAttributes, Node } from "@tiptap/core";
 import Mention from "@tiptap/extension-mention";
 import {
@@ -18,16 +11,7 @@ import {
 } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
-import {
-  createContext,
-  type FormEvent,
-  type ReactNode,
-  useContext,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { createContext, type FormEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   type GuideBody,
@@ -96,7 +80,10 @@ function YouTubeView({ node, selected }: ReactNodeViewProps) {
   return (
     <NodeViewWrapper
       data-drag-handle
-      className={cn("relative my-3 block w-full max-w-md overflow-hidden rounded-md bg-v2-inset", selected && "outline-2 outline-v2-focus")}
+      className={cn(
+        "relative my-3 block w-full max-w-md overflow-hidden rounded-md bg-v2-inset",
+        selected && "outline-2 outline-v2-focus",
+      )}
     >
       <img
         src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
@@ -120,7 +107,12 @@ const YouTube = Node.create({
     return { videoId: { default: null } };
   },
   parseHTML() {
-    return [{ tag: "div[data-youtube-video]", getAttrs: (element) => ({ videoId: element.getAttribute("data-youtube-video") }) }];
+    return [
+      {
+        tag: "div[data-youtube-video]",
+        getAttrs: (element) => ({ videoId: element.getAttribute("data-youtube-video") }),
+      },
+    ];
   },
   renderHTML({ HTMLAttributes }) {
     return ["div", mergeAttributes({ "data-youtube-video": HTMLAttributes.videoId })];
@@ -141,7 +133,11 @@ type SuggestionState = {
   props: SuggestionProps<MentionItem, MentionItem>;
 };
 
-function mentionItems(query: string, context: GuideMentionContext, students: readonly WalkthroughStudent[]): MentionItem[] {
+function mentionItems(
+  query: string,
+  context: GuideMentionContext,
+  students: readonly WalkthroughStudent[],
+): MentionItem[] {
   const trimmed = query.trim();
   const parties = context.parties.flatMap((party, index) =>
     !trimmed || walkthroughPartyLabel(index).includes(trimmed) || String(index + 1) === trimmed
@@ -185,12 +181,15 @@ function MentionMenu({
   const { items } = state.props;
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)?.scrollIntoView?.({ block: "nearest" });
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)
+      ?.scrollIntoView?.({ block: "nearest" });
   }, [activeIndex]);
   const group = (kind: GuideMentionKind, title: string) => {
     const rows = items.flatMap((item, index) => (item.kind === kind ? [{ item, index }] : []));
     if (rows.length === 0) return null;
     return (
+      // biome-ignore lint/a11y/useSemanticElements: A listbox may only hold options and option groups; a <fieldset> is neither.
       <div role="group" aria-labelledby={`${id}-${kind}`}>
         <p id={`${id}-${kind}`} className="px-2.5 pt-2 pb-1 text-xs font-medium text-v2-fg-tertiary">
           {title}
@@ -214,18 +213,22 @@ function MentionMenu({
                 <RoundStudentImage studentUid={item.id} size="sm" />
                 <span className="min-w-0 truncate">{walkthroughStudentName(context.studentsByUid, item.id)}</span>
                 {partyIndex !== null ? (
-                  <span className="ml-auto shrink-0 text-xs text-v2-fg-tertiary">{walkthroughPartyLabel(partyIndex)}</span>
+                  <span className="ml-auto shrink-0 text-xs text-v2-fg-tertiary">
+                    {walkthroughPartyLabel(partyIndex)}
+                  </span>
                 ) : null}
               </>
             );
           }
           return (
-            <div
+            <button
               key={`${item.kind}-${item.id}`}
               id={`${id}-option-${index}`}
               data-index={index}
+              type="button"
               role="option"
               aria-selected={active}
+              // The keyboard stays in the editor, which moves the active option with the arrow keys.
               tabIndex={-1}
               onMouseDown={(event) => event.preventDefault()}
               onMouseMove={(event) => {
@@ -233,12 +236,12 @@ function MentionMenu({
               }}
               onClick={() => onPick(item)}
               className={cn(
-                "flex min-h-v2-row-min cursor-pointer items-center gap-2 rounded-md px-2.5 text-sm text-v2-fg",
+                "flex min-h-v2-row-min w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm text-v2-fg",
                 active && "bg-v2-hover",
               )}
             >
               {content}
-            </div>
+            </button>
           );
         })}
       </div>
@@ -345,7 +348,13 @@ function UrlPopover({
     onSubmit(value);
   };
   return (
-    <Popover open={open} label={label} onClose={onClose} returnFocusRef={triggerRef} className="w-80 max-w-[calc(100vw-2rem)] p-3">
+    <Popover
+      open={open}
+      label={label}
+      onClose={onClose}
+      returnFocusRef={triggerRef}
+      className="w-80 max-w-[calc(100vw-2rem)] p-3"
+    >
       {/* A nested form would submit the page's form, so the field submits on Enter by hand. */}
       <div className="flex flex-col gap-2">
         <input

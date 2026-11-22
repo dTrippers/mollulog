@@ -120,7 +120,7 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({ actionResult, defau
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "피드 | 몰루로그";
-  const description = "선생님들의 학생 평가, 이벤트 의견, 모집 결과와 공략/타임라인을 확인해보세요.";
+  const description = "선생님들의 학생 평가, 이벤트 의견, 모집 결과와 공략/타임라인을 확인해 보세요.";
   return [
     { title },
     { name: "description", content: description },
@@ -147,7 +147,7 @@ export default function CommunityPage() {
   return (
     <Page
       title="피드"
-      description="선생님들의 평가, 의견, 모집 결과와 공략/타임라인을 한곳에서 확인해보세요"
+      description="선생님들의 평가, 의견, 모집 결과와 공략/타임라인을 한곳에서 확인해 보세요"
       belowTitle={<CommunityPostTypeFilter selectedPostTypes={postTypes} />}
       layout="vertical"
     >

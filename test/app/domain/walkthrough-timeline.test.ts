@@ -192,7 +192,10 @@ describe("parseWalkthroughTimelineDocument", () => {
 
 describe("walkthroughSaveProblems", () => {
   const context = { bossUid: "binah", terrain: "street", defenseType: "heavy", maxDifficulty: "torment" } as const;
-  const party = (units: { slot: number; studentUid: string | null }[], steps: WalkthroughTimelineDocument["parties"][number]["steps"] = []) => ({
+  const party = (
+    units: { slot: number; studentUid: string | null }[],
+    steps: WalkthroughTimelineDocument["parties"][number]["steps"] = [],
+  ) => ({
     uid: `party-${units.length}`,
     order: 0,
     startingSkillStudentUids: [],

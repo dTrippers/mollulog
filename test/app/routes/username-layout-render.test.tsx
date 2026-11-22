@@ -273,9 +273,9 @@ describe("@username moved menus notice", () => {
     renderLayout({ isOwner: true, signedIn: true });
 
     const aside = await screen.findByRole("complementary", { name: "보조 도구" });
-    expect(await within(aside).findByText("공략/타임라인과 편성은 커뮤니티에서 확인해주세요.")).toBeTruthy();
+    expect(await within(aside).findByText("공략/타임라인과 편성은 커뮤니티에서 확인해 주세요.")).toBeTruthy();
     expect(within(aside).getByRole("link", { name: "내 공략/타임라인" }).getAttribute("href")).toBe("/timelines?mine=1");
-    const notices = screen.getAllByText("공략/타임라인과 편성은 커뮤니티에서 확인해주세요.");
+    const notices = screen.getAllByText("공략/타임라인과 편성은 커뮤니티에서 확인해 주세요.");
     expect(notices).toHaveLength(2);
     const stacked = notices.find((notice) => !aside.contains(notice));
     expect(stacked?.closest(".v2-stacked-only")).toBeTruthy();
@@ -286,20 +286,20 @@ describe("@username moved menus notice", () => {
 
     const [close] = await screen.findAllByRole("button", { name: "안내 닫기" });
     fireEvent.click(close as HTMLElement);
-    expect(screen.queryAllByText("공략/타임라인과 편성은 커뮤니티에서 확인해주세요.")).toHaveLength(0);
+    expect(screen.queryAllByText("공략/타임라인과 편성은 커뮤니티에서 확인해 주세요.")).toHaveLength(0);
   });
 
   it("does not show the notice to a visitor", async () => {
     renderLayout({ signedIn: true });
 
     await screen.findByRole("heading", { level: 1, name: "@sensei" });
-    expect(screen.queryByText("공략/타임라인과 편성은 커뮤니티에서 확인해주세요.")).toBeNull();
+    expect(screen.queryByText("공략/타임라인과 편성은 커뮤니티에서 확인해 주세요.")).toBeNull();
   });
 
   it("remembers a dismissal in this browser", async () => {
     const first = render(<MemoryRouterNotice now={duringNotice} />);
     fireEvent.click(await screen.findByRole("button", { name: "안내 닫기" }));
-    expect(screen.queryByText("공략/타임라인과 편성은 커뮤니티에서 확인해주세요.")).toBeNull();
+    expect(screen.queryByText("공략/타임라인과 편성은 커뮤니티에서 확인해 주세요.")).toBeNull();
     expect(localStorage.getItem(MOVED_MENUS_NOTICE_STORAGE_KEY)).toBe("1");
     first.unmount();
 
@@ -311,7 +311,7 @@ describe("@username moved menus notice", () => {
     render(<MemoryRouterNotice now={() => MOVED_MENUS_NOTICE_ENDS_AT} />);
 
     await waitFor(() => expect(screen.queryByRole("button", { name: "안내 닫기" })).toBeNull());
-    expect(screen.queryByText("공략/타임라인과 편성은 커뮤니티에서 확인해주세요.")).toBeNull();
+    expect(screen.queryByText("공략/타임라인과 편성은 커뮤니티에서 확인해 주세요.")).toBeNull();
   });
 });
 

@@ -347,7 +347,12 @@ function StepEditor({
     <div className="flex min-w-0 flex-col gap-3 rounded-md bg-v2-inset p-3">
       <div className="flex items-center gap-1">
         <h4 className="mr-auto text-sm font-semibold text-v2-fg">{label}</h4>
-        <IconButton icon={ChevronUpIcon} label={`${label} 위로 이동`} disabled={stepIndex === 0} onClick={() => onMove(stepIndex - 1)} />
+        <IconButton
+          icon={ChevronUpIcon}
+          label={`${label} 위로 이동`}
+          disabled={stepIndex === 0}
+          onClick={() => onMove(stepIndex - 1)}
+        />
         <IconButton
           icon={ChevronDownIcon}
           label={`${label} 아래로 이동`}
@@ -449,7 +454,7 @@ function StepEditor({
             ) : null}
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
               <span className="text-xs font-medium text-v2-fg-secondary">스킬 추가</span>
-              <div role="group" aria-label={`${label} 스킬 추가`} className="flex flex-wrap gap-1">
+              <fieldset aria-label={`${label} 스킬 추가`} className="flex flex-wrap gap-1">
                 {partyStudentUids.map((uid) => (
                   <button
                     key={uid}
@@ -465,7 +470,7 @@ function StepEditor({
                     <RoundStudentImage studentUid={uid} size="md" />
                   </button>
                 ))}
-              </div>
+              </fieldset>
             </div>
             <div className="sm:hidden">
               <Button size="sm" disabled={!canAddStep} onClick={onInsertAfter}>
@@ -601,7 +606,7 @@ function ImportPanel({
         aria-label="커뮤니티 공략 글"
         value={text}
         rows={7}
-        placeholder="커뮤니티의 공략 글을 붙여넣어주세요."
+        placeholder="커뮤니티의 공략 글을 붙여넣어 주세요."
         onChange={(event) => setText(event.currentTarget.value)}
         className={cn(
           "w-full min-w-0 resize-y rounded-md border border-v2-control-border bg-v2-surface px-2.5 py-2 font-mono text-base text-v2-fg placeholder:text-v2-fg-tertiary sm:text-sm",

@@ -44,7 +44,10 @@ export function WalkthroughConditions({
     <p className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-v2-fg-secondary", className)}>
       {timeline.isAuto ? <WalkthroughAutoBadge /> : null}
       <Stripe color="grey" text={terrainLocale[timeline.terrain]} />
-      <Stripe color={defenseColor in stripeColorClassName ? defenseColor : "grey"} text={defenseTypeLocale[timeline.defenseType]} />
+      <Stripe
+        color={defenseColor in stripeColorClassName ? defenseColor : "grey"}
+        text={defenseTypeLocale[timeline.defenseType]}
+      />
       <Stripe color="grey" text={difficultyLocale[timeline.maxDifficulty]} />
     </p>
   );

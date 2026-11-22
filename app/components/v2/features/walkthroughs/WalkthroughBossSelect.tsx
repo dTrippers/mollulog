@@ -53,7 +53,12 @@ export function WalkthroughBossSelect({
   useEffect(() => {
     if (!open) return;
     setQuery("");
-    setActiveIndex(Math.max(0, options.findIndex((option) => option.uid === value)));
+    setActiveIndex(
+      Math.max(
+        0,
+        options.findIndex((option) => option.uid === value),
+      ),
+    );
     requestAnimationFrame(() => searchRef.current?.focus());
   }, [open, options, value]);
 
@@ -90,7 +95,7 @@ export function WalkthroughBossSelect({
           {selected?.name ?? "보스 선택"}
         </span>
         <ChevronDownIcon
-          className="pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 text-v2-fg-tertiary"
+          className="pointer-events-none absolute inset-y-0 right-2 my-auto size-4 text-v2-fg-tertiary"
           aria-hidden="true"
         />
       </button>
@@ -139,10 +144,11 @@ export function WalkthroughBossSelect({
             <p className="px-2.5 py-2 text-sm text-v2-fg-secondary">검색 결과가 없어요</p>
           ) : (
             filtered.map((option) => (
-              <div
+              <button
                 key={option.uid}
                 id={`${listId}-${option.uid}`}
                 data-uid={option.uid}
+                type="button"
                 role="option"
                 aria-selected={option.uid === value}
                 tabIndex={-1}
@@ -152,7 +158,7 @@ export function WalkthroughBossSelect({
                 }}
                 onClick={() => choose(option.uid)}
                 className={cn(
-                  "relative flex h-12 cursor-pointer items-center overflow-hidden rounded-md px-2.5 text-sm font-semibold text-v2-fg",
+                  "relative flex h-12 w-full cursor-pointer items-center overflow-hidden rounded-md px-2.5 text-left text-sm font-semibold text-v2-fg",
                   option.uid === active?.uid && "bg-v2-hover",
                 )}
               >
@@ -161,7 +167,7 @@ export function WalkthroughBossSelect({
                 {option.uid === value ? (
                   <CheckIcon className="relative size-4 shrink-0 text-v2-link" aria-hidden="true" />
                 ) : null}
-              </div>
+              </button>
             ))
           )}
         </div>

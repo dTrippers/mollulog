@@ -49,7 +49,7 @@ export function MovedMenusNotice({ onDismiss, className }: { onDismiss: () => vo
       className={className}
       action={<IconButton icon={XMarkIcon} label="안내 닫기" onClick={onDismiss} className="-my-1.5 -mr-1.5" />}
     >
-      <p className="break-keep">공략/타임라인과 편성은 커뮤니티에서 확인해주세요.</p>
+      <p className="break-keep">공략/타임라인과 편성은 커뮤니티에서 확인해 주세요.</p>
       <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
         <Link to="/timelines?mine=1" className={linkClassName}>
           내 공략/타임라인

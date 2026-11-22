@@ -61,7 +61,7 @@ export default function UserPartiesPage() {
         <Callout
           Icon={QueueListIcon}
           title="공략/타임라인 작성 기능이 추가됐어요"
-          description="기존 페이지에서는 더 이상 작성할 수 없어요. 새로운 공략/타임라인 기능을 이용해주세요."
+          description="기존 페이지에서는 더 이상 작성할 수 없어요. 새로운 공략/타임라인 기능을 이용해 주세요."
           tone="warning"
         />
 

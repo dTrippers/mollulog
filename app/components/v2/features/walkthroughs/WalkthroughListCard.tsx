@@ -69,21 +69,19 @@ export function WalkthroughListCard({
         </h2>
       </div>
       <WalkthroughConditions timeline={guide} />
-      {guide.excerpt ? (
-        <p className="line-clamp-2 text-sm text-v2-fg-secondary">{guide.excerpt}</p>
-      ) : null}
+      {guide.excerpt ? <p className="line-clamp-2 text-sm text-v2-fg-secondary">{guide.excerpt}</p> : null}
       {guide.parties.length > 0 ? (
         <ol className="flex flex-col gap-1.5">
           {guide.parties.map((party, index) => (
             <li key={party.uid} className="flex min-h-7 min-w-0 items-center gap-2">
               <span className="w-3.5 shrink-0 text-xs font-bold text-v2-fg-tertiary tabular-nums">{index + 1}</span>
               <span className="flex min-w-0 flex-wrap gap-1">
-                {party.studentUids.map((uid, slot) => {
+                {party.studentUids.map((uid) => {
                   const unrecruited = isUnrecruited(uid);
                   return (
                     <RoundStudentImage
-                      // A party can hold the same student only once, but the slot keeps the key stable while editing data.
-                      key={`${slot}-${uid}`}
+                      // A party holds a student only once (the document parser rejects duplicates).
+                      key={uid}
                       studentUid={uid}
                       size="sm"
                       alt={unrecruited ? `${studentName(uid)} (미모집)` : studentName(uid)}
