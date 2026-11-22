@@ -76,6 +76,18 @@ export function getRecruitmentRemainingEleph(targetTier: RecruitmentTargetTier, 
 export function buildRecruitmentOwnedSnapshot(
   readAt: string,
   studentUids: readonly string[],
+  ownedTiers: Readonly<Record<string, number>>,
+  heldEleph: Readonly<Record<string, number>>,
+): RecruitmentOwnedSnapshot;
+export function buildRecruitmentOwnedSnapshot(
+  readAt: string,
+  studentUids: readonly string[],
+  ownedTiers: Readonly<Record<string, number>> | null,
+  heldEleph: Readonly<Record<string, number>> | null,
+): RecruitmentOwnedSnapshot | null;
+export function buildRecruitmentOwnedSnapshot(
+  readAt: string,
+  studentUids: readonly string[],
   ownedTiers: Readonly<Record<string, number>> | null,
   heldEleph: Readonly<Record<string, number>> | null,
 ): RecruitmentOwnedSnapshot | null {

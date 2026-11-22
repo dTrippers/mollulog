@@ -32,8 +32,7 @@ export type PyroxenePlannerAccount = {
     recruitmentResultUid: string | null;
   }[];
   recruitedStudentUids: string[];
-  // Null when held eleph is unavailable; the timeline then counts targets as unowned.
-  recruitmentOwnedSnapshot: RecruitmentOwnedSnapshot | null;
+  recruitmentOwnedSnapshot: RecruitmentOwnedSnapshot;
   collectedSourceKeys: string[];
 };
 
@@ -57,15 +56,13 @@ export async function loadPyroxenePlannerAccount(
       getPyroxeneUserState(env, userId, { ctx }),
       getRecruitmentResultsByRecruitmentGroupUids(env, userId, recruitmentGroupUids),
       getRecruitedStudents(env, userId),
-      favoritedStudentsPromise
-        .then((items) =>
-          getUserResourceInventoryMapByItemUids(
-            env,
-            userId,
-            items.map(({ studentId }) => studentId),
-          ),
-        )
-        .catch(() => null),
+      favoritedStudentsPromise.then((items) =>
+        getUserResourceInventoryMapByItemUids(
+          env,
+          userId,
+          items.map(({ studentId }) => studentId),
+        ),
+      ),
     ]);
 
   return {

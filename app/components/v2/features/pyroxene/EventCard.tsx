@@ -15,10 +15,11 @@ import { getBalanceRange, getPyroxeneEventStatus } from "~/domain/pyroxene-plann
 import {
   DEFAULT_RECRUITMENT_TARGET_TIER,
   RECRUITMENT_TARGET_TIERS,
+  type RecruitmentOwnedSnapshot,
   type RecruitmentTargetTier,
   type RecruitmentTargetTiers,
 } from "~/domain/pyroxene-recruitment-goal";
-import type { TimelineEntry, TimelinePickupStack } from "~/domain/pyroxene-timeline";
+import { getEventOwnedStates, type TimelineEntry, type TimelinePickupStack } from "~/domain/pyroxene-timeline";
 import { getTaggedFreeRecruitmentPulls } from "~/domain/recruitment-notice";
 import { STUDENT_ACQUISITION_LABELS } from "~/domain/student-directory";
 import dayjs from "~/lib/dayjs";
@@ -70,6 +71,8 @@ type EventCardProps = {
   eventData: PlannerEventData | undefined;
   defaultBasis: PyroxenePickupChance;
   recruitedStudentUids: ReadonlySet<string>;
+  // The signed-in account's students as the plan reads them; undefined for a guest, whose plan starts unowned.
+  ownedSnapshot: RecruitmentOwnedSnapshot | undefined;
   canRecordCompletion: boolean;
   recordEditLink: string | undefined;
   selected: boolean;
@@ -77,12 +80,12 @@ type EventCardProps = {
 };
 
 /** The accessible meaning of a tier: "3성" for a star tier, "고유무기 2" for an exclusive weapon level. */
-function tierMeaning(tier: RecruitmentTargetTier): string {
+function tierMeaning(tier: number): string {
   return tier <= 5 ? `${tier}성` : `고유무기 ${tier - 5}`;
 }
 
 /** A yellow star with the tier up to 5, then the exclusive weapon icon with its level. */
-function TierFace({ tier, iconClassName = "size-3.5" }: { tier: RecruitmentTargetTier; iconClassName?: string }) {
+function TierFace({ tier, iconClassName = "size-3.5" }: { tier: number; iconClassName?: string }) {
   return (
     <span className="inline-flex items-center gap-0.5 tabular-nums">
       {tier <= 5 ? (
@@ -266,6 +269,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
     eventData,
     defaultBasis,
     recruitedStudentUids,
+    ownedSnapshot,
     canRecordCompletion,
     recordEditLink,
     selected,
@@ -288,6 +292,8 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
 
   const completed = eventData?.completed ?? false;
   const targetTiers = eventData?.targetTiers ?? {};
+  // The start the plan uses for this event: an event that began before the account was read starts unowned.
+  const ownedStates = ownedSnapshot ? (getEventOwnedStates(event, ownedSnapshot) ?? {}) : undefined;
   const students = event.recruitments.flatMap((recruitment) =>
     recruitment.pickup && recruitment.student
       ? [
@@ -499,8 +505,19 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
             const names = splitVisibleStudentName(student.name);
             const tier = (targetTiers[student.uid] ?? DEFAULT_RECRUITMENT_TARGET_TIER) as RecruitmentTargetTier;
             const acquisitionLabel = getAcquisitionLabel(student.acquisitionType);
-            const showTier = student.favorited && tier !== DEFAULT_RECRUITMENT_TARGET_TIER;
-            const thumbDescription = [acquisitionLabel, student.favorited ? `목표 ${tierMeaning(tier)}` : null]
+            // A signed-in plan counts copies from the current tier of a ★3 student, so its card shows the tier it
+            // starts from beside the target. A ★2 student always needs one copy, and a guest plan starts unowned.
+            const currentTier =
+              student.favorited && ownedStates && (student.initialTier ?? 3) === 3
+                ? (ownedStates[student.uid]?.tier ?? null)
+                : undefined;
+            const showTierChange = currentTier !== undefined;
+            const showTier = student.favorited && !showTierChange && tier !== DEFAULT_RECRUITMENT_TARGET_TIER;
+            const thumbDescription = [
+              acquisitionLabel,
+              showTierChange ? (currentTier === null ? "미모집" : `현재 성급 ${tierMeaning(currentTier)}`) : null,
+              student.favorited ? `목표 성급 ${tierMeaning(tier)}` : null,
+            ]
               .filter(Boolean)
               .join(", ");
             return (
@@ -564,6 +581,20 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                         <TierFace tier={tier} iconClassName="size-3" />
                       </span>
                     ) : null}
+                  </span>
+                ) : null}
+                {showTierChange ? (
+                  <span
+                    aria-hidden="true"
+                    className="mt-1 flex items-center justify-center gap-0.5 text-[0.625rem] leading-4 font-semibold whitespace-nowrap text-v2-fg-secondary"
+                  >
+                    {currentTier === null ? (
+                      <span className="font-medium text-v2-fg-tertiary">미모집</span>
+                    ) : (
+                      <TierFace tier={currentTier} iconClassName="size-3" />
+                    )}
+                    <span className="font-normal text-v2-fg-tertiary">→</span>
+                    <TierFace tier={tier} iconClassName="size-3" />
                   </span>
                 ) : null}
               </div>

@@ -1119,7 +1119,7 @@ export default function PyroxenePlanner() {
     collectedSourceKeys: localCollectedSourceKeys,
     endDate: planEndDate,
     recruitmentStacks: stacks,
-    ownedSnapshot: loaderData.recruitmentOwnedSnapshot ?? undefined,
+    ownedSnapshot: loaderData.recruitmentOwnedSnapshot,
   });
   const displayTimeline = useMemo(
     () => buildPyroxeneDisplayTimeline(timeline, scheduleItems, initialDate ?? new Date(), initialResources),
@@ -1246,10 +1246,6 @@ export default function PyroxenePlanner() {
     <StatusNotice tone="danger">{revisionConflictError}</StatusNotice>
   ) : ownedResourceSaveError ? (
     <StatusNotice tone="danger">{ownedResourceSaveError}</StatusNotice>
-  ) : signedIn && loaderData.recruitmentOwnedSnapshot === null ? (
-    <StatusNotice tone="warning">
-      보유 학생이나 엘레프 정보를 확인할 수 없어 모집 목표를 미보유 기준으로 계산했어요.
-    </StatusNotice>
   ) : signedIn && hasGuestLegacyConflicts ? (
     <StatusNotice tone="warning" action={<ImportLink />}>
       이전 화면과 이 화면에서 같은 항목을 다르게 바꾼 계획이 있어요. 내용을 확인하고 사용할 값을 선택해주세요.
@@ -1367,6 +1363,7 @@ export default function PyroxenePlanner() {
             eventDataMap={eventDataMap}
             defaultBasis={options.event.pickupChance}
             recruitedStudentUids={recruitedStudentUids}
+            ownedSnapshot={loaderData.recruitmentOwnedSnapshot}
             canRecordCompletion={Boolean(signedIn)}
             recordEditLinks={recordEditLinks}
             eventHandlers={{

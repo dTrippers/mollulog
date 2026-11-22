@@ -835,8 +835,11 @@ export default function IntegratedPlannerRoute() {
     ownedSnapshot: isSignedIn ? (accountState?.recruitmentOwnedSnapshot ?? undefined) : undefined,
   });
 
+  // A signed-in plan counts recruitment targets from the account's students, so it cannot be calculated without them.
   const pyroxeneInputAvailable = isSignedIn
-    ? loaderData.accountStateStatus === "available" && accountState !== null
+    ? loaderData.accountStateStatus === "available" &&
+      accountState !== null &&
+      accountState.recruitmentOwnedSnapshot !== null
     : pyroxeneGuestPlanner.status === "ready" || pyroxeneGuestPlanner.status === "memory";
   const pyroxeneForecastStatus = useMemo(() => {
     if (loaderData.pyroxeneSchedulesStatus !== "available") return "unavailable" as const;
@@ -1014,9 +1017,6 @@ export default function IntegratedPlannerRoute() {
     if (isSignedIn && accountState?.recruitedStudentUids === null) {
       messages.push("계정 모집 정보가 없어 기본 이벤트 상점 계획을 확인할 수 없어요.");
     }
-    if (isSignedIn && accountState?.recruitmentOwnedSnapshot === null) {
-      messages.push("보유 학생이나 엘레프 정보를 확인할 수 없어 모집 목표를 미보유 기준으로 계산했어요.");
-    }
     if (isSignedIn && pyroxeneGuestPlanner.status === "corrupt") {
       messages.push("미로그인 상태의 청휘석 계획을 읽지 못해 가져오기 항목을 확인할 수 없어요.");
     }
@@ -1055,7 +1055,6 @@ export default function IntegratedPlannerRoute() {
     isSignedIn,
     loaderData,
     accountState?.recruitedStudentUids,
-    accountState?.recruitmentOwnedSnapshot,
     pyroxeneGuestPlanner.status,
   ]);
 
