@@ -1323,21 +1323,6 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   scroll-margin-top: 1rem;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .v2-featured-banner:hover .v2-featured-cue > svg {
-    animation: v2-featured-cue-nudge calc(var(--transition-duration-v2-slow) * 2) var(--ease-v2-enter) 1;
-  }
-}
-
-@keyframes v2-featured-cue-nudge {
-  0%,
-  100% {
-    transform: none;
-  }
-  40% {
-    transform: translateY(2px);
-  }
-}
 
 @keyframes v2-panel-in {
   from {

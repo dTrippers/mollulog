@@ -178,6 +178,16 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     expect(popoverSource).toContain("duration-v2-base ease-v2-enter");
   });
 
+  it("V2b: hover never moves an element, and a thumbnail fades only under a fine pointer", () => {
+    // Hand-written rules escape the class-string guard, so a :hover rule here must not animate or transform.
+    const hoverRules = [...css.matchAll(/([^{}]*:hover[^{}]*)\{([^{}]*)\}/g)];
+    const moving = hoverRules.filter(([, , body]) => /\b(?:animation|transform|translate|scale|rotate)\s*:/.test(body));
+    expect(moving.map(([, selector]) => selector.trim())).toEqual([]);
+    // A touch leaves :hover on the tapped thumbnail, which would stay dimmed in a selection grid.
+    const thumbSource = readFileSync(join(process.cwd(), "app/components/v2/features/students/StudentThumb.tsx"), "utf8");
+    expect(thumbSource).toContain('"[@media(hover:hover)_and_(pointer:fine)]:hover:opacity-80 v2-interaction-transition"');
+  });
+
   it("V3: the panel section uses block padding, and only the collapsible header keeps the row minimum", () => {
     expect(panelSource).toMatch(
       /togglesBody && phase === "collapsed"\s*\?\s*"px-v2-block-p py-2"\s*:\s*"p-v2-block-p"/,

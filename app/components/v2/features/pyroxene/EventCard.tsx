@@ -528,7 +528,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                   thumbWidth,
                   // A student not yet added brightens on hover, as adding it will.
                   !student.favorited &&
-                    "opacity-45 hover:opacity-90 v2-interaction-transition",
+                    "opacity-45 [@media(hover:hover)_and_(pointer:fine)]:hover:opacity-90 v2-interaction-transition",
                 )}
               >
                 <StudentThumb

@@ -59,8 +59,10 @@ export type StudentThumbProps = {
   overlayOnMobile?: boolean;
 };
 
-// A linked or clickable thumbnail fades on hover, as every 2.0 pressable element does. It never scales.
-const pressableClassName = "hover:opacity-80 v2-interaction-transition";
+// A linked or clickable thumbnail fades on hover, as every 2.0 pressable element does. It never scales. The fade needs a
+// fine pointer: a touch leaves :hover on the tapped thumbnail, and in a selection grid a dimmed thumbnail reads as not
+// chosen.
+const pressableClassName = "[@media(hover:hover)_and_(pointer:fine)]:hover:opacity-80 v2-interaction-transition";
 
 // Student thumbnail: a 5:6 image with a label band at the bottom, a favorite label on the top edge, and the name below.
 
