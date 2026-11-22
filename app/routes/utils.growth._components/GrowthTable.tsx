@@ -67,7 +67,7 @@ export default function GrowthTable({
   sortOrderStored,
   onPositionsChange,
 }: GrowthTableProps) {
-  const [viewSettings, setViewSettings, legacySortOrder] = useGrowthViewSettings();
+  const [viewSettings, setViewSettings, legacySortOrder, dropLegacySortOrder] = useGrowthViewSettings();
   const showSteps = viewSettings.showNumberInputShortcuts;
   const [sortOrder, setSortOrder] = useState(initialSortOrder);
   const [activeTabKey, setActiveTabKey] = useState<GrowthTab["key"]>("basic");
@@ -87,64 +87,95 @@ export default function GrowthTable({
     });
   }, []);
 
-  // Sort choice and manual order are saved per account. A failed save keeps the screen as chosen and offers a retry.
+  // Sort choice and manual order are saved per account. One save runs at a time, and a change made meanwhile waits
+  // as the latest of its kind, so an earlier order can never land after a later one and a sort change does not cancel
+  // an order save. A failed save keeps the screen as chosen and offers a retry; a failure of one kind does not hide the
+  // other.
   const pageFetcher = useFetcher<GrowthActionResult>();
   const addFetcher = useFetcher<GrowthActionResult>();
   const revalidator = useRevalidator();
-  const pendingSaveRef = useRef<PageSave | null>(null);
-  const failedSaveRef = useRef<{ save: PageSave; previousPositions: Record<string, number | null> | null } | null>(
-    null,
-  );
-  const previousPositionsRef = useRef<Record<string, number | null> | null>(null);
+  const inFlightRef = useRef<{ save: PageSave; started: boolean } | null>(null);
+  const queuedRef = useRef<Partial<Record<PageSave["kind"], PageSave>>>({});
+  const failedRef = useRef<Partial<Record<PageSave["kind"], PageSave>>>({});
+  // The positions before the first order change the server has not confirmed, restored when it rejects the order.
+  const confirmedPositionsRef = useRef<Record<string, number | null> | null>(null);
   const [pageSaveFailed, setPageSaveFailed] = useState<"retryable" | "final" | null>(null);
+
+  const sendNextPageSave = useCallback(() => {
+    if (inFlightRef.current) return;
+    const next = queuedRef.current.order ?? queuedRef.current.sort;
+    if (!next) return;
+    delete queuedRef.current[next.kind];
+    inFlightRef.current = { save: next, started: false };
+    pageFetcher.submit(
+      next.kind === "sort"
+        ? { _intent: "sort", sortOrder: next.sortOrder }
+        : { _intent: "reorder", orderedStudentUids: next.orderedUids },
+      GROWTH_ACTION_SUBMIT_OPTIONS,
+    );
+  }, [pageFetcher]);
 
   const submitPageSave = useCallback(
     (save: PageSave) => {
-      pendingSaveRef.current = save;
-      setPageSaveFailed(null);
-      pageFetcher.submit(
-        save.kind === "sort"
-          ? { _intent: "sort", sortOrder: save.sortOrder }
-          : { _intent: "reorder", orderedStudentUids: save.orderedUids },
-        GROWTH_ACTION_SUBMIT_OPTIONS,
-      );
+      queuedRef.current[save.kind] = save;
+      delete failedRef.current[save.kind];
+      setPageSaveFailed(Object.keys(failedRef.current).length > 0 ? "retryable" : null);
+      sendNextPageSave();
     },
-    [pageFetcher],
+    [sendNextPageSave],
   );
 
   useEffect(() => {
-    if (pageFetcher.state !== "idle" || !pendingSaveRef.current) return;
-    const save = pendingSaveRef.current;
-    pendingSaveRef.current = null;
+    const inFlight = inFlightRef.current;
+    if (!inFlight) return;
+    if (pageFetcher.state !== "idle") {
+      inFlight.started = true;
+      return;
+    }
+    // The fetcher is still idle right after the submit; its answer comes after it has been busy.
+    if (!inFlight.started) return;
+    inFlightRef.current = null;
+    const { save } = inFlight;
     const result = pageFetcher.data;
     if (!isFailure(result)) {
-      failedSaveRef.current = null;
-      previousPositionsRef.current = null;
-      if (save.kind === "order") trackGoogleAnalyticsEvent("growth_plan_changed", { action: "reorder" });
-      return;
+      delete failedRef.current[save.kind];
+      // The account now holds a sort choice, so the one this device kept before is no longer needed.
+      if (save.kind === "sort") dropLegacySortOrder();
+      if (save.kind === "order") {
+        if (!queuedRef.current.order) confirmedPositionsRef.current = null;
+        trackGoogleAnalyticsEvent("growth_plan_changed", { action: "reorder" });
+      }
+      setPageSaveFailed(Object.keys(failedRef.current).length > 0 ? "retryable" : null);
+    } else if (result.retryable) {
+      // A newer change of the same kind is already waiting and will be sent instead.
+      if (!queuedRef.current[save.kind]) failedRef.current[save.kind] = save;
+      setPageSaveFailed(Object.keys(failedRef.current).length > 0 ? "retryable" : null);
+    } else {
+      // The order no longer matches the planner, such as after another tab added a student: show the stored state.
+      if (save.kind === "order") {
+        delete queuedRef.current.order;
+        delete failedRef.current.order;
+        if (confirmedPositionsRef.current) onPositionsChange(confirmedPositionsRef.current);
+        confirmedPositionsRef.current = null;
+      }
+      setPageSaveFailed("final");
+      revalidator.revalidate();
     }
-    if (result.retryable) {
-      failedSaveRef.current = { save, previousPositions: previousPositionsRef.current };
-      setPageSaveFailed("retryable");
-      return;
-    }
-    // The order no longer matches the planner, such as after another tab added a student: show the stored state.
-    if (save.kind === "order" && previousPositionsRef.current) onPositionsChange(previousPositionsRef.current);
-    previousPositionsRef.current = null;
-    failedSaveRef.current = null;
-    setPageSaveFailed("final");
-    revalidator.revalidate();
-  }, [pageFetcher.state, pageFetcher.data, onPositionsChange, revalidator]);
+    sendNextPageSave();
+  }, [pageFetcher.state, pageFetcher.data, onPositionsChange, revalidator, sendNextPageSave, dropLegacySortOrder]);
 
   // A sort chosen on this device before the choice moved to the account carries over once.
   const carriedLegacySortRef = useRef(false);
   useEffect(() => {
     if (carriedLegacySortRef.current || legacySortOrder === undefined) return;
     carriedLegacySortRef.current = true;
-    if (sortOrderStored || legacySortOrder === null || legacySortOrder === initialSortOrder) return;
+    if (sortOrderStored || legacySortOrder === null || legacySortOrder === initialSortOrder) {
+      dropLegacySortOrder();
+      return;
+    }
     setSortOrder(legacySortOrder);
     submitPageSave({ kind: "sort", sortOrder: legacySortOrder });
-  }, [legacySortOrder, sortOrderStored, initialSortOrder, submitPageSave]);
+  }, [legacySortOrder, sortOrderStored, initialSortOrder, submitPageSave, dropLegacySortOrder]);
 
   const changeSortOrder = (next: GrowthSortOrder) => {
     if (next === sortOrder) return;
@@ -168,7 +199,7 @@ export default function GrowthTable({
   const commitOrder = useCallback(
     (nextOrder: string[]) => {
       if (nextOrder.join("\n") === orderedUids.join("\n")) return;
-      previousPositionsRef.current = Object.fromEntries(
+      confirmedPositionsRef.current ??= Object.fromEntries(
         students.map((student) => [student.uid, student.plannerPosition]),
       );
       onPositionsChange(Object.fromEntries(nextOrder.map((uid, index) => [uid, index])));
@@ -273,10 +304,7 @@ export default function GrowthTable({
 
   const saving = savingRows.size > 0 || pageFetcher.state !== "idle" || addFetcher.state !== "idle";
   const retryPageSave = () => {
-    const failed = failedSaveRef.current;
-    if (!failed) return;
-    previousPositionsRef.current = failed.previousPositions;
-    submitPageSave(failed.save);
+    for (const save of Object.values(failedRef.current)) submitPageSave(save);
   };
 
   const rows = displayStudents.map((student, index) => (

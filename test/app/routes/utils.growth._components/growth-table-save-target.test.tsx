@@ -227,4 +227,61 @@ describe("growth table autosave", () => {
     expect(screen.getByRole("button", { name: "테스트 학생 현재 4성" })).toBeTruthy();
     answerTier({ kind: "studentUpdate", student: { ...student, tier: 4 } });
   });
+
+  it("sends a second move only after the first order save answers", async () => {
+    // Two order saves at once could reach the server out of order and leave an earlier order stored.
+    const answers: Array<(value: unknown) => void> = [];
+    function ReorderablePlanner() {
+      const [students, setStudents] = useState([
+        { ...student, plannerPosition: 0 },
+        { ...student, uid: "student-2", name: "다른 학생", plannerPosition: 1 },
+      ]);
+      return (
+        <V2Page width="full">
+          <GrowthTable
+            students={students}
+            availableStudents={[]}
+            onStudentUpdate={() => {}}
+            writeMode="nullable"
+            stacked={false}
+            sortOrder="manual"
+            sortOrderStored
+            onPositionsChange={(positions) =>
+              setStudents((current) =>
+                current.map((row) => ({ ...row, plannerPosition: positions[row.uid] ?? row.plannerPosition })),
+              )
+            }
+          />
+        </V2Page>
+      );
+    }
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/utils/growth/students",
+          action: () => new Promise((resolve) => answers.push(resolve)),
+          element: <ReorderablePlanner />,
+        },
+      ],
+      { initialEntries: ["/utils/growth/students"] },
+    );
+    render(<RouterProvider router={router} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "테스트 학생 아래로" }));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "테스트 학생 위로" }));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(answers).toHaveLength(1);
+
+    await act(async () => {
+      answers[0]({ ok: true });
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(answers).toHaveLength(2);
+    answers[1]({ ok: true });
+  });
 });
