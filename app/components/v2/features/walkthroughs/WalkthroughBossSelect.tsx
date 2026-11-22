@@ -20,6 +20,7 @@ function BossArtwork({ uid, className }: { uid: string; className?: string }) {
 }
 
 // The boss of a guide: a button with the boss's image, and a searchable list of the bosses a guide can be written for.
+// An option with an empty uid (such as the list filter's "전체") has no image.
 export function WalkthroughBossSelect({
   id,
   value,
@@ -84,7 +85,7 @@ export function WalkthroughBossSelect({
           v2FocusRing,
         )}
       >
-        {selected ? <BossArtwork uid={selected.uid} className="right-8 w-1/2" /> : null}
+        {selected?.uid ? <BossArtwork uid={selected.uid} className="right-8 w-1/2" /> : null}
         <span className={cn("relative min-w-0 flex-1 truncate", !selected && "text-v2-fg-tertiary")}>
           {selected?.name ?? "보스 선택"}
         </span>
@@ -155,7 +156,7 @@ export function WalkthroughBossSelect({
                   option.uid === active?.uid && "bg-v2-hover",
                 )}
               >
-                <BossArtwork uid={option.uid} />
+                {option.uid ? <BossArtwork uid={option.uid} /> : null}
                 <span className="relative min-w-0 flex-1 truncate">{option.name}</span>
                 {option.uid === value ? (
                   <CheckIcon className="relative size-4 shrink-0 text-v2-link" aria-hidden="true" />

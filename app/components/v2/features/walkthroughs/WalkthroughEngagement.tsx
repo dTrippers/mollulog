@@ -16,6 +16,7 @@ export function WalkthroughLikeButton({
   likeCount: initialLikeCount,
   signedIn,
   canLike,
+  variant = "secondary",
   className,
 }: {
   timelineUid: string;
@@ -23,6 +24,7 @@ export function WalkthroughLikeButton({
   likeCount: number;
   signedIn: boolean;
   canLike: boolean;
+  variant?: "secondary" | "text";
   className?: string;
 }) {
   const { showSignIn } = useSignIn();
@@ -60,6 +62,7 @@ export function WalkthroughLikeButton({
   return (
     <Button
       size="sm"
+      variant={variant}
       onClick={toggle}
       disabled={fetcher.state === "submitting" || (signedIn && !liked && !canLike)}
       aria-label={`좋아요 ${likeCount}개`}

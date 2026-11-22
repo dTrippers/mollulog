@@ -256,6 +256,7 @@ const migratedRouteFiles: string[] = [
   "routes/furniture._components/FurnitureQuantityField.tsx",
   "routes/furniture._components/FurnitureCatalogScreen.tsx",
   "routes/timelines.$uid.tsx",
+  "routes/timelines._index.tsx",
 ];
 // Allowed exceptions: the file, the line pattern, and the reason.
 const v2GuardExceptions: { file: string; pattern: RegExp; reason: string }[] = [

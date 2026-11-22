@@ -1,18 +1,32 @@
-import { BoltIcon } from "@heroicons/react/16/solid";
-import { ArrowRightIcon, FunnelIcon, PlusIcon } from "@heroicons/react/24/outline";
-import { useState } from "react";
+import { ChatBubbleOvalLeftIcon, FunnelIcon, PlusIcon } from "@heroicons/react/16/solid";
+import { type ReactNode, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import LikeButton from "~/components/features/engagement/LikeButton";
-import { Page, RouteErrorBoundary } from "~/components/features/layout";
-import { RaidPartyCard, type RaidPartyRow } from "~/components/features/raids";
-import { WalkthroughTimelineFeedbackButton } from "~/components/features/walkthrough-timeline";
-import WalkthroughBossSelect from "~/components/features/walkthrough-timeline/WalkthroughBossSelect";
-import { AttributeBadge, Button, PanelFilterButtonsSection, PanelSwitchRow } from "~/components/primitives";
-import { PanelBody, PanelBodySection } from "~/components/primitives/PanelBody";
+import { FeedbackSheet } from "~/components/v2/features/feedback/FeedbackSheet";
+import { WalkthroughBossSelect } from "~/components/v2/features/walkthroughs/WalkthroughBossSelect";
+import {
+  WalkthroughListCard,
+  type WalkthroughListCardData,
+} from "~/components/v2/features/walkthroughs/WalkthroughListCard";
+import { WalkthroughRouteError } from "~/components/v2/features/walkthroughs/WalkthroughRouteError";
+import { UNKNOWN_STUDENT_NAME } from "~/components/v2/features/walkthroughs/walkthrough-parts";
+import { MobileActionBar } from "~/components/v2/layout/MobileActionBar";
+import { PageAside } from "~/components/v2/layout/PageAside";
+import { PageHeader } from "~/components/v2/layout/PageHeader";
+import { PageMain } from "~/components/v2/layout/PageMain";
+import { PanelAction } from "~/components/v2/layout/PanelAction";
+import { PanelSheet } from "~/components/v2/layout/PanelSheet";
+import { V2Page } from "~/components/v2/layout/V2Page";
+import { v2FocusRing } from "~/components/v2/layout/styles";
+import { Button, v2ButtonClassName } from "~/components/v2/primitives/Button";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { Switch } from "~/components/v2/primitives/Switch";
+import { ToggleChip } from "~/components/v2/primitives/ToggleChip";
 import { getPostgresWalkthroughTimelineLikeSummaries } from "~/db/postgres/walkthrough-timeline-likes";
 import { listPostgresVisibleWalkthroughTimelines } from "~/db/postgres/walkthrough-timelines";
+import { guideBodyPlainText } from "~/domain/guide-body";
+import { walkthroughMentionLabelResolver } from "~/domain/walkthrough-mentions";
 import {
   WALKTHROUGH_TIMELINE_DEFENSE_TYPES,
   WALKTHROUGH_TIMELINE_DIFFICULTIES,
@@ -20,35 +34,65 @@ import {
   type WalkthroughTimelineRecord,
 } from "~/domain/walkthrough-timeline";
 import { DEMO_WALKTHROUGH_BOSS_NAME, DEMO_WALKTHROUGH_TIMELINE } from "~/domain/walkthrough-timeline-demo";
-import { formatInstant } from "~/lib/date-time";
 import { trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
 import { canonicalLink, socialMeta } from "~/lib/seo";
-import {
-  defenseTypeColor,
-  defenseTypeLocale,
-  defenseTypeShortLocale,
-  difficultyLocale,
-  terrainLocale,
-} from "~/locales/ko";
-import { bossImageUrl } from "~/models/assets";
+import { cn } from "~/lib/utils";
+import { defenseTypeShortLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { getUserParties } from "~/models/party.server";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getVisibleSenseisById } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
+import { walkthroughStudentNameLookup } from "./timelines._components/timeline-route-data.server";
+
+const PAGE_TITLE = "공략/타임라인";
+const FILTER_PANEL_ID = "timeline-filter";
+const FEEDBACK_TITLE = "의견/오류 제보";
+// A card shows two lines of the body, so the rest never needs to reach the page.
+const EXCERPT_MAX_LENGTH = 200;
+const FILTER_KEYS = ["bossUid", "terrain", "defenseType", "difficulty", "auto", "mine", "liked"] as const;
 
 export const meta: MetaFunction = ({ location }) => {
-  const title = "공략 타임라인";
-  const description = "보스와 지형, 방어 타입, 난이도에 맞는 공략 타임라인을 찾아보세요.";
+  const description = "보스와 지형, 방어 타입, 난이도에 맞는 공략과 타임라인을 찾아보세요.";
   return [
-    { title: `${title} | 몰루로그` },
+    { title: `${PAGE_TITLE} | 몰루로그` },
     { name: "description", content: description },
-    ...socialMeta({ title, description, pathname: location.pathname }),
+    ...socialMeta({ title: PAGE_TITLE, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };
 
-export const ErrorBoundary = RouteErrorBoundary;
+export const ErrorBoundary = WalkthroughRouteError;
+
+function toCardData(
+  timeline: Omit<WalkthroughTimelineRecord, "userId">,
+  studentName: (uid: string) => string | undefined,
+): WalkthroughListCardData {
+  const parties = [...timeline.document.parties].sort((left, right) => left.order - right.order);
+  const excerpt = guideBodyPlainText(timeline.body, walkthroughMentionLabelResolver(parties, studentName)).replace(
+    /\s+/g,
+    " ",
+  );
+  return {
+    uid: timeline.uid,
+    title: timeline.title,
+    bossUid: timeline.bossUid,
+    terrain: timeline.terrain,
+    defenseType: timeline.defenseType,
+    maxDifficulty: timeline.maxDifficulty,
+    isAuto: timeline.isAuto,
+    visibility: timeline.visibility,
+    updatedAt: timeline.updatedAt,
+    excerpt: excerpt.length > EXCERPT_MAX_LENGTH ? `${excerpt.slice(0, EXCERPT_MAX_LENGTH)}…` : excerpt,
+    parties: parties.map((party) => ({
+      uid: party.uid,
+      studentUids: [...party.units]
+        .sort((left, right) => left.slot - right.slot)
+        .flatMap((unit) => (unit.studentUid ? [unit.studentUid] : [])),
+      hasTimeline: party.steps.length > 0,
+    })),
+  };
+}
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -100,12 +144,16 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     sensei?.id,
     { ctx },
   );
-  const visibleAuthorIds = new Set(authors.map((author) => author.id));
-  const visibleTimelines = timelines.filter((timeline) => visibleAuthorIds.has(timeline.userId));
-  const timelineUids = visibleTimelines.map((timeline) => timeline.uid);
+  const authorsById = new Map(authors.map((author) => [author.id, author.username]));
+  const visibleTimelines = timelines.filter((timeline) => authorsById.has(timeline.userId));
   const [recruitedStudentTiers, engagementByUid, earlierPartiesPath] = await Promise.all([
     sensei ? getRecruitedStudentTiers(env, sensei.id) : Promise.resolve({}),
-    getPostgresWalkthroughTimelineLikeSummaries(env, timelineUids, sensei?.id, { ctx }),
+    getPostgresWalkthroughTimelineLikeSummaries(
+      env,
+      visibleTimelines.map((timeline) => timeline.uid),
+      sensei?.id,
+      { ctx },
+    ),
     // The earlier parties page is only offered to someone who still has parties there.
     mineOnly
       ? getUserParties(env, sensei.username, { includePrivate: true }).then((parties) =>
@@ -114,347 +162,285 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       : null,
   ]);
 
+  const studentName = walkthroughStudentNameLookup(rawStudents);
+  const shownStudentUids = new Set<string>();
+  const toCard = (timeline: Omit<WalkthroughTimelineRecord, "userId">) => {
+    const card = toCardData(timeline, studentName);
+    for (const party of card.parties) for (const uid of party.studentUids) shownStudentUids.add(uid);
+    return card;
+  };
+  const guides = visibleTimelines.map((timeline) => ({
+    card: toCard(timeline),
+    author: authorsById.get(timeline.userId) ?? null,
+    // An author cannot like their own guide.
+    canLike: timeline.userId !== sensei?.id,
+  }));
+  const demo = !filters.autoOnly && !filters.mineOnly && !filters.likedOnly ? toCard(DEMO_WALKTHROUGH_TIMELINE) : null;
+
   return {
-    timelines: visibleTimelines,
+    guides,
+    demo,
+    demoBossName: bosses.find((boss) => boss.uid === DEMO_WALKTHROUGH_TIMELINE.bossUid)?.name ?? DEMO_WALKTHROUGH_BOSS_NAME,
     filters,
     engagementByUid,
     bosses,
-    authorsById: Object.fromEntries(authors.map((author) => [author.id, author.username])),
-    studentsByUid: Object.fromEntries(
-      Object.entries(rawStudents).map(([uid, student]) => [
-        uid,
-        {
-          name: student.name,
-          attackType: student.attackType,
-          defenseType: student.defenseType,
-          role: student.role,
-        },
-      ]),
-    ),
-    recruitedStudentTiers,
-    hasRecruitedStudentData: sensei !== null,
+    studentNames: Object.fromEntries([...shownStudentUids].map((uid) => [uid, studentName(uid) ?? null])),
+    recruitedStudentUids: Object.keys(recruitedStudentTiers),
     signedIn: sensei !== null,
     earlierPartiesPath,
   };
 };
 
+function FilterGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div role="group" aria-label={title} className="space-y-2">
+      <p className="text-xs font-semibold text-v2-fg-tertiary">{title}</p>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+function ChoiceChips<T extends string>({
+  title,
+  options,
+  value,
+  label,
+  onChange,
+}: {
+  title: string;
+  options: readonly T[];
+  value: T | null;
+  label: (option: T) => string;
+  onChange: (value: T | null) => void;
+}) {
+  return (
+    <FilterGroup title={title}>
+      <ToggleChip pressed={value === null} onPressedChange={() => onChange(null)}>
+        전체
+      </ToggleChip>
+      {options.map((option) => (
+        <ToggleChip key={option} pressed={value === option} onPressedChange={() => onChange(option)}>
+          {label(option)}
+        </ToggleChip>
+      ))}
+    </FilterGroup>
+  );
+}
+
 export default function WalkthroughTimelineCatalogPage() {
   const {
-    timelines,
+    guides,
+    demo,
+    demoBossName,
     filters,
     engagementByUid,
     bosses,
-    authorsById,
-    studentsByUid,
-    recruitedStudentTiers,
-    hasRecruitedStudentData,
+    studentNames,
+    recruitedStudentUids,
     signedIn,
     earlierPartiesPath,
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showUnrecruitedStudents, setShowUnrecruitedStudents] = useState(true);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const recruited = new Set(recruitedStudentUids);
+  const bossNameByUid = new Map(bosses.map((boss) => [boss.uid, boss.name]));
+  const studentName = (uid: string) => studentNames[uid] ?? UNKNOWN_STUDENT_NAME;
+  const isUnrecruited = (uid: string) => signedIn && showUnrecruitedStudents && !recruited.has(uid);
+  const filterActive = FILTER_KEYS.some((key) => searchParams.has(key));
 
-  const setFilter = (key: string, value: string | null) => {
+  const setFilter = (key: (typeof FILTER_KEYS)[number], value: string | null) => {
     if (searchParams.get(key) === value) return;
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
     else next.delete(key);
-    setSearchParams(next, { replace: true });
+    setSearchParams(next, { replace: true, preventScrollReset: true });
     trackGoogleAnalyticsEventIfAllowed("filter_apply", { scope: "timelines", filter: key });
   };
+  const resetFilters = () => {
+    const next = new URLSearchParams(searchParams);
+    for (const key of FILTER_KEYS) next.delete(key);
+    setSearchParams(next, { replace: true, preventScrollReset: true });
+  };
+
+  const emptyMessage = filters.mineOnly
+    ? "조건에 맞는 내 공략이 없어요."
+    : filters.likedOnly
+      ? "조건에 맞는 좋아요한 공략이 없어요."
+      : filters.autoOnly
+        ? "조건에 맞는 오토 공략이 없어요."
+        : "조건에 맞는 공략이 없어요.";
 
   return (
-    <Page
-      title="공략 타임라인 (β)"
-      description="다른 선생님들이 작성한 총력전/대결전 공략과 타임라인을 확인해보세요"
-      contentWidth="full"
-      panels={[
-        {
-          title: "필터",
-          Icon: FunnelIcon,
-          children: (
-            <PanelBody>
-              <PanelBodySection title="보스">
-                <WalkthroughBossSelect
-                  value={filters.bossUid ?? ""}
-                  options={[{ uid: "", name: "전체" }, ...bosses]}
-                  onChange={(bossUid) => setFilter("bossUid", bossUid || null)}
-                />
-              </PanelBodySection>
-              <PanelFilterButtonsSection
-                title="지형"
-                buttonProps={[
-                  {
-                    text: "전체",
-                    active: filters.terrain === null,
-                    onToggle: () => setFilter("terrain", null),
-                  },
-                  ...WALKTHROUGH_TIMELINE_TERRAINS.map((terrain) => ({
-                    text: terrainLocale[terrain],
-                    active: filters.terrain === terrain,
-                    onToggle: () => setFilter("terrain", terrain),
-                  })),
-                ]}
-                exclusive
-                atLeastOne
-                size="sm"
-              />
-              <PanelFilterButtonsSection
-                title="방어 타입"
-                buttonProps={[
-                  {
-                    text: "전체",
-                    active: filters.defenseType === null,
-                    onToggle: () => setFilter("defenseType", null),
-                  },
-                  ...WALKTHROUGH_TIMELINE_DEFENSE_TYPES.map((defenseType) => ({
-                    text: defenseTypeShortLocale[defenseType],
-                    color: defenseTypeColor[defenseType],
-                    active: filters.defenseType === defenseType,
-                    onToggle: () => setFilter("defenseType", defenseType),
-                  })),
-                ]}
-                exclusive
-                atLeastOne
-                size="sm"
-              />
-              <PanelFilterButtonsSection
-                title="난이도"
-                buttonProps={[
-                  {
-                    text: "전체",
-                    active: filters.maxDifficulty === null,
-                    onToggle: () => setFilter("difficulty", null),
-                  },
-                  ...WALKTHROUGH_TIMELINE_DIFFICULTIES.map((difficulty) => ({
-                    text: difficultyLocale[difficulty],
-                    active: filters.maxDifficulty === difficulty,
-                    onToggle: () => setFilter("difficulty", difficulty),
-                  })),
-                ]}
-                exclusive
-                atLeastOne
-                size="sm"
-              />
-              <div className="space-y-0">
-                <PanelSwitchRow
-                  title="오토 공략만 보기"
-                  checked={filters.autoOnly}
-                  onChange={(checked) => setFilter("auto", checked ? "1" : null)}
-                  className="border-t-0 pt-0"
-                />
-                {hasRecruitedStudentData ? (
-                  <PanelSwitchRow
-                    title="미모집 학생 표시"
-                    checked={showUnrecruitedStudents}
-                    onChange={setShowUnrecruitedStudents}
-                    className="border-t-0 pt-0"
-                  />
-                ) : null}
-                {signedIn ? (
-                  <PanelSwitchRow
-                    title="내 공략만 보기"
-                    checked={filters.mineOnly}
-                    onChange={(checked) => setFilter("mine", checked ? "1" : null)}
-                    className="border-t-0 pt-0"
-                  />
-                ) : null}
-                {signedIn ? (
-                  <PanelSwitchRow
-                    title="좋아요한 공략만 보기"
-                    checked={filters.likedOnly}
-                    onChange={(checked) => setFilter("liked", checked ? "1" : null)}
-                    className="border-t-0 pt-0"
-                  />
-                ) : null}
-              </div>
-            </PanelBody>
-          ),
-        },
-      ]}
-      belowPanels={<WalkthroughTimelineFeedbackButton signedIn={signedIn} />}
-    >
-      <div className="py-4">
-        {signedIn ? (
-          <div className="mb-4 flex justify-end">
-            <Button to="/timelines/new" icon={PlusIcon} text="공략 작성" variant="primary" />
-          </div>
-        ) : null}
-
-        {filters.mineOnly && earlierPartiesPath ? (
-          <p className="mb-4 text-sm text-muted-foreground">
-            이전 방식으로 등록한 편성과 공략은{" "}
-            <Link to={earlierPartiesPath} className="font-medium text-foreground underline">
-              이전 편성·공략
+    <V2Page width="wide">
+      <PageHeader
+        title={PAGE_TITLE}
+        trailing={
+          signedIn ? (
+            <Link to="/timelines/new" className={v2ButtonClassName({ variant: "primary" })}>
+              <PlusIcon className="size-4" aria-hidden="true" />
+              공략 작성
             </Link>
-            에서 볼 수 있어요.
-          </p>
-        ) : null}
-
-        {(filters.autoOnly || filters.mineOnly) && timelines.length === 0 ? (
-          <div
-            className="rounded-lg bg-card p-8 text-center text-sm text-muted-foreground"
-            role="status"
-            aria-live="polite"
-          >
-            {filters.mineOnly ? "조건에 맞는 내 공략이 없어요." : "조건에 맞는 오토 공략이 없어요."}
-          </div>
-        ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {!filters.autoOnly && !filters.mineOnly ? (
-              <WalkthroughTimelineCard
-                timeline={DEMO_WALKTHROUGH_TIMELINE}
-                bossName={
-                  bosses.find((boss) => boss.uid === DEMO_WALKTHROUGH_TIMELINE.bossUid)?.name ??
-                  DEMO_WALKTHROUGH_BOSS_NAME
-                }
-                studentsByUid={studentsByUid}
-                recruitedStudentTiers={recruitedStudentTiers}
-                showUnrecruitedStudents={false}
-                engagement={{ liked: false, likeCount: 0 }}
-                signedIn={signedIn}
-                demo
+          ) : undefined
+        }
+        trailingInline
+      />
+      <PageAside>
+        <PanelSheet
+          panelId={FILTER_PANEL_ID}
+          title="필터"
+          Icon={FunnelIcon}
+          headerAction={
+            filterActive ? (
+              <PanelAction variant="danger" onClick={resetFilters}>
+                초기화
+              </PanelAction>
+            ) : undefined
+          }
+        >
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p id="timeline-filter-boss" className="text-xs font-semibold text-v2-fg-tertiary">
+                보스
+              </p>
+              <WalkthroughBossSelect
+                describedBy="timeline-filter-boss"
+                value={filters.bossUid ?? ""}
+                options={[{ uid: "", name: "전체" }, ...bosses]}
+                onChange={(bossUid) => setFilter("bossUid", bossUid || null)}
               />
-            ) : null}
-            {timelines.map((timeline) => (
-              <WalkthroughTimelineCard
-                key={timeline.uid}
-                timeline={timeline}
-                bossName={bosses.find((boss) => boss.uid === timeline.bossUid)?.name ?? null}
-                author={authorsById[timeline.userId]}
-                studentsByUid={studentsByUid}
-                recruitedStudentTiers={recruitedStudentTiers}
-                showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
-                engagement={engagementByUid[timeline.uid] ?? { liked: false, likeCount: 0 }}
-                signedIn={signedIn}
+            </div>
+            <ChoiceChips
+              title="지형"
+              options={WALKTHROUGH_TIMELINE_TERRAINS}
+              value={filters.terrain}
+              label={(terrain) => terrainLocale[terrain]}
+              onChange={(terrain) => setFilter("terrain", terrain)}
+            />
+            <ChoiceChips
+              title="방어 타입"
+              options={WALKTHROUGH_TIMELINE_DEFENSE_TYPES}
+              value={filters.defenseType}
+              label={(defenseType) => defenseTypeShortLocale[defenseType]}
+              onChange={(defenseType) => setFilter("defenseType", defenseType)}
+            />
+            <ChoiceChips
+              title="난이도"
+              options={WALKTHROUGH_TIMELINE_DIFFICULTIES}
+              value={filters.maxDifficulty}
+              label={(difficulty) => difficultyLocale[difficulty]}
+              onChange={(difficulty) => setFilter("difficulty", difficulty)}
+            />
+            <div className="space-y-1">
+              <Switch
+                id="timeline-filter-auto"
+                label="오토 공략만 보기"
+                checked={filters.autoOnly}
+                onCheckedChange={(checked) => setFilter("auto", checked ? "1" : null)}
               />
-            ))}
-          </div>
-        )}
-      </div>
-    </Page>
-  );
-}
-
-type TimelineStudent = Awaited<ReturnType<typeof loader>>["studentsByUid"][string];
-
-function WalkthroughTimelineCard({
-  timeline,
-  bossName,
-  author,
-  studentsByUid,
-  recruitedStudentTiers,
-  showUnrecruitedStudents,
-  engagement,
-  signedIn,
-  demo = false,
-}: {
-  timeline: Omit<WalkthroughTimelineRecord, "userId">;
-  bossName: string | null;
-  author?: string;
-  studentsByUid: Record<string, TimelineStudent>;
-  recruitedStudentTiers: Record<string, number>;
-  showUnrecruitedStudents: boolean;
-  engagement: { liked: boolean; likeCount: number };
-  signedIn: boolean;
-  demo?: boolean;
-}) {
-  const rows: RaidPartyRow[] = timeline.document.parties.map((party, partyIndex) => ({
-    key: party.uid,
-    label: String(partyIndex + 1),
-    slots: Array.from({ length: timeline.document.partySize }, (_, slot) => {
-      const unit = party.units.find((candidate) => candidate.slot === slot);
-      const studentUid = unit?.studentUid;
-      if (!studentUid) return { uid: null };
-      const student = studentsByUid[studentUid];
-      const isUnrecruited = showUnrecruitedStudents && recruitedStudentTiers[studentUid] === undefined;
-      return {
-        uid: studentUid,
-        name: student?.name,
-        attackType: student?.attackType,
-        defenseType: student?.defenseType,
-        role: student?.role,
-        tier: unit.snapshot?.tier,
-        grayscale: isUnrecruited,
-        unrecruited: isUnrecruited,
-      };
-    }),
-  }));
-
-  return (
-    <article
-      className="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 ring-primary/30 dark:shadow-md dark:shadow-black/20 data-[demo=true]:ring-1"
-      data-demo={demo}
-    >
-      <div>
-        <div className="relative overflow-hidden p-4">
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 right-0 w-3/5 bg-contain bg-right bg-no-repeat opacity-55"
-            style={{ backgroundImage: `url(${bossImageUrl(timeline.bossUid)})` }}
-          />
-          <span className="pointer-events-none absolute inset-0 bg-linear-to-r from-card from-45% via-card/90 via-70% to-card/30" />
-          <div className="relative min-w-0">
-            <p className="mb-1 text-xs font-medium text-muted-foreground">{bossName ?? "보스 정보 확인 불가"}</p>
-            <h2 className="line-clamp-2 text-lg font-bold text-foreground">{timeline.title}</h2>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              <span>
-                {demo
-                  ? "데모 타임라인으로 동작을 확인해보세요"
-                  : `${author ? `@${author} · ` : ""}${formatInstant(timeline.updatedAt, { timeZone: "Asia/Seoul" })}`}
-              </span>
-              {timeline.visibility !== "public" ? (
-                <span className="rounded-full bg-muted px-2 py-0.5">
-                  {timeline.visibility === "unlisted" ? "목록 미노출" : "나만 보기"}
-                </span>
+              {signedIn ? (
+                <>
+                  <Switch
+                    id="timeline-filter-unrecruited"
+                    label="미모집 학생 표시"
+                    checked={showUnrecruitedStudents}
+                    onCheckedChange={setShowUnrecruitedStudents}
+                  />
+                  <Switch
+                    id="timeline-filter-mine"
+                    label="내 공략만 보기"
+                    checked={filters.mineOnly}
+                    onCheckedChange={(checked) => setFilter("mine", checked ? "1" : null)}
+                  />
+                  <Switch
+                    id="timeline-filter-liked"
+                    label="좋아요한 공략만 보기"
+                    checked={filters.likedOnly}
+                    onCheckedChange={(checked) => setFilter("liked", checked ? "1" : null)}
+                  />
+                </>
               ) : null}
             </div>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5 px-4 py-3">
-          {timeline.isAuto ? (
-            <span className="inline-flex w-fit shrink-0 items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-semibold leading-none text-emerald-700 dark:text-emerald-300">
-              <BoltIcon className="size-3.5" aria-hidden="true" />
-              오토
-            </span>
-          ) : null}
-          <AttributeBadge text={terrainLocale[timeline.terrain]} color={null} />
-          <AttributeBadge text={difficultyLocale[timeline.maxDifficulty]} color={null} />
-          <AttributeBadge
-            text={defenseTypeLocale[timeline.defenseType]}
-            color={defenseTypeColor[timeline.defenseType]}
-          />
-        </div>
-      </div>
-
-      <RaidPartyCard
-        rows={rows}
-        summaryItems={[]}
-        popupIdPrefix={`walkthrough-${timeline.uid}`}
-        slotCount={timeline.document.partySize}
-        tierPlacement="below"
-        centerRowLabels
-        emptyText="편성 정보가 없어요"
-        className="grow rounded-none pt-0 md:pt-0"
-      />
-      <div className="flex items-center justify-between gap-2 px-4 pb-4">
-        {!demo && timeline.visibility === "public" ? (
-          <LikeButton
-            targetUid={timeline.uid}
-            action={`/api/timelines/${timeline.uid}/likes`}
-            liked={engagement.liked}
-            likeCount={engagement.likeCount}
-            signedIn={signedIn}
-          />
+        </PanelSheet>
+        {signedIn ? (
+          <div className="flex justify-end">
+            <Button variant="secondary" className="text-xs" onClick={() => setFeedbackOpen(true)}>
+              <ChatBubbleOvalLeftIcon className="size-4" aria-hidden="true" />
+              {FEEDBACK_TITLE}
+            </Button>
+          </div>
         ) : null}
-        <Button
-          to={`/timelines/${timeline.uid}`}
-          text="자세히 보기"
-          icon={ArrowRightIcon}
-          size="xs"
-          className="ml-auto"
-        />
-      </div>
-    </article>
+      </PageAside>
+      <MobileActionBar
+        panels={[{ panelId: FILTER_PANEL_ID, title: "필터", Icon: FunnelIcon }]}
+        links={
+          signedIn
+            ? [
+                {
+                  key: "feedback",
+                  title: FEEDBACK_TITLE,
+                  Icon: ChatBubbleOvalLeftIcon,
+                  onClick: () => setFeedbackOpen(true),
+                },
+              ]
+            : []
+        }
+      />
+      <PageMain>
+        <div className="flex flex-col gap-4">
+          {filters.mineOnly && earlierPartiesPath ? (
+            <StatusNotice tone="neutral">
+              이전 방식으로 등록한 편성과 공략은{" "}
+              <Link to={earlierPartiesPath} className={cn("font-medium text-v2-link hover:underline", v2FocusRing)}>
+                이전 편성·공략
+              </Link>
+              에서 볼 수 있어요.
+            </StatusNotice>
+          ) : null}
+          {guides.length === 0 && filterActive ? (
+            <p role="status" className="rounded-lg bg-v2-surface p-v2-block-p text-sm text-v2-fg-secondary">
+              {emptyMessage}
+            </p>
+          ) : null}
+          {demo || guides.length > 0 ? (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {demo ? (
+                <WalkthroughListCard
+                  guide={demo}
+                  bossName={demoBossName}
+                  author={null}
+                  studentName={studentName}
+                  isUnrecruited={() => false}
+                  engagement={{ liked: false, likeCount: 0 }}
+                  signedIn={signedIn}
+                  canLike={false}
+                  demo
+                />
+              ) : null}
+              {guides.map(({ card, author, canLike }) => (
+                <WalkthroughListCard
+                  key={card.uid}
+                  guide={card}
+                  bossName={bossNameByUid.get(card.bossUid) ?? null}
+                  author={author}
+                  studentName={studentName}
+                  isUnrecruited={isUnrecruited}
+                  engagement={engagementByUid[card.uid] ?? { liked: false, likeCount: 0 }}
+                  signedIn={signedIn}
+                  canLike={canLike}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </PageMain>
+      <FeedbackSheet
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        featureName={PAGE_TITLE}
+        feedbackType="walkthrough_timeline_feedback"
+      />
+    </V2Page>
   );
 }
