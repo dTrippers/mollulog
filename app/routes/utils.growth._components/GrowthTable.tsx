@@ -72,7 +72,12 @@ export default function GrowthTable({
   const [sortOrder, setSortOrder] = useState(initialSortOrder);
   const [activeTabKey, setActiveTabKey] = useState<GrowthTab["key"]>("basic");
   const activeTab = GROWTH_TABS.find((tab) => tab.key === activeTabKey) ?? GROWTH_TABS[0];
-  const { getInputProps } = useNumberInputFlowNavigation({ tabMovesBetweenInputs: true });
+  // Tab moves between one student's values, and between students it passes that student's buttons (handle, ↑/↓, ⋯,
+  // 재화), so they stay reachable by keyboard.
+  const { getInputProps } = useNumberInputFlowNavigation({
+    tabMovesBetweenInputs: true,
+    tabScopeAttribute: "data-growth-student",
+  });
   const flowProps = useCallback(() => getInputProps(), [getInputProps]);
 
   // Autosave status of the rows, for the page's "저장 중..." toast.

@@ -40,12 +40,20 @@ const SAME_ROW_EPSILON = 1;
 // `enterMovesDown` makes Enter move to the cell below, the way a spreadsheet does, for screens that are a table of
 // entries rather than a form Enter would submit. `tabMovesBetweenInputs` makes Tab and Shift+Tab go to the next and
 // previous member of the flow in document order, past the step buttons between them; past the last member Tab leaves
-// the flow as usual.
+// the flow as usual. `tabScopeAttribute` names an attribute that splits the flow into parts, such as the rows of one
+// student: Tab moves between members only within one part, and past its end the browser handles Tab, so the controls
+// between the parts stay reachable.
 export function useNumberInputFlowNavigation({
   selectOnFocus = true,
   enterMovesDown = false,
   tabMovesBetweenInputs = false,
-}: { selectOnFocus?: boolean; enterMovesDown?: boolean; tabMovesBetweenInputs?: boolean } = {}) {
+  tabScopeAttribute,
+}: {
+  selectOnFocus?: boolean;
+  enterMovesDown?: boolean;
+  tabMovesBetweenInputs?: boolean;
+  tabScopeAttribute?: string;
+} = {}) {
   const gridId = useId();
 
   const selectInputValue = useCallback(
@@ -83,7 +91,7 @@ export function useNumberInputFlowNavigation({
         }
 
         if (tabMovesBetweenInputs && event.key === "Tab") {
-          const targetInput = findTabTarget(event.currentTarget, gridId, event.shiftKey ? -1 : 1);
+          const targetInput = findTabTarget(event.currentTarget, gridId, event.shiftKey ? -1 : 1, tabScopeAttribute);
           if (!targetInput) {
             return;
           }
@@ -112,7 +120,7 @@ export function useNumberInputFlowNavigation({
         selectInputValue(targetInput);
       },
     }),
-    [gridId, selectInputValue, enterMovesDown, tabMovesBetweenInputs],
+    [gridId, selectInputValue, enterMovesDown, tabMovesBetweenInputs, tabScopeAttribute],
   );
 
   return { getInputProps };
@@ -155,12 +163,23 @@ function getDirection(key: string): NumberInputFlowDirection | null {
   }
 }
 
-function findTabTarget(currentInput: HTMLElement, gridId: string, step: -1 | 1): HTMLElement | null {
-  const inputs = Array.from(currentInput.ownerDocument.querySelectorAll<HTMLElement>("[data-number-input-flow]")).filter(
+function findTabTarget(
+  currentInput: HTMLElement,
+  gridId: string,
+  step: -1 | 1,
+  scopeAttribute: string | undefined,
+): HTMLElement | null {
+  const scopeOf = (element: HTMLElement) =>
+    scopeAttribute ? (element.closest(`[${scopeAttribute}]`)?.getAttribute(scopeAttribute) ?? null) : null;
+  const scope = scopeOf(currentInput);
+  const inputs = Array.from(
+    currentInput.ownerDocument.querySelectorAll<HTMLElement>("[data-number-input-flow]"),
+  ).filter(
     (input) =>
       input.dataset.numberInputFlow === gridId &&
       !(input as HTMLInputElement).disabled &&
-      input.getClientRects().length > 0,
+      input.getClientRects().length > 0 &&
+      scopeOf(input) === scope,
   );
   const currentIndex = inputs.indexOf(currentInput);
   if (currentIndex === -1) {
