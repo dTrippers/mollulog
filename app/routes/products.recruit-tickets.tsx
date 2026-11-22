@@ -99,10 +99,7 @@ export default function RecruitTickets() {
             {cards.length === 0 ? (
               <p className="text-base font-semibold text-v2-fg">지금 볼 수 있는 모집권이 없어요</p>
             ) : (
-              <>
-                <p className="text-base font-semibold text-v2-fg">모집하지 않은 학생이 있는 모집권이 없어요</p>
-                <p className="mt-1 text-sm text-v2-fg-secondary">필터를 끄면 모든 모집권을 볼 수 있어요.</p>
-              </>
+              <p className="text-base font-semibold text-v2-fg">모집하지 않은 학생이 있는 모집권이 없어요</p>
             )}
           </div>
         ) : (

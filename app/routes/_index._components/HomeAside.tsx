@@ -234,7 +234,6 @@ export function HomeFeedBlock({
         {feed.status === "error" ? (
           <div className="flex flex-col gap-v2-block-gap p-v2-block-p">
             <p className="text-sm font-medium text-v2-fg">최근 피드를 불러오지 못했어요</p>
-            <p className="text-xs text-v2-fg-tertiary">일시적인 문제일 수 있어요.</p>
             <div>
               <HomeRetryButton onClick={onRetry} />
             </div>

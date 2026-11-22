@@ -41,7 +41,7 @@ export function AsideLinks({ items }: { items: AsideLinkItem[] }) {
             <span className="min-w-0 flex-1">
               <span className={cn("block text-sm font-medium", disabled && "text-v2-fg-disabled")}>{item.title}</span>
               {item.description && !disabled ? (
-                <span className="line-clamp-2 text-xs text-v2-fg-tertiary">{item.description}</span>
+                <span className="line-clamp-2 break-keep text-xs text-v2-fg-tertiary">{item.description}</span>
               ) : null}
             </span>
             {item.badge ? <span className="text-xs text-v2-fg-tertiary">{item.badge}</span> : null}

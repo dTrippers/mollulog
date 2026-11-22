@@ -72,7 +72,7 @@ export default function ScannerLayout() {
     <V2Page width="wide" panelRequest={panelRequest} onStackedChange={setStacked}>
       <PageHeader
         title="게임 화면 인식기"
-        description="게임 화면 스크린샷 또는 녹화 영상을 업로드하여 인게임 데이터를 인식 후 등록할 수 있어요"
+        description="스크린샷이나 녹화 영상을 올리면 게임 데이터를 인식해 등록해요"
         trailing={
           <ScannerQuota>
             <ScannerQuotaMeter subject="이미지" state={toMeterState(image)} />

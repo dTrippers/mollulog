@@ -399,7 +399,6 @@ export default function DevelopersKeys() {
             <div className="mt-v2-group-gap space-y-v2-group-gap">
               <StatusNotice tone="warning">
                 <span className="block font-semibold">키는 지금만 확인할 수 있어요.</span>
-                <span className="block">이 화면을 벗어나면 다시 확인할 수 없어요. 안전한 곳에 복사해 두세요.</span>
               </StatusNotice>
               <RevealedTokenField key={reveal.token} token={reveal.token} />
               <footer className="flex flex-wrap items-center justify-end gap-4">
@@ -437,7 +436,6 @@ export default function DevelopersKeys() {
           <section className="space-y-v2-group-gap rounded-lg bg-v2-surface p-v2-block-p">
             <StatusNotice tone="danger">
               <span className="font-semibold">API 키 목록을 불러오지 못했어요.</span>
-              <span className="block">다시 시도하거나 잠시 후 이 화면을 새로고침해주세요.</span>
             </StatusNotice>
             <Button
               type="button"

@@ -561,7 +561,6 @@ function ApChargeDialog({
         </>
       }
     >
-      <p className="text-sm text-v2-fg-secondary">매일 청휘석으로 AP를 충전하는 횟수예요. 0회면 소비하지 않아요.</p>
       <div className="flex items-center gap-3">
         <FieldLabel htmlFor={inputId}>하루 충전 횟수</FieldLabel>
         <div className="ml-auto w-40">
@@ -655,7 +654,7 @@ function AttendanceDialog({
       }
     >
       <p className="text-sm text-v2-fg-secondary">
-        출석 1일차 날짜를 입력해주세요. 5일차에 50개, 10일차에 100개를 받아요. 저장하면 기존 출석 계획을 바꿔요.
+        5일차에 청휘석 50개, 10일차에 100개를 받아요. 저장하면 기존 출석 계획을 덮어써요.
       </p>
       <DateField label="출석 1일차" value={date} onChange={setDate} />
     </PlannerDialog>

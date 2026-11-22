@@ -106,7 +106,6 @@ export function UserFollowButton({
         returnFocusRef={buttonRef}
       >
         <p className="text-sm font-semibold text-v2-fg">로그인이 필요해요</p>
-        <p className="mt-1 text-sm text-v2-fg-secondary">로그인하면 이 선생님을 팔로우할 수 있어요.</p>
         <Button
           variant="primary"
           size="sm"

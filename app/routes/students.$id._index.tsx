@@ -350,7 +350,7 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
       operation: "save",
     });
     return data<StudentBasicInfoActionData>(
-      { ok: false, error: "육성 상태를 저장하지 못했어요. 잠시 후 다시 시도해주세요", retryable: true },
+      { ok: false, error: "육성 상태를 프로필에 반영하지 못했어요.", retryable: true },
       { status: 500 },
     );
   }

@@ -417,7 +417,6 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         open={dialog === "complete"}
         title="모집 완료 기록"
         submitLabel="기록"
-        description="모집을 마친 뒤 남은 재화와 스택을 입력해주세요. 예상값으로 채워 두었어요."
         initialValues={completionValues}
         onClose={() => setDialog(null)}
         onSubmit={(values) => {

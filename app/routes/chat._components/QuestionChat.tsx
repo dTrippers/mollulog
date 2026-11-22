@@ -99,12 +99,12 @@ type QuestionChatProps = {
 };
 
 const ERROR_COPY: Record<ChatErrorCode | "question_too_long", string> = {
-  rate_limited: "짧은 시간에 질문이 많았어요. 잠시 후 다시 시도해 주세요.",
-  service_unavailable: "지금은 AI 챗봇을 사용할 수 없어요. 잠시 후 다시 시도해 주세요.",
-  provider_failure: "지금은 AI 챗봇을 사용할 수 없어요. 잠시 후 다시 시도해 주세요.",
+  rate_limited: "짧은 시간에 요청이 너무 많았어요.",
+  service_unavailable: "지금은 AI 챗봇을 사용할 수 없어요.",
+  provider_failure: "지금은 AI 챗봇을 사용할 수 없어요.",
   timeout: "답변하는 데 시간이 너무 오래 걸렸어요. 질문을 더 구체적으로 바꿔서 다시 시도해 주세요.",
-  internal_error: "답변을 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
-  validation_failed: "답변을 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
+  internal_error: "요청을 처리하는 중에 오류가 발생했어요.",
+  validation_failed: "요청을 처리하는 중에 오류가 발생했어요.",
   budget_exhausted: "한 번에 답하기 어려운 질문이에요. 여러 질문으로 나눠서 물어봐 주세요.",
   invalid_request: "이 질문은 처리할 수 없어요. 내용을 줄이거나 바꿔서 다시 보내 주세요.",
   member_data_unavailable:
@@ -115,7 +115,7 @@ const ERROR_COPY: Record<ChatErrorCode | "question_too_long", string> = {
   consent_required: "‘내 데이터 함께 보내기’에 대한 동의가 취소된 상태예요. 다시 켜서 동의한 뒤 질문해 주세요.",
   conversation_not_found: "대화를 찾을 수 없어요. 새 대화에서 다시 질문해 주세요.",
   conversation_busy: "이전 질문에 대한 답변을 기다리고 있어요. 답변이 끝난 뒤 다시 보내 주세요.",
-  network: "연결에 문제가 있어 답변을 받지 못했어요. 다시 시도해 주세요.",
+  network: "네트워크 연결에 문제가 있어요.",
   question_too_long: "질문이 너무 길어요. 줄여서 보내 주세요.",
 };
 
@@ -305,7 +305,7 @@ function AssistantTurn({ turn, onRetry }: { turn: QuestionTurn; onRetry: () => v
           <span>답변이 중단됐어요</span>
         </div>
         <p className="mt-3 whitespace-pre-wrap break-keep text-sm leading-6 text-v2-fg">
-          답변을 받는 중에 연결이 끊겼어요. 다시 시도해 주세요.
+          답변을 받는 중에 연결이 끊겼어요.
         </p>
         <Button type="button" onClick={onRetry} className="mt-3">
           다시 시도

@@ -151,7 +151,6 @@ function HistoryContent() {
             Icon={ExclamationCircleIcon}
             role="alert"
             title="데이터 변경 이력을 불러오지 못했어요"
-            description="잠시 후 다시 시도해주세요."
             action={
               <Button
                 type="button"

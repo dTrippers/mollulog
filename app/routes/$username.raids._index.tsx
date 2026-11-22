@@ -258,9 +258,6 @@ export default function UserRaidRecords() {
               <p className="text-sm font-semibold text-v2-fg">
                 {RAID_RECORD_SERVER_LABEL[server]} {raidLabel ? `${raidLabel} ` : ""}기록이 없어요
               </p>
-              <p className="mt-1 text-sm text-v2-fg-tertiary">
-                기록을 하나씩 추가하거나, 여러 시즌을 표로 한 번에 입력할 수 있어요.
-              </p>
               <div className="mt-3 flex justify-center gap-2">
                 <Link to={tableLink} className={v2ButtonClassName({ variant: "secondary" })}>
                   표로 입력

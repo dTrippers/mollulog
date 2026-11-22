@@ -417,7 +417,6 @@ export function ErrorBoundary() {
       <PageMain>
         <div role="alert" className="rounded-lg bg-v2-surface px-v2-block-p py-10 text-center">
           <p className="text-base font-semibold text-v2-fg">이 모집 기록을 불러오지 못했어요</p>
-          <p className="mt-1 text-sm text-v2-fg-tertiary">잠시 후 다시 시도해주세요.</p>
           <Button className="mt-3" onClick={() => revalidator.revalidate()} disabled={revalidator.state !== "idle"}>
             다시 시도
           </Button>
@@ -606,7 +605,7 @@ function EditPickupForm() {
   let barMessage: string;
   let barTone: "danger" | "neutral" = "neutral";
   if (saveFailed) {
-    barMessage = "모집 결과를 저장하지 못했어요. 입력한 값은 그대로 있어요. 다시 시도해주세요.";
+    barMessage = "모집 기록을 저장하지 못했어요.";
     barTone = "danger";
   } else if (deleteFailed) {
     barMessage = "모집 기록을 삭제하지 못했어요. 다시 시도해주세요.";
@@ -628,7 +627,7 @@ function EditPickupForm() {
     <div className="flex flex-col gap-v2-block-gap">
       <div className="flex flex-col rounded-lg bg-v2-surface">
         <section className="flex flex-col gap-3 p-v2-block-p">
-          <SectionHeading title="모집 이벤트" description="모집을 진행한 이벤트를 선택해주세요." />
+          <SectionHeading title="모집 이벤트" />
           {isEditing && !initialEvent ? (
             <StatusNotice tone="danger">모집 이벤트 정보를 불러오지 못했어요.</StatusNotice>
           ) : (
@@ -658,23 +657,14 @@ function EditPickupForm() {
               }
             >
               <p className="font-semibold">이 모집에는 이미 모집 기록이 있어요.</p>
-              <p className="text-v2-fg-secondary">
-                저장하면 기존 기록을 덮어써요. 기존 기록을 불러와서 고칠 수도 있어요.
-              </p>
+              <p className="text-v2-fg-secondary">저장하면 기존 기록을 덮어써요.</p>
             </StatusNotice>
           ) : null}
         </section>
 
         <section className="flex flex-col gap-v2-group-gap p-v2-block-p">
           <div className="flex items-start justify-between gap-3">
-            <SectionHeading
-              title="모집 결과"
-              description={
-                exchangeable
-                  ? "총 모집 횟수와 획득한 ★3 학생, 모집 포인트 교환 학생을 입력해주세요."
-                  : "총 모집 횟수와 획득한 ★3 학생을 입력해주세요."
-              }
-            />
+            <SectionHeading title="모집 결과" />
             <Button
               size="sm"
               className="shrink-0"

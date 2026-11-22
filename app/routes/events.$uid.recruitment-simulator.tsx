@@ -321,9 +321,6 @@ export default function EventRecruitmentSimulator() {
           <div className="rounded-lg bg-v2-surface p-v2-block-p text-center">
             <SparklesIcon className="mx-auto size-8 text-v2-fg-tertiary" aria-hidden="true" />
             <h2 className="mt-3 text-base font-semibold text-v2-fg">시뮬레이션할 픽업 학생이 없어요</h2>
-            <p className="mt-1 text-sm text-v2-fg-secondary">
-              이 모집 기간에는 모집 시뮬레이션에 사용할 픽업 학생 정보가 없어요.
-            </p>
           </div>
         </div>
       </PageMain>
@@ -375,10 +372,7 @@ export default function EventRecruitmentSimulator() {
         </section>
 
         <section className="space-y-v2-block-gap">
-          <div>
-            <h2 className="text-base font-semibold text-v2-fg">모집 결과</h2>
-            <p className="mt-1 text-sm text-v2-fg-secondary tabular-nums">총 {totalCount.toLocaleString()}회 모집</p>
-          </div>
+          <h2 className="text-base font-semibold text-v2-fg">모집 결과</h2>
           {!selectedPickupStudentUid ? (
             <div className="rounded-lg bg-v2-surface px-v2-block-p py-7 text-center text-sm text-v2-fg-secondary">
               픽업 학생을 선택해주세요
@@ -673,14 +667,9 @@ function TargetStudentChooser({
       aria-labelledby="target-student-title"
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 id="target-student-title" className="text-sm font-semibold text-v2-fg">
-            목표 학생을 선택해주세요
-          </h3>
-          <p className="mt-1 text-xs text-v2-fg-secondary">
-            픽업 대상 학생을 바로 고르거나, 픽업 외 학생을 검색할 수 있어요.
-          </p>
-        </div>
+        <h3 id="target-student-title" className="text-sm font-semibold text-v2-fg">
+          목표 학생을 선택해주세요
+        </h3>
         <Button size="sm" onClick={onClose}>
           닫기
         </Button>

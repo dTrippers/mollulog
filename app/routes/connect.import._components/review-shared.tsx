@@ -156,7 +156,7 @@ export function DraftApplyBar({
                 </Button>
               }
             >
-              프로필에 반영하지 못했어요. 입력한 값은 그대로 있어요. 잠시 후 다시 시도해주세요.
+              프로필에 반영하지 못했어요.
             </StatusNotice>
           </div>
         ) : null}

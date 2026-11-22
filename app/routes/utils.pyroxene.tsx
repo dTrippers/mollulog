@@ -1378,7 +1378,7 @@ export default function PyroxenePlanner() {
     <V2Page width="wide">
       <PageHeader
         title="청휘석 플래너"
-        description="관심 학생을 모집할 때 청휘석이 충분한지 미리 계산해요"
+        description="관심 학생을 모집하는 데 청휘석이 충분한지 미리 확인해요"
         trailing={
           signedIn ? (
             <span role="status" className="text-xs text-v2-fg-tertiary">

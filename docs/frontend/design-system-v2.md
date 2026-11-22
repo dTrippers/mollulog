@@ -389,7 +389,7 @@ Each recipe shows the parts that matter. Omit `PageAside` for a recipe with no A
 
 ```tsx
 <V2Page width="wide" panelRequest={panelRequest} panelCloseRequest={panelCloseRequest} onPanelCloseRequestHandled={() => setPanelCloseRequest(null)}>
-  <PageHeader title="미래시" description="일본 서버를 바탕으로 추정된 일정" />
+  <PageHeader title="미래시" description="일본 서버를 기준으로 추정한 일정이라 추후 변경될 수 있어요" />
   <PageToolbar>
     <ScreenTabs
       items={[

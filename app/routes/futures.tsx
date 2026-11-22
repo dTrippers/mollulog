@@ -567,7 +567,7 @@ export function ErrorBoundary() {
 
   return (
     <V2Page width="wide">
-      <PageHeader title="미래시" description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요" />
+      <PageHeader title="미래시" description="일본 서버를 기준으로 추정한 일정이라 추후 변경될 수 있어요" />
       <LoadFailureState onRetry={() => navigate(pathWithSearch, { replace: true })} />
     </V2Page>
   );
@@ -603,7 +603,7 @@ function FutureContentsResolved({
 function FutureSkeletonPage({ viewState }: { viewState: FutureViewState }) {
   return (
     <V2Page width="wide" onStackedChange={viewState.onStackedChange}>
-      <PageHeader title="미래시" description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요" />
+      <PageHeader title="미래시" description="일본 서버를 기준으로 추정한 일정이라 추후 변경될 수 있어요" />
       <PageToolbar>
         <ScreenTabs items={buildFutureTabs(viewState.view, viewState.setView)} />
       </PageToolbar>
@@ -1460,7 +1460,7 @@ function FutureContentsScreen({
       onPanelCloseRequestHandled={showSignIn}
       onStackedChange={viewState.onStackedChange}
     >
-      <PageHeader title="미래시" description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요" />
+      <PageHeader title="미래시" description="일본 서버를 기준으로 추정한 일정이라 추후 변경될 수 있어요" />
       <PageToolbar>
         <ScreenTabs items={tabs} />
       </PageToolbar>

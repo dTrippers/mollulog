@@ -382,7 +382,6 @@ export function RaidRecordForm({
                     id={ids.score}
                     value={scores[defenseTypes[0]] ?? null}
                     onValueChange={(value) => setScore(defenseTypes[0], value)}
-                    placeholder="점수 입력"
                     invalid={Boolean(
                       (attempted && (scoreErrors[defenseTypes[0]] || localErrors.score)) || serverErrorFor("score"),
                     )}
@@ -423,7 +422,6 @@ export function RaidRecordForm({
                           setTotalScore(value);
                           clearServerError("totalScore");
                         }}
-                        placeholder="합산 점수 입력"
                         invalid={Boolean(showError("totalScore") || serverErrorFor("totalScore") || serverErrorFor("score"))}
                         aria-describedby={`${ids.score}-hint`}
                         containerClassName="w-full max-w-[13.75rem]"
@@ -745,7 +743,6 @@ function EliminationScores({
               id={inputId}
               value={score}
               onValueChange={(value) => onChange(defenseType, value)}
-              placeholder="점수 입력"
               invalid={Boolean(error)}
               aria-describedby={`${inputId}-hint`}
             />
