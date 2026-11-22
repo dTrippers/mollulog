@@ -45,7 +45,7 @@ export function ScrollDownCue({ size }: { size: "desktop" | "mobile" }) {
     <span
       aria-hidden="true"
       className={cn(
-        "v2-featured-cue inline-flex shrink-0 items-center justify-center rounded-md bg-v2-accent text-v2-on-accent",
+        "inline-flex shrink-0 items-center justify-center rounded-md bg-v2-accent text-v2-on-accent",
         size === "desktop" ? "-ml-2 size-5" : "size-7",
       )}
     >
@@ -61,7 +61,7 @@ export function FeaturedContentAsideBlock({ content, onJump }: FeaturedContentBa
         type="button"
         onClick={onJump}
         className={cn(
-          "v2-featured-banner flex min-h-v2-row-min w-full items-center gap-v2-media-gap rounded-md pl-v2-row-x pr-1 py-v2-row-y text-left hover:bg-v2-hover",
+          "flex min-h-v2-row-min w-full items-center gap-v2-media-gap rounded-md pl-v2-row-x pr-1 py-v2-row-y text-left hover:bg-v2-hover v2-interaction-transition",
           v2FocusRing,
         )}
       >
@@ -84,7 +84,7 @@ export function FeaturedContentFloatingBanner({
         type="button"
         onClick={onJump}
         className={cn(
-          "v2-featured-banner flex h-full min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left hover:bg-v2-hover",
+          "flex h-full min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left hover:bg-v2-hover v2-interaction-transition",
           v2FocusRing,
         )}
       >
@@ -96,7 +96,7 @@ export function FeaturedContentFloatingBanner({
         aria-label="닫기"
         onClick={onDismiss}
         className={cn(
-          "relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-v2-fg-tertiary before:absolute before:inset-x-0 before:-inset-y-2 before:content-[''] hover:bg-v2-hover hover:text-v2-fg",
+          "relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-v2-fg-tertiary before:absolute before:inset-x-0 before:-inset-y-2 before:content-[''] hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
           v2FocusRing,
         )}
       >

@@ -52,7 +52,7 @@ export function ContactHistoryPanel({ tickets }: { tickets: FeedbackTicket[] }) 
             <Link
               to={`/contact/${ticket.uid}`}
               {...getV2LinkTransitionProps("forward")}
-              className="flex min-h-v2-row-min min-w-0 items-center gap-3 rounded-md px-v2-row-x py-v2-row-y text-v2-fg hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+              className="flex min-h-v2-row-min min-w-0 items-center gap-3 rounded-md px-v2-row-x py-v2-row-y text-v2-fg hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{ticket.title}</span>

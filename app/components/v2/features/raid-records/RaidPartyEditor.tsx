@@ -99,7 +99,7 @@ export function RaidPartyCard({
         onClick={onExpand}
         aria-label={`${title} 펼치기`}
         className={cn(
-          "flex w-full cursor-pointer items-center gap-3 rounded-lg border border-v2-divider px-3.5 py-2.5 text-left hover:bg-v2-hover",
+          "flex w-full cursor-pointer items-center gap-3 rounded-lg border border-v2-divider px-3.5 py-2.5 text-left hover:bg-v2-hover v2-interaction-transition",
           v2FocusRing,
         )}
       >
@@ -354,7 +354,7 @@ function PartySlots({
             <>
               <span
                 className={cn(
-                  "flex aspect-[5/6] w-full items-center justify-center rounded-md border border-dashed border-v2-control-border-strong text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg",
+                  "flex aspect-[5/6] w-full items-center justify-center rounded-md border border-dashed border-v2-control-border-strong text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
                   isSelected && "border-solid border-v2-accent bg-v2-accent-subtle text-v2-accent",
                 )}
               >
@@ -617,7 +617,7 @@ function PartyGrowthTable({
                 "flex min-h-8 shrink-0 cursor-pointer items-center border-b-2 px-2.5 text-sm whitespace-nowrap",
                 bundle.key === bundleKey
                   ? "border-v2-link font-semibold text-v2-fg"
-                  : "border-transparent text-v2-fg-secondary hover:text-v2-fg",
+                  : "border-transparent text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
                 v2FocusRing,
               )}
             >

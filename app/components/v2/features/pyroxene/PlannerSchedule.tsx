@@ -86,7 +86,7 @@ function IncomeRowView({
               aria-controls={breakdownId}
               onClick={onToggle}
               className={cn(
-                "inline-flex cursor-pointer items-center gap-0.5 rounded text-left text-v2-fg-secondary hover:text-v2-fg",
+                "inline-flex cursor-pointer items-center gap-0.5 rounded text-left text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
                 v2FocusRing,
               )}
             >

@@ -69,10 +69,10 @@ describe("navigation menu row favorite affordance", () => {
     const html = renderRow();
 
     expect(html).toContain('aria-label="총력전 / 대결전, 진행중, 새 항목 있음"');
-    expect(html).toContain("min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs transition-colors");
+    expect(html).toContain("min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs v2-interaction-transition");
     expect(html).toContain('class="min-w-0 flex-1 truncate">총력전 / 대결전</span>');
     expect(html).toContain(
-      "transition-opacity duration-v2-fast ease-v2-standard group-hover:opacity-0 group-has-[button:focus-visible]:opacity-0",
+      "group-hover:opacity-0 group-has-[button:focus-visible]:opacity-0 v2-interaction-transition",
     );
 
     const starButton = html.match(/<button[^>]*aria-label="총력전 \/ 대결전 즐겨찾기에 추가"[^>]*>/)?.[0];

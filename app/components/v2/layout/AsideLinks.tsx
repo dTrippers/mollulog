@@ -83,7 +83,7 @@ export function AsideLinks({ items }: { items: AsideLinkItem[] }) {
             transition={item.transition}
             className={cn(
               // An onClick row renders as a button, which centers its text by default.
-              "flex min-h-v2-row-min items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-left text-v2-fg hover:bg-v2-hover",
+              "flex min-h-v2-row-min items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-left text-v2-fg hover:bg-v2-hover v2-interaction-transition",
               v2FocusRing,
             )}
           >

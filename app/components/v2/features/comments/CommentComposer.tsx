@@ -157,7 +157,7 @@ export function CommentComposer({
           aria-label={`공개 범위: ${isPrivate ? "나만 보기" : "전체 공개"}`}
           title={nextVisibilityText}
           className={cn(
-            "inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled",
+            "inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled v2-interaction-transition",
             v2FocusRing,
           )}
         >
@@ -174,7 +174,7 @@ export function CommentComposer({
         label={submitLabel}
         disabled={!canSubmit}
         onClick={submit}
-        className="bg-v2-accent-solid text-v2-on-accent-solid hover:bg-v2-accent-solid hover:text-v2-on-accent-solid hover:opacity-90 disabled:bg-v2-inset disabled:text-v2-fg-disabled"
+        className="bg-v2-accent-solid text-v2-on-accent-solid hover:bg-v2-accent-solid hover:text-v2-on-accent-solid hover:opacity-90 disabled:bg-v2-inset disabled:text-v2-fg-disabled v2-interaction-transition"
       />
     </div>
   );

@@ -57,7 +57,7 @@ export function Switch({
             )}
           />
         </span>
-        <span id={`${id}-label`} className={cn("text-[0.8125rem] font-medium text-v2-fg-secondary group-hover:text-v2-fg", hideLabel && "sr-only")}>
+        <span id={`${id}-label`} className={cn("text-[0.8125rem] font-medium text-v2-fg-secondary group-hover:text-v2-fg v2-interaction-transition", hideLabel && "sr-only")}>
           {label}
         </span>
         {description ? (

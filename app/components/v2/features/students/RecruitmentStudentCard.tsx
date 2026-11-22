@@ -85,7 +85,7 @@ export function RecruitmentStudentCard({
           <Link
             to={`/students/${studentUid}`}
             className={cn(
-              "inline-flex min-h-7 items-center justify-center rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover",
+              "inline-flex min-h-7 items-center justify-center rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover v2-interaction-transition",
               controlSurface,
             )}
           >
@@ -100,7 +100,7 @@ export function RecruitmentStudentCard({
             aria-pressed={currentFavorited}
             disabled={favoriteDisabled}
             className={cn(
-              "inline-flex min-h-7 items-center justify-center gap-1.5 rounded-md px-2 py-0.5 text-sm font-semibold transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60",
+              "inline-flex min-h-7 items-center justify-center gap-1.5 rounded-md px-2 py-0.5 text-sm font-semibold hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 v2-interaction-transition",
               currentFavorited ? "bg-v2-danger text-v2-on-danger" : `${controlSurface} text-v2-fg-secondary`,
             )}
             onClick={() => {

@@ -66,7 +66,7 @@ export function SiteBanner({ banner, slot, onDismiss, className }: SiteBannerPro
 
   const style = slotStyles[slot];
   const linkClassName = cn(
-    "block rounded-[inherit] font-normal transition-opacity duration-v2-fast ease-v2-standard hover:opacity-90",
+    "block rounded-[inherit] font-normal hover:opacity-90 v2-interaction-transition",
     style.link,
     v2FocusRing,
   );
@@ -87,7 +87,7 @@ export function SiteBanner({ banner, slot, onDismiss, className }: SiteBannerPro
         aria-label="배너 닫기"
         onClick={() => onDismiss(banner.uid)}
         className={cn(
-          "absolute inline-flex size-6 cursor-pointer items-center justify-center rounded-md opacity-70 transition-[opacity,background-color] duration-v2-fast ease-v2-standard hover:bg-current/10 hover:opacity-100",
+          "absolute inline-flex size-6 cursor-pointer items-center justify-center rounded-md opacity-70 hover:bg-current/10 hover:opacity-100 v2-interaction-transition",
           style.close,
           v2FocusRing,
         )}

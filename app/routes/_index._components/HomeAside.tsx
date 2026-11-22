@@ -52,7 +52,7 @@ function FeedStudentImage({ uid, name, showName = false }: { uid: string; name: 
       to={`/students/${uid}`}
       aria-label={`${name} 정보`}
       title={name}
-      className="inline-flex min-w-0 items-center gap-1.5 rounded-sm transition-opacity duration-v2-fast ease-v2-standard hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+      className="inline-flex min-w-0 items-center gap-1.5 rounded-sm hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
     >
       <StudentPortrait uid={uid} className="size-6 rounded-full object-cover" />
       {showName ? <span className="truncate">{name}</span> : null}
@@ -81,7 +81,7 @@ function feedContext(post: EnrichedCommunityFeedPost): ReactNode {
                   ? `/lives/${post.subjectContentUid}`
                   : `/events/${post.subjectContentUid}`
               }
-              className="inline-flex min-w-0 items-center gap-1.5 transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
+              className="inline-flex min-w-0 items-center gap-1.5 hover:text-v2-fg v2-interaction-transition"
             >
               <UserGroupIcon aria-hidden="true" className="size-3.5 shrink-0" />
               <span className="truncate">{post.subjectContentName}</span>
@@ -153,12 +153,12 @@ function FeedItem({ post, timeZone }: { post: EnrichedCommunityFeedPost; timeZon
   const context = feedContext(post);
   const body = feedBody(post);
   return (
-    <li className="flex min-w-0 items-start gap-2.5 py-3 first:pt-v2-block-p transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover motion-reduce:transition-none">
+    <li className="flex min-w-0 items-start gap-2.5 py-3 first:pt-v2-block-p hover:bg-v2-hover v2-interaction-transition">
       {post.author ? (
         <Link
           to={`/@${post.author.username}`}
           aria-label={`@${post.author.username} 프로필`}
-          className="shrink-0 transition-opacity duration-v2-fast ease-v2-standard hover:opacity-80 motion-reduce:transition-none"
+          className="shrink-0 hover:opacity-80 v2-interaction-transition"
         >
           <SenseiAvatar profileStudentId={post.author.profileStudentId} labels={post.author.labels} />
         </Link>
@@ -170,7 +170,7 @@ function FeedItem({ post, timeZone }: { post: EnrichedCommunityFeedPost; timeZon
           {post.author ? (
             <Link
               to={`/@${post.author.username}`}
-              className="min-w-0 truncate text-xs font-semibold text-v2-fg underline decoration-transparent transition-colors duration-v2-fast ease-v2-standard hover:decoration-current motion-reduce:transition-none"
+              className="min-w-0 truncate text-xs font-semibold text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition"
             >
               @{post.author.username}
             </Link>
@@ -192,7 +192,7 @@ function FeedItem({ post, timeZone }: { post: EnrichedCommunityFeedPost; timeZon
               href ? (
                 <Link
                   to={href}
-                  className="text-sm font-semibold text-v2-fg underline decoration-transparent line-clamp-2 transition-colors duration-v2-fast ease-v2-standard hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+                  className="text-sm font-semibold text-v2-fg underline decoration-transparent line-clamp-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
                 >
                   {post.title}
                 </Link>
@@ -204,7 +204,7 @@ function FeedItem({ post, timeZone }: { post: EnrichedCommunityFeedPost; timeZon
               href ? (
                 <Link
                   to={href}
-                  className="text-sm text-v2-fg-secondary line-clamp-2 transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+                  className="text-sm text-v2-fg-secondary line-clamp-2 hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
                 >
                   {body}
                 </Link>
@@ -252,7 +252,7 @@ export function HomeFeedBlock({
             </ul>
             <Link
               to="/community"
-              className="relative flex min-h-v2-row-min items-center justify-center gap-0.5 text-sm text-v2-fg-secondary before:absolute before:inset-x-v2-block-p before:top-0 before:border-t before:border-v2-divider/60 before:content-[''] transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+              className="relative flex min-h-v2-row-min items-center justify-center gap-0.5 text-sm text-v2-fg-secondary before:absolute before:inset-x-v2-block-p before:top-0 before:border-t before:border-v2-divider/60 before:content-[''] hover:bg-v2-hover hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
             >
               더 보기
               <ChevronRightIcon aria-hidden="true" className="size-4" />
@@ -302,7 +302,7 @@ export function HomeYoutubeBlock({
                   href={video.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex min-w-0 gap-3 py-3 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+                  className="flex min-w-0 gap-3 py-3 hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
                 >
                   <img
                     src={video.thumbnailUrl}
@@ -340,7 +340,7 @@ export function HomeChannelLinks({ channels }: { channels: HomeYoutubeChannelLin
             href={channel.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-0.5 rounded-sm transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+            className="inline-flex items-center gap-0.5 rounded-sm hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
           >
             <ArrowTopRightOnSquareIcon aria-hidden="true" className="size-3" />
             {CHANNEL_TITLES[channel.key]}

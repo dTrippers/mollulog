@@ -370,7 +370,7 @@ function HeldContent({
       />
       <div className="min-w-0 flex-1">
         <p className="text-xs text-v2-fg-tertiary">{typeLabel}</p>
-        <p className={cn("text-sm font-semibold whitespace-pre-line text-v2-fg", linkable && "group-hover:underline")}>
+        <p className={cn("text-sm font-semibold whitespace-pre-line text-v2-fg", linkable && "underline decoration-transparent group-hover:decoration-current v2-interaction-transition")}>
           {name}
         </p>
         {periodLabel ? <p className="text-xs text-v2-fg-tertiary tabular-nums">{periodLabel}</p> : null}
@@ -401,7 +401,7 @@ function HeldContent({
         state={view.navigationState}
         prefetch="intent"
         className={cn(
-          "group grid min-h-v2-row-min grid-cols-[minmax(0,1fr)_1rem] items-center gap-2 rounded-md hover:bg-v2-hover",
+          "group grid min-h-v2-row-min grid-cols-[minmax(0,1fr)_1rem] items-center gap-2 rounded-md hover:bg-v2-hover v2-interaction-transition",
           v2FocusRing,
         )}
         {...getV2LinkTransitionProps("forward", () => onOpenContent(content.uid))}

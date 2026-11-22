@@ -44,7 +44,13 @@ single owner for commands and claim-to-evidence mapping.
   not with the last saved one, and keeps a waiting save, its status, and its
   retry per target, so no input is dropped and one target's success does not
   hide another's failure. Its state lives in a component that a loading state
-  does not unmount.
+  does not unmount. A save sent later than the input, such as after a delay,
+  names its route action explicitly. Without one, React Router posts it to
+  whichever page is current when it is sent, so a Sensei who leaves the page
+  first loses the edit.
+- Does a component that copies loader data into state still show revalidated
+  data? Copy only what the screen edits locally, and refresh the copy whenever
+  the loader data changes, not only when its list of keys does.
 - Does code that handles a PostgreSQL error, such as a unique violation, read it
   through `postgresUniqueConstraintName` (`app/lib/db.ts`)? Drizzle wraps driver
   errors in `DrizzleQueryError`, so the code and constraint are on its `cause`,

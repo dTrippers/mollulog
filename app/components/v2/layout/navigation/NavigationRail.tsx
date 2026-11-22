@@ -53,7 +53,7 @@ export function NavigationRail({
         <Link
           to="/"
           className={cn(
-            "flex h-10 w-full items-center justify-center rounded-md transition-opacity duration-v2-fast ease-v2-standard hover:opacity-80",
+            "flex h-10 w-full items-center justify-center rounded-md hover:opacity-80 v2-interaction-transition",
             v2FocusRing,
           )}
           aria-label="몰루로그 홈으로 이동"
@@ -67,7 +67,7 @@ export function NavigationRail({
         <button
           type="button"
           className={cn(
-            "inline-flex size-10 items-center justify-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            "inline-flex size-10 items-center justify-center rounded-md text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
             v2FocusRing,
           )}
           aria-label="검색 열기"
@@ -82,7 +82,7 @@ export function NavigationRail({
           <button
             type="button"
             className={cn(
-              "inline-flex size-10 items-center justify-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+              "inline-flex size-10 items-center justify-center rounded-md text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
               v2FocusRing,
             )}
             aria-label="사이트 배너 열기"
@@ -104,7 +104,7 @@ export function NavigationRail({
           aria-current={homeItem.isActive ? "page" : undefined}
           aria-label={homeItem.name}
           className={cn(
-            "flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            "flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
             homeItem.isActive && "bg-v2-nav-active font-semibold text-v2-fg",
             v2FocusRing,
           )}
@@ -181,7 +181,7 @@ function RailGroupButton({
     <button
       type="button"
       className={cn(
-        "relative flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+        "relative flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
         active && "bg-v2-nav-active font-semibold text-v2-fg",
         v2FocusRing,
       )}

@@ -33,7 +33,7 @@ export function NavigationMenuRow({
   const hasFavoriteStar = favoriteAction !== null;
   const accessibleName = [name, badgeLabel, dot ? NAVIGATION_DOT_LABELS[dot] : null].filter(Boolean).join(", ");
   const rowClassName = cn(
-    "group relative flex min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs transition-colors duration-v2-fast ease-v2-standard",
+    "group relative flex min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs v2-interaction-transition",
     isActive
       ? "bg-v2-nav-active font-semibold text-v2-fg"
       : "font-normal text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg",
@@ -49,7 +49,7 @@ export function NavigationMenuRow({
         className={cn(
           "flex shrink-0 items-center gap-1.5",
           hasFavoriteStar &&
-            "transition-opacity duration-v2-fast ease-v2-standard group-hover:opacity-0 group-has-[button:focus-visible]:opacity-0",
+            "group-hover:opacity-0 group-has-[button:focus-visible]:opacity-0 v2-interaction-transition",
         )}
       >
         {badgeLabel ? (
@@ -87,7 +87,7 @@ export function NavigationMenuRow({
         <button
           type="button"
           className={cn(
-            "absolute top-0 right-1 bottom-0 z-10 my-auto inline-flex size-6 items-center justify-center rounded-md text-v2-fg-secondary opacity-0 transition-opacity duration-v2-fast ease-v2-standard group-hover:opacity-100 focus-visible:opacity-100",
+            "absolute top-0 right-1 bottom-0 z-10 my-auto inline-flex size-6 items-center justify-center rounded-md text-v2-fg-secondary opacity-0 group-hover:opacity-100 focus-visible:opacity-100 v2-interaction-transition",
             "hover:bg-v2-hover hover:text-v2-fg",
             v2FocusRing,
           )}

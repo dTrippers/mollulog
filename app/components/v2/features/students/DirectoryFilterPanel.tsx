@@ -429,11 +429,11 @@ export function DirectoryToggleChip({
       onPressedChange={onPressedChange}
       disabled={disabled}
       ariaLabel={ariaLabel}
-      className="group min-h-8 shrink-0 justify-center bg-transparent px-0 hover:bg-transparent active:bg-transparent disabled:bg-transparent disabled:hover:bg-transparent sm:min-h-6 sm:min-w-0 sm:px-0"
+      className="group min-h-8 shrink-0 justify-center bg-transparent px-0 hover:bg-transparent active:bg-transparent disabled:bg-transparent disabled:hover:bg-transparent sm:min-h-6 sm:min-w-0 sm:px-0 v2-interaction-transition"
     >
       <span
         className={cn(
-          "inline-flex min-h-8 items-center justify-center rounded-md px-2.5 text-sm font-normal whitespace-nowrap sm:min-h-6 sm:min-w-0 sm:px-1.5 sm:text-[13px]",
+          "inline-flex min-h-8 items-center justify-center rounded-md px-2.5 text-sm font-normal whitespace-nowrap sm:min-h-6 sm:min-w-0 sm:px-1.5 sm:text-[13px] v2-interaction-transition",
           pressed ? "bg-v2-selected text-v2-on-selected" : "bg-v2-inset text-v2-fg-secondary",
           !disabled && !pressed && "group-hover:bg-v2-filled-hover",
           !disabled && "group-active:bg-v2-filled-hover",
@@ -456,7 +456,7 @@ function SignInAction({ onClick }: { onClick: () => void }) {
       type="button"
       aria-label="로그인 후 사용 가능: 로그인하고 내 기록으로 정렬·필터하기"
       onClick={onClick}
-      className="min-h-6 cursor-pointer rounded-md px-1 text-xs text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg active:bg-v2-filled-hover active:text-v2-fg"
+      className="min-h-6 cursor-pointer rounded-md px-1 text-xs text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg active:bg-v2-filled-hover active:text-v2-fg v2-interaction-transition"
     >
       로그인 후 사용 가능
     </button>

@@ -251,7 +251,7 @@ function ListRow({
         state={content.navigationState}
         prefetch="intent"
         aria-label={name}
-        className={cn("block hover:bg-v2-hover", v2FocusRing)}
+        className={cn("block hover:bg-v2-hover v2-interaction-transition", v2FocusRing)}
         {...getV2LinkTransitionProps("forward", () => onOpenContent(content.uid))}
       >
         {row}

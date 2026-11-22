@@ -236,7 +236,7 @@ export default function NotificationHistoryPopover({
         ref={triggerRef}
         type="button"
         className={cn(
-          "relative inline-flex items-center justify-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+          "relative inline-flex items-center justify-center rounded-md text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
           placement === "rail" ? "size-11 bg-transparent" : "size-9 bg-transparent",
           v2FocusRing,
         )}
@@ -287,7 +287,7 @@ export default function NotificationHistoryPopover({
               to="/notifications"
               aria-label="알림 설정"
               className={cn(
-                "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-v2-fg-tertiary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+                "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
                 v2FocusRing,
               )}
               onClick={() => setIsOpen(false)}

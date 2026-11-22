@@ -246,7 +246,7 @@ function SearchResultPopup({
             key={`${result.type}:${result.to}`}
             to={result.to}
             className={cn(
-              "flex items-center gap-2 px-v2-row-x py-v2-row-y text-sm text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover",
+              "flex items-center gap-2 px-v2-row-x py-v2-row-y text-sm text-v2-fg hover:bg-v2-hover v2-interaction-transition",
               v2FocusRing,
             )}
             onClick={onResultClick}
@@ -537,7 +537,7 @@ export default function NavigationBar({
       <button
         type="button"
         className={cn(
-          "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-v2-fg-tertiary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+          "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
           v2FocusRing,
         )}
         aria-label="메뉴 접기/펼치기"
@@ -572,7 +572,7 @@ export default function NavigationBar({
       <button
         type="button"
         className={cn(
-          "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-tertiary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+          "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
           v2FocusRing,
         )}
         aria-label="메뉴 접기/펼치기"
@@ -603,7 +603,7 @@ export default function NavigationBar({
           <Link
             to="/"
             className={cn(
-              "flex h-14 shrink-0 items-center gap-1 px-3 transition-opacity duration-v2-fast ease-v2-standard hover:opacity-80",
+              "flex h-14 shrink-0 items-center gap-1 px-3 hover:opacity-80 v2-interaction-transition",
               v2FocusRing,
             )}
             aria-label="몰루로그 홈으로 이동"
@@ -790,7 +790,7 @@ function DesktopNavigationGroup({
       <button
         type="button"
         className={cn(
-          "flex min-h-7 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-semibold text-v2-fg-tertiary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+          "flex min-h-7 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-semibold text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
           active && !expanded && "bg-v2-nav-active text-v2-fg",
           v2FocusRing,
         )}
@@ -1007,7 +1007,7 @@ function MobileBrandHeader({
           <button
             type="button"
             className={cn(
-              "inline-flex size-9 items-center justify-center rounded-md bg-transparent text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover",
+              "inline-flex size-9 items-center justify-center rounded-md bg-transparent text-v2-fg hover:bg-v2-hover v2-interaction-transition",
               v2FocusRing,
             )}
             onClick={() => {
@@ -1084,7 +1084,7 @@ function MobileBottomNavigation({
         {items.map((item) => {
           const Icon = item.isActive ? item.SolidIcon : item.OutlineIcon;
           const className = cn(
-            "relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0 text-xs font-medium text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg",
+            "relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0 text-xs font-medium text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
             item.isActive && "font-semibold text-v2-fg",
             v2FocusRing,
           );

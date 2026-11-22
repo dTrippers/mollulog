@@ -55,7 +55,7 @@ export default function StudentBossUsageChart({
         renderValue={(row) => `${formatUsagePercent(row.usageRate)} · ${row.usageCount.toLocaleString()}회`}
       />
       {hiddenCount > 0 || expanded ? (
-        <button type="button" className="mt-1.5 inline-flex min-h-7 items-center rounded-md px-2 text-xs leading-[1.43] font-medium text-v2-fg-secondary hover:bg-v2-hover" onClick={() => setExpanded((current) => !current)}>
+        <button type="button" className="mt-1.5 inline-flex min-h-7 items-center rounded-md px-2 text-xs leading-[1.43] font-medium text-v2-fg-secondary hover:bg-v2-hover v2-interaction-transition" onClick={() => setExpanded((current) => !current)}>
           {expanded ? "접기" : `+${hiddenCount}개 더 보기`}
         </button>
       ) : null}
