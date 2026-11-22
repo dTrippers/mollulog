@@ -433,9 +433,9 @@ export function DirectoryToggleChip({
     >
       <span
         className={cn(
-          "inline-flex min-h-8 items-center justify-center rounded-md px-2.5 text-sm font-normal whitespace-nowrap sm:min-h-6 sm:min-w-0 sm:px-1.5 sm:text-[13px]",
+          "inline-flex min-h-8 items-center justify-center rounded-md px-2.5 text-sm font-normal whitespace-nowrap sm:min-h-6 sm:min-w-0 sm:px-1.5 sm:text-[13px] v2-interaction-transition",
           pressed ? "bg-v2-selected text-v2-on-selected" : "bg-v2-inset text-v2-fg-secondary",
-          !disabled && !pressed && "group-hover:bg-v2-filled-hover v2-interaction-transition",
+          !disabled && !pressed && "group-hover:bg-v2-filled-hover",
           !disabled && "group-active:bg-v2-filled-hover",
           disabled && "text-v2-fg-disabled",
         )}
