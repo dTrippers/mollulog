@@ -47,11 +47,14 @@ import {
   type RaidTableCellError,
   type RaidTableDraft,
   type RaidTableRowStatus,
+  raidTableDraftStorageKey,
   raidTableErrorLabel,
   raidTableRowErrors,
   raidTableRowStatus,
   raidTableShowsTotal,
+  restoreRaidTableDrafts,
   toRaidTableSubmissionRow,
+  toStoredRaidTableDrafts,
 } from "./raid-record-table-state";
 
 export type RaidRecordTableRowError = {
@@ -134,6 +137,37 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
   const [onlyUnrecorded, setOnlyUnrecorded] = useState(false);
   const [visibleCount, setVisibleCount] = useState(ROWS_PER_PAGE);
   const savingRef = useRef(false);
+  // Drafts are written to the browser only after the kept ones are read, so the first empty render never erases them.
+  const [draftsLoaded, setDraftsLoaded] = useState(false);
+  const [restoredCount, setRestoredCount] = useState(0);
+  const storageKey = raidTableDraftStorageKey(username, server, raidType);
+
+  // Read once per table: the page remounts the table for another server or raid type, and a revalidation after a failed
+  // save must not announce the drafts on screen as restored.
+  const initialRowsRef = useRef(rows);
+  useEffect(() => {
+    let restored: Record<number, RaidTableDraft> = {};
+    try {
+      const stored = window.localStorage.getItem(storageKey);
+      restored = stored ? restoreRaidTableDrafts(initialRowsRef.current, JSON.parse(stored)) : {};
+    } catch {
+      // Unreadable storage or a malformed entry restores nothing; the table starts from what is saved.
+    }
+    setDrafts(restored);
+    setRestoredCount(Object.keys(restored).length);
+    setDraftsLoaded(true);
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!draftsLoaded) return;
+    try {
+      const stored = toStoredRaidTableDrafts(rows, drafts);
+      if (stored) window.localStorage.setItem(storageKey, JSON.stringify(stored));
+      else window.localStorage.removeItem(storageKey);
+    } catch {
+      // Without storage the table still works; only the copy kept across reloads is lost.
+    }
+  }, [draftsLoaded, storageKey, rows, drafts]);
 
   useEffect(() => {
     if (fetcher.state !== "idle") return;
@@ -242,6 +276,27 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
         </span>
       </div>
 
+      {restoredCount > 0 && dirty ? (
+        <StatusNotice
+          tone="neutral"
+          boxed
+          action={
+            <Button
+              variant="text"
+              size="sm"
+              onClick={() => {
+                setDrafts({});
+                setRestoredCount(0);
+              }}
+            >
+              되돌리기
+            </Button>
+          }
+        >
+          저장하지 않은 기록 {restoredCount}개를 불러왔어요.
+        </StatusNotice>
+      ) : null}
+
       {pageMessage ? (
         <StatusNotice tone="danger" boxed>
           {pageMessage}
@@ -267,6 +322,9 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
                   <th scope="col" className="text-left">
                     보스
                   </th>
+                  <th scope="col" className="w-36 text-right">
+                    순위
+                  </th>
                   {raidType === "total_assault" ? (
                     <>
                       <th scope="col" className="w-40 text-right">
@@ -288,9 +346,6 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
                       </th>
                     </>
                   )}
-                  <th scope="col" className="w-36 text-right">
-                    순위
-                  </th>
                   <th scope="col" className="w-28 text-left">
                     상태
                   </th>
@@ -354,6 +409,12 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
           <Button
             variant="danger"
             onClick={() => {
+              // Removed here as well: the page leaves before the effect that writes the drafts would run.
+              try {
+                window.localStorage.removeItem(storageKey);
+              } catch {
+                // Nothing kept to remove.
+              }
               setDrafts({});
               blocker.proceed?.();
             }}
@@ -482,7 +543,16 @@ function ScoreModeSwitch({ model, context }: { model: RowModel; context: CellCon
   );
 }
 
-function RankCell({ model, context }: { model: RowModel; context: CellContext }) {
+// A card leads with the rank, so its badge follows the input and the input lines up with the card's left edge.
+function RankCell({
+  model,
+  context,
+  badgeAfter = false,
+}: {
+  model: RowModel;
+  context: CellContext;
+  badgeAfter?: boolean;
+}) {
   const errorId = useId();
   const { row, draft } = model;
   const error = cellError(model, "rank");
@@ -491,7 +561,7 @@ function RankCell({ model, context }: { model: RowModel; context: CellContext })
   const previous = changed && row.record?.rank != null ? row.record.rank : null;
   return (
     <span className="block">
-      <span className="flex items-center gap-1.5">
+      <span className={cn("flex items-center gap-1.5", badgeAfter && "flex-row-reverse")}>
         {/* A fixed slot, so the input keeps its width while the typed rank moves in and out of a tier. */}
         <span className="flex w-6.5 shrink-0 justify-center">
           <RaidRankTierBadge
@@ -663,6 +733,11 @@ function TableRow({ model, context }: { model: RowModel; context: CellContext })
           </span>
         ) : null}
       </td>
+      <td className={inputLineCell}>
+        <InputLine aligned={elimination}>
+          <RankCell model={model} context={context} />
+        </InputLine>
+      </td>
       {season.raidType === "total_assault" ? (
         <>
           <td>
@@ -730,11 +805,6 @@ function TableRow({ model, context }: { model: RowModel; context: CellContext })
       )}
       <td className={inputLineCell}>
         <InputLine aligned={elimination}>
-          <RankCell model={model} context={context} />
-        </InputLine>
-      </td>
-      <td className={inputLineCell}>
-        <InputLine aligned={elimination}>
           <span className={cn(elimination && INPUT_LINE)}>
             <StatusCell status={model.status} />
           </span>
@@ -783,7 +853,8 @@ function SeasonCard({ model, context }: { model: RowModel; context: CellContext 
       </span>
       {row.unavailableRecordUid ? <UnavailableNote username={context.username} uid={row.unavailableRecordUid} /> : null}
       {season.raidType === "total_assault" ? (
-        <span className="grid grid-cols-[1fr_8.5rem] items-start gap-2">
+        <span className="grid grid-cols-[8.5rem_1fr] items-start gap-2">
+          <RankCell model={model} context={context} badgeAfter />
           <span className="flex flex-col gap-0.5">
             {season.scoreDefenseTypes[0] ? (
               <ScoreCell
@@ -797,10 +868,12 @@ function SeasonCard({ model, context }: { model: RowModel; context: CellContext 
               <ClearResult model={model} />
             </span>
           </span>
-          <RankCell model={model} context={context} />
         </span>
       ) : (
         <span className="flex flex-col gap-1.5">
+          <span className="w-[8.5rem]">
+            <RankCell model={model} context={context} badgeAfter />
+          </span>
           <span className="flex flex-col items-start">
             <ScoreModeSwitch model={model} context={context} />
           </span>
@@ -817,20 +890,17 @@ function SeasonCard({ model, context }: { model: RowModel; context: CellContext 
               </span>
             ))
           )}
-          <span className="grid grid-cols-[1fr_8.5rem] items-start gap-2">
-            {raidTableShowsTotal(row, model.draft) ? (
-              <span className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2">
-                <span className="flex min-h-7 items-center text-xs text-v2-fg-secondary">합산</span>
-                <TotalScoreCell model={model} context={context} />
-              </span>
-            ) : (
-              <span className="flex min-h-7 items-start justify-between gap-2 text-xs text-v2-fg-secondary">
-                <span className="flex min-h-7 shrink-0 items-center">합산</span>
-                <EliminationTotal model={model} />
-              </span>
-            )}
-            <RankCell model={model} context={context} />
-          </span>
+          {raidTableShowsTotal(row, model.draft) ? (
+            <span className="grid grid-cols-[6rem_1fr] items-start gap-2">
+              <span className="flex min-h-7 items-center text-xs text-v2-fg-secondary">합산</span>
+              <TotalScoreCell model={model} context={context} />
+            </span>
+          ) : (
+            <span className="flex min-h-7 items-start justify-between gap-2 text-xs text-v2-fg-secondary">
+              <span className="flex min-h-7 shrink-0 items-center">합산</span>
+              <EliminationTotal model={model} />
+            </span>
+          )}
         </span>
       )}
     </li>

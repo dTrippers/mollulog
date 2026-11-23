@@ -6,7 +6,9 @@ import {
   raidTableErrorLabel,
   raidTableRowErrors,
   raidTableRowStatus,
+  restoreRaidTableDrafts,
   toRaidTableSubmissionRow,
+  toStoredRaidTableDrafts,
 } from "~/components/v2/features/raid-records/raid-record-table-state";
 import type { RaidRecordRankStatus, RaidRecordScoreMode } from "~/domain/raid-record";
 import { Terrain } from "~/graphql/graphql";
@@ -310,5 +312,72 @@ describe("raid record table submission", () => {
     expect(
       toRaidTableSubmissionRow(assault, draft({ special: 1 }, 1, { scoreMode: "total", totalScore: 5 })),
     ).toMatchObject({ scoreMode: "defense_type", totalScore: null });
+  });
+});
+
+describe("raid record table drafts kept in the browser", () => {
+  const saved = row("total_assault", { scores: { special: 30_000_000 }, rank: 20_000, rankStatus: "confirmed" });
+  const empty = row("total_assault", null);
+
+  it("keeps only the changed rows, with the record version each was typed over", () => {
+    const stored = toStoredRaidTableDrafts([saved], {
+      88: draft({ special: 31_000_000 }, 20_000),
+    });
+    expect(stored).toEqual({
+      version: 1,
+      rows: { "88": { recordUpdatedAt: "2026-11-05T00:00:00.000Z", draft: draft({ special: 31_000_000 }, 20_000) } },
+    });
+    expect(toStoredRaidTableDrafts([saved], { 88: initialRaidTableDraft(saved) })).toBeNull();
+    expect(toStoredRaidTableDrafts([saved], {})).toBeNull();
+  });
+
+  it("restores a kept row only while its record is the version it was typed over", () => {
+    const typed = draft({ special: 31_000_000 }, 20_000);
+    const stored = toStoredRaidTableDrafts([saved], { 88: typed });
+    expect(restoreRaidTableDrafts([saved], JSON.parse(JSON.stringify(stored)))).toEqual({ 88: typed });
+    const changedSince = {
+      ...saved,
+      record: saved.record && { ...saved.record, updatedAt: "2026-11-06T00:00:00.000Z" },
+    };
+    expect(restoreRaidTableDrafts([changedSince], stored)).toEqual({});
+    // A new row kept before the save has a record after it, so it is not restored either.
+    const newRow = toStoredRaidTableDrafts([empty], { 88: draft({ special: 1_000_000 }, 30_000) });
+    expect(restoreRaidTableDrafts([empty], newRow)).toEqual({ 88: draft({ special: 1_000_000 }, 30_000) });
+    expect(restoreRaidTableDrafts([saved], newRow)).toEqual({});
+  });
+
+  it("restores nothing from a malformed entry, and drops defense types the season does not score", () => {
+    for (const stored of [
+      null,
+      "x",
+      { version: 2, rows: {} },
+      { version: 1, rows: { "88": { recordUpdatedAt: null } } },
+    ]) {
+      expect(restoreRaidTableDrafts([empty], stored)).toEqual({});
+    }
+    const badRank = {
+      version: 1,
+      rows: { "88": { recordUpdatedAt: null, draft: { ...draft({ special: 1 }, null), rank: "1" } } },
+    };
+    expect(restoreRaidTableDrafts([empty], badRank)).toEqual({});
+    const extra = {
+      version: 1,
+      rows: {
+        "88": {
+          recordUpdatedAt: null,
+          draft: draft({ special: 1_000_000, heavy: 5 } as RaidTableDraft["scores"], 30_000),
+        },
+      },
+    };
+    expect(restoreRaidTableDrafts([empty], extra)).toEqual({ 88: draft({ special: 1_000_000 }, 30_000) });
+  });
+
+  it("skips a row the table cannot edit", () => {
+    const unavailable = { ...empty, unavailableRecordUid: "record-x" };
+    const stored = {
+      version: 1,
+      rows: { "88": { recordUpdatedAt: null, draft: draft({ special: 1_000_000 }, 30_000) } },
+    };
+    expect(restoreRaidTableDrafts([unavailable], stored)).toEqual({});
   });
 });

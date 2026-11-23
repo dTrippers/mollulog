@@ -1,6 +1,7 @@
 import {
   defaultRaidRecordScoreMode,
   InvalidRaidRecordError,
+  isRaidRecordScoreMode,
   parseRaidRecordRank,
   parseRaidRecordScore,
   parseRaidRecordTotalScore,
@@ -224,4 +225,77 @@ export function toRaidTableSubmissionRow(
 export function raidTableErrorLabel(row: RaidRecordTableRowView, error: RaidTableCellError): string {
   const label = error.field === "rank" ? "순위" : error.field === "totalScore" ? "합산" : "점수";
   return `#${row.season.seasonIndex} ${label}`;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Unsaved drafts kept in the browser
+// ---------------------------------------------------------------------------------------------------------------------
+
+// What the browser keeps of the changed rows, so a reload or a closed tab does not lose them. Each row keeps the version
+// of the record it was typed over; a row whose record changed since, such as by the save itself, is not restored.
+export type StoredRaidTableDrafts = {
+  version: 1;
+  rows: Record<string, { recordUpdatedAt: string | null; draft: RaidTableDraft }>;
+};
+
+export function raidTableDraftStorageKey(username: string, server: string, raidType: string): string {
+  return `raid-record-table-drafts:${username}:${server}:${raidType}`;
+}
+
+// The changed rows to keep, or null when no row is changed.
+export function toStoredRaidTableDrafts(
+  rows: readonly RaidRecordTableRowView[],
+  drafts: Record<number, RaidTableDraft>,
+): StoredRaidTableDrafts | null {
+  const stored: StoredRaidTableDrafts["rows"] = {};
+  for (const row of rows) {
+    const draft = drafts[row.season.seasonIndex];
+    if (!draft || !isRaidTableRowChanged(row, draft)) continue;
+    stored[String(row.season.seasonIndex)] = { recordUpdatedAt: row.record?.updatedAt ?? null, draft };
+  }
+  return Object.keys(stored).length > 0 ? { version: 1, rows: stored } : null;
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || (typeof value === "number" && Number.isSafeInteger(value));
+}
+
+function restoredDraftOf(row: RaidRecordTableRowView, value: unknown): RaidTableDraft | null {
+  if (typeof value !== "object" || value === null) return null;
+  const draft = value as Record<string, unknown>;
+  if (!isRaidRecordScoreMode(draft.scoreMode) || !isNullableNumber(draft.totalScore) || !isNullableNumber(draft.rank)) {
+    return null;
+  }
+  if (typeof draft.scores !== "object" || draft.scores === null) return null;
+  const storedScores = draft.scores as Record<string, unknown>;
+  const scores: RaidTableDraft["scores"] = {};
+  // Only the defense types the season scores; anything else in the stored row is dropped.
+  for (const { defenseType } of row.season.scoreDefenseTypes) {
+    const score = storedScores[defenseType] ?? null;
+    if (!isNullableNumber(score)) return null;
+    scores[defenseType] = score;
+  }
+  return { scoreMode: draft.scoreMode, scores, totalScore: draft.totalScore, rank: draft.rank };
+}
+
+// The drafts to put back from what the browser kept. A row is restored only when its season is still in the table, its
+// record is the version the draft was typed over, and the draft still differs from what is saved.
+export function restoreRaidTableDrafts(
+  rows: readonly RaidRecordTableRowView[],
+  stored: unknown,
+): Record<number, RaidTableDraft> {
+  if (typeof stored !== "object" || stored === null) return {};
+  const { version, rows: storedRows } = stored as Partial<StoredRaidTableDrafts>;
+  if (version !== 1 || typeof storedRows !== "object" || storedRows === null) return {};
+  const restored: Record<number, RaidTableDraft> = {};
+  for (const row of rows) {
+    if (row.unavailableRecordUid !== null) continue;
+    const entry = (storedRows as Record<string, unknown>)[String(row.season.seasonIndex)];
+    if (typeof entry !== "object" || entry === null) continue;
+    const { recordUpdatedAt, draft } = entry as Record<string, unknown>;
+    if (recordUpdatedAt !== (row.record?.updatedAt ?? null)) continue;
+    const restoredDraft = restoredDraftOf(row, draft);
+    if (restoredDraft && isRaidTableRowChanged(row, restoredDraft)) restored[row.season.seasonIndex] = restoredDraft;
+  }
+  return restored;
 }
