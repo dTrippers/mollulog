@@ -5,6 +5,7 @@ import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
 import { Skeleton } from "../../primitives/Skeleton";
+import { StatusNotice } from "../../primitives/StatusNotice";
 
 const goalDescriptions: Record<RecruitGoal, string> = {
   top: "루나틱 클리어와 상위 순위",
@@ -62,15 +63,19 @@ export function RecruitLoadFailure({ onRetry }: { onRetry: () => void }) {
 // One line above the timeline when the viewer's own records failed. The screen still works without them.
 export function RecruitViewerNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div
-      role="alert"
-      className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-v2-surface px-v2-block-p py-2.5"
+    <StatusNotice
+      tone="warning"
+      boxed
+      className="mb-3 items-center"
+      action={
+        <Button size="sm" onClick={onRetry}>
+          <ArrowPathIcon className="size-4" aria-hidden="true" />
+          다시 시도
+        </Button>
+      }
     >
-      <p className="text-sm text-v2-fg">{message}</p>
-      <Button variant="text" className="px-2" onClick={onRetry}>
-        다시 시도
-      </Button>
-    </div>
+      {message}
+    </StatusNotice>
   );
 }
 

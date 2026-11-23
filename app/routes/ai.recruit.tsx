@@ -1,5 +1,5 @@
 import { CalendarIcon, CreditCardIcon, FlagIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type LoaderFunctionArgs,
   type MetaFunction,
@@ -285,17 +285,42 @@ export default function RecruitRecommendationPage() {
     setGoal(readStoredGoal());
     setGoalReady(true);
   }, [available, loaderData]);
+  // A page that first failed to load gets the saved goal when a retry succeeds. A goal the Sensei already picked stays.
+  const [goalLoaderData, setGoalLoaderData] = useState(loaderData);
+  if (goalLoaderData !== loaderData) {
+    setGoalLoaderData(loaderData);
+    if (goal === null && loaderData.status === "available" && loaderData.signedIn) setGoal(loaderData.savedGoal);
+  }
 
+  // One save at a time: a goal picked while a save is in flight waits for it and replaces any goal still waiting, so
+  // the last goal picked is the one saved.
   const goalFetcher = useFetcher<RecruitGoalActionData>();
+  const submitGoalRef = useRef(goalFetcher.submit);
+  submitGoalRef.current = goalFetcher.submit;
+  const queuedGoalRef = useRef<RecruitGoal | null>(null);
   const [goalSaveFailed, setGoalSaveFailed] = useState(false);
-  useEffect(() => {
-    if (goalFetcher.state === "idle" && goalFetcher.data) setGoalSaveFailed(!goalFetcher.data.ok);
-  }, [goalFetcher.state, goalFetcher.data]);
-  const saveGoal = (next: RecruitGoal) => {
-    goalFetcher.submit(
+  const submitGoal = useCallback((next: RecruitGoal) => {
+    void submitGoalRef.current(
       { goal: next },
       { action: "/api/recruit-recommendations", method: "post", encType: "application/json" },
     );
+  }, []);
+  useEffect(() => {
+    if (goalFetcher.state !== "idle") return;
+    const queued = queuedGoalRef.current;
+    if (queued !== null) {
+      queuedGoalRef.current = null;
+      submitGoal(queued);
+      return;
+    }
+    if (goalFetcher.data) setGoalSaveFailed(!goalFetcher.data.ok);
+  }, [goalFetcher.state, goalFetcher.data, submitGoal]);
+  const saveGoal = (next: RecruitGoal) => {
+    if (goalFetcher.state !== "idle") {
+      queuedGoalRef.current = next;
+      return;
+    }
+    submitGoal(next);
   };
   const handleGoalChange = (next: RecruitGoal) => {
     setGoal(next);
@@ -343,13 +368,18 @@ export default function RecruitRecommendationPage() {
   useEffect(() => {
     if (resolvedFavorites?.status === "available") setFavorites(resolvedFavorites.value ?? []);
   }, [resolvedFavorites]);
+  // The recruitment records and the favorites are the viewer's own records: when the records fail, the hearts are off
+  // as when the favorites fail, and one notice above the timeline says so.
+  const recordsUnavailable = recommendations?.status === "ok" && recommendations.recruited === "unavailable";
   const ownState: RecruitPickupFavorite["ownState"] = !signedIn
     ? "guest"
-    : resolvedFavorites === undefined
-      ? "pending"
-      : resolvedFavorites.status === "available"
-        ? "ready"
-        : "unavailable";
+    : recordsUnavailable
+      ? "unavailable"
+      : resolvedFavorites === undefined
+        ? "pending"
+        : resolvedFavorites.status === "available"
+          ? "ready"
+          : "unavailable";
 
   const toggleFavorite = (contentUid: string, studentUid: string, favorited: boolean) => {
     if (!signedIn) {
