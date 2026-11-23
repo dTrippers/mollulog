@@ -25,22 +25,60 @@ function campaign(uid: string, category: string[]) {
   return { uid, category, multiplier: 2, startAt: "2099-11-02T19:00:00Z", endAt: "2099-11-09T19:00:00Z" };
 }
 
+function drill(
+  uid: string,
+  drillType: string,
+  schedules: Array<{ region: string; startAt: string; endAt: string | null }> = [
+    { region: "gl", startAt: "2099-11-24T02:00:00Z", endAt: "2099-11-30T19:00:00Z" },
+  ],
+) {
+  return { uid, season: Number(uid), drillType, schedules };
+}
+
+type BaqlResult = { data?: unknown; error?: Error };
+
+function operationName(document: unknown): string | undefined {
+  const definitions = (document as { definitions?: Array<{ name?: { value?: string } }> }).definitions;
+  return definitions?.[0]?.name?.value;
+}
+
+/** Answers each source's query separately; a source left out gets an empty list. */
+function mockBaql(results: { campaigns?: BaqlResult; jointFiringDrills?: BaqlResult }) {
+  mockedRunQuery.mockImplementation(async (document) => {
+    switch (operationName(document)) {
+      case "TimelineAutoSyncCampaigns":
+        return results.campaigns ?? { data: { campaigns: [] } };
+      case "TimelineAutoSyncJointFiringDrills":
+        return results.jointFiringDrills ?? { data: { jointFiringDrills: [] } };
+      default:
+        throw new Error(`unexpected BAQL query: ${operationName(document)}`);
+    }
+  });
+}
+
+function planFor(contentType: string) {
+  return mockedApply.mock.calls.find((call) => call[1].creates.some((row) => row.contentType === contentType))?.[1];
+}
+
+function queryVariables(name: string) {
+  return mockedRunQuery.mock.calls.find((call) => operationName(call[0]) === name)?.[1];
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockedGetRows.mockResolvedValue([]);
   mockedApply.mockResolvedValue();
+  mockBaql({});
 });
 
 describe("syncTimelineContentsFromSources", () => {
   it("creates confirmed campaign rows in the existing uid and name format, asking BAQL for GL campaigns", async () => {
-    mockedRunQuery.mockResolvedValue({
-      data: { campaigns: [campaign("20991103", ["mission_normal", "mission_hard"])] },
-    });
+    mockBaql({ campaigns: { data: { campaigns: [campaign("20991103", ["mission_normal", "mission_hard"])] } } });
 
     await syncTimelineContentsFromSources(env);
 
-    expect(mockedRunQuery.mock.calls[0]?.[1]).toEqual({ region: "gl", endAfter: expect.any(Date) });
-    const plan = mockedApply.mock.calls[0]?.[1];
+    expect(queryVariables("TimelineAutoSyncCampaigns")).toEqual({ region: "gl", endAfter: expect.any(Date) });
+    const plan = planFor("campaign");
     expect(plan?.creates).toEqual([
       {
         uid: "campaign-20991103",
@@ -58,13 +96,13 @@ describe("syncTimelineContentsFromSources", () => {
   });
 
   it("syncs valid campaigns but fails the run for an unknown category instead of inventing a name", async () => {
-    mockedRunQuery.mockResolvedValue({
-      data: { campaigns: [campaign("20991103", ["exp"]), campaign("20991104", ["new_category"])] },
+    mockBaql({
+      campaigns: { data: { campaigns: [campaign("20991103", ["exp"]), campaign("20991104", ["new_category"])] } },
     });
 
     await expect(syncTimelineContentsFromSources(env)).rejects.toThrow(AggregateError);
 
-    const plan = mockedApply.mock.calls[0]?.[1];
+    const plan = planFor("campaign");
     expect(plan?.creates.map((row) => row.uid)).toEqual(["campaign-20991103"]);
     expect(mockLoggerError).toHaveBeenCalledWith(
       "Timeline auto sync rejected source items",
@@ -75,12 +113,87 @@ describe("syncTimelineContentsFromSources", () => {
     );
   });
 
-  it("writes nothing and fails the run when BAQL fails", async () => {
-    mockedRunQuery.mockResolvedValue({ error: new Error("baql down") });
+  it("creates unconfirmed joint firing drill rows in the existing uid and name format from the GL schedule", async () => {
+    mockBaql({
+      jointFiringDrills: {
+        data: {
+          jointFiringDrills: [
+            drill("98", "escort", [
+              { region: "jp", startAt: "2099-10-01T02:00:00Z", endAt: "2099-10-07T19:00:00Z" },
+              { region: "gl", startAt: "2099-11-24T02:00:00Z", endAt: "2099-11-30T19:00:00Z" },
+            ]),
+          ],
+        },
+      },
+    });
+
+    await syncTimelineContentsFromSources(env);
+
+    expect(queryVariables("TimelineAutoSyncJointFiringDrills")).toEqual({ endAfter: expect.any(Date) });
+    expect(planFor("joint_firing_drill")?.creates).toEqual([
+      {
+        uid: "jfd-98",
+        contentType: "joint_firing_drill",
+        contentUid: "98",
+        runType: "first",
+        occurrence: null,
+        nameI18n: { ko: "98차: 호위시험" },
+        startAt: toUtcIso("2099-11-24T02:00:00Z"),
+        endAt: toUtcIso("2099-11-30T19:00:00Z"),
+        endless: false,
+        confirmed: false,
+      },
+    ]);
+  });
+
+  it("skips drills without a GL schedule or whose GL schedule has ended", async () => {
+    mockBaql({
+      jointFiringDrills: {
+        data: {
+          jointFiringDrills: [
+            drill("97", "shooting", [{ region: "jp", startAt: "2099-10-01T02:00:00Z", endAt: "2099-10-07T19:00:00Z" }]),
+            drill("96", "defense", [
+              { region: "gl", startAt: "2000-01-01T02:00:00Z", endAt: "2000-01-07T19:00:00Z" },
+              { region: "jp", startAt: "2099-10-01T02:00:00Z", endAt: "2099-10-07T19:00:00Z" },
+            ]),
+            drill("95", "assault"),
+          ],
+        },
+      },
+    });
+
+    await syncTimelineContentsFromSources(env);
+
+    expect(planFor("joint_firing_drill")?.creates.map((row) => row.uid)).toEqual(["jfd-95"]);
+    expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+
+  it("syncs valid drills but fails the run for an unknown drill type instead of inventing a name", async () => {
+    mockBaql({
+      jointFiringDrills: { data: { jointFiringDrills: [drill("95", "assault"), drill("94", "new_type")] } },
+    });
 
     await expect(syncTimelineContentsFromSources(env)).rejects.toThrow(AggregateError);
 
-    expect(mockedApply).not.toHaveBeenCalled();
+    expect(planFor("joint_firing_drill")?.creates.map((row) => row.uid)).toEqual(["jfd-95"]);
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      "Timeline auto sync rejected source items",
+      expect.objectContaining({ message: expect.stringContaining("94 (unknown drill type: new_type)") }),
+      { contentType: "joint_firing_drill" },
+    );
+  });
+
+  it("writes nothing for a source and fails the run when its BAQL query fails", async () => {
+    mockBaql({
+      campaigns: { error: new Error("baql down") },
+      jointFiringDrills: { data: { jointFiringDrills: [drill("95", "assault")] } },
+    });
+
+    await expect(syncTimelineContentsFromSources(env)).rejects.toThrow(AggregateError);
+
+    expect(mockedApply).toHaveBeenCalledTimes(1);
+    expect(planFor("campaign")).toBeUndefined();
+    expect(planFor("joint_firing_drill")?.creates.map((row) => row.uid)).toEqual(["jfd-95"]);
     expect(mockLoggerError).toHaveBeenCalledWith(
       "Timeline auto sync source failed",
       expect.objectContaining({ message: "baql down" }),

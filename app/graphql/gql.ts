@@ -52,6 +52,7 @@ type Documents = {
     "\n  query StudentSkillItems($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      schaleDbId\n      skillItems(skillType: ex, skillLevel: 5) {\n        item { uid subCategory rarity }\n      }\n    }\n  }\n": typeof types.StudentSkillItemsDocument,
     "\n  query StudentWeaponAvailability($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      catalog {\n        weapon { name }\n      }\n    }\n  }\n": typeof types.StudentWeaponAvailabilityDocument,
     "\n  query TimelineAutoSyncCampaigns($region: String!, $endAfter: ISO8601DateTime) {\n    campaigns(region: $region, endAfter: $endAfter) {\n      uid\n      category\n      multiplier\n      startAt\n      endAt\n    }\n  }\n": typeof types.TimelineAutoSyncCampaignsDocument,
+    "\n  query TimelineAutoSyncJointFiringDrills($endAfter: ISO8601DateTime) {\n    jointFiringDrills(endAfter: $endAfter) {\n      uid\n      season\n      drillType\n      schedules {\n        region\n        startAt\n        endAt\n      }\n    }\n  }\n": typeof types.TimelineAutoSyncJointFiringDrillsDocument,
 };
 const documents: Documents = {
     "\n  query EventContentSchedule($eventUid: String!) {\n    eventContent(uid: $eventUid) {\n      schedules {\n        region\n        runType\n        startAt\n        endAt\n      }\n    }\n  }\n": types.EventContentScheduleDocument,
@@ -92,6 +93,7 @@ const documents: Documents = {
     "\n  query StudentSkillItems($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      schaleDbId\n      skillItems(skillType: ex, skillLevel: 5) {\n        item { uid subCategory rarity }\n      }\n    }\n  }\n": types.StudentSkillItemsDocument,
     "\n  query StudentWeaponAvailability($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      catalog {\n        weapon { name }\n      }\n    }\n  }\n": types.StudentWeaponAvailabilityDocument,
     "\n  query TimelineAutoSyncCampaigns($region: String!, $endAfter: ISO8601DateTime) {\n    campaigns(region: $region, endAfter: $endAfter) {\n      uid\n      category\n      multiplier\n      startAt\n      endAt\n    }\n  }\n": types.TimelineAutoSyncCampaignsDocument,
+    "\n  query TimelineAutoSyncJointFiringDrills($endAfter: ISO8601DateTime) {\n    jointFiringDrills(endAfter: $endAfter) {\n      uid\n      season\n      drillType\n      schedules {\n        region\n        startAt\n        endAt\n      }\n    }\n  }\n": types.TimelineAutoSyncJointFiringDrillsDocument,
 };
 
 /**
@@ -260,6 +262,10 @@ export function graphql(source: "\n  query StudentWeaponAvailability($uids: [Str
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query TimelineAutoSyncCampaigns($region: String!, $endAfter: ISO8601DateTime) {\n    campaigns(region: $region, endAfter: $endAfter) {\n      uid\n      category\n      multiplier\n      startAt\n      endAt\n    }\n  }\n"): (typeof documents)["\n  query TimelineAutoSyncCampaigns($region: String!, $endAfter: ISO8601DateTime) {\n    campaigns(region: $region, endAfter: $endAfter) {\n      uid\n      category\n      multiplier\n      startAt\n      endAt\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query TimelineAutoSyncJointFiringDrills($endAfter: ISO8601DateTime) {\n    jointFiringDrills(endAfter: $endAfter) {\n      uid\n      season\n      drillType\n      schedules {\n        region\n        startAt\n        endAt\n      }\n    }\n  }\n"): (typeof documents)["\n  query TimelineAutoSyncJointFiringDrills($endAfter: ISO8601DateTime) {\n    jointFiringDrills(endAfter: $endAfter) {\n      uid\n      season\n      drillType\n      schedules {\n        region\n        startAt\n        endAt\n      }\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};
