@@ -122,6 +122,15 @@ single owner for commands and claim-to-evidence mapping.
   frame (`absolute inset-0`) instead of relying on `height: 100%`? Inside a
   table cell, WebKit resolves that percentage to the image's natural height, and
   `object-cover` then shows a magnified crop.
+- Is a visually hidden table, such as a chart's text equivalent, hidden by
+  `sr-only` on a wrapping element instead of on the `<table>`? Firefox applies a
+  table's `overflow` and `clip-path` to the table box, which does not contain
+  the caption, so the caption showed under the chart.
+- Does input kept in browser storage stay correct across a save and a second
+  tab? Each tab writes only the entries it changed, a save forgets the saved
+  entries before the page moves on, and an action that discards kept input
+  discards only the entries it names. A saved row that stayed in storage came
+  back after its record was deleted.
 - For changed user-visible flows, are the relevant loading, empty, failure,
   retry/control adjacency, keyboard, and mobile fixed-bar states handled? Check
   the relevant render and interaction evidence; a concrete changed-UX deviation
