@@ -128,8 +128,10 @@ Density tokens are spacing tokens in a plain `@theme` block so utilities can rea
 - Use Tailwind's `tabular-nums` for every number, date, time, count, and remaining duration. Do not add a numeric-only utility.
 - Dates and periods: `MM/DD ~ MM/DD`. Period with time: `MM/DD HH:mm ~ MM/DD HH:mm`.
 - Past records whose year may differ, such as a news post date: `YYYY/MM/DD`.
+- Past periods whose year may differ, such as a raid season: `YYYY/MM/DD ~ MM/DD`. The end carries the year only when it differs: `2023/12/26 ~ 2024/01/02`.
 - Remaining time: `N일 남음` for a running period, `N일 후 시작` for a future one.
 - Counts: thousands separator, for example `1,234`.
+- Chart axes show full digits with a thousands separator (`50,000`), not `K` or `M`.
 - Comparison tables: right-align the date and figure columns so rows compare by digit position.
 - Show each value in its own unit, and compare or subtract only values of the same unit. A difference between 청휘석 and a recruit count (for example "차이 30회") is meaningless.
 
@@ -185,6 +187,7 @@ These rules come from the product owner's reviews of design proposals and implem
 - A result for a currency allows several acquisition and consumption sources. A display with one slot per currency is a defect.
 - UI copy uses the domain terms below and polite, neutral wording. Avoid casual or condescending words (갖고 있는, 키운다) and labels that read as a judgment of the user (운).
 - A notice about one item (a student, a row) sits at that item, as an inline mark or icon beside its name, not as a notice at the top of the screen.
+- A screen where the Sensei enters many values at once keeps unsaved input in the browser and restores it on the next visit with a notice and a 되돌리기 action.
 
 ### Domain terms
 
