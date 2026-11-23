@@ -7,7 +7,7 @@ import {
   raidRankTierBands,
 } from "~/domain/raid-record";
 import { formatRaidRank, formatRaidScore, RAID_RECORD_RAID_TYPE_LABEL } from "./raid-record-format";
-import { RANK_STATUS_LABEL, RaidRankTierBadge } from "./RaidRecordBits";
+import { RAID_RANK_TIER_LABEL, RANK_STATUS_LABEL, RaidRankTierBadge } from "./RaidRecordBits";
 
 export type RaidRecordTrendPoint = {
   key: string;
@@ -66,6 +66,12 @@ export function buildTicks(min: number, max: number): { domain: [number, number]
 
 export function formatRankTick(value: number): string {
   return value.toLocaleString("ko-KR");
+}
+
+// The trophy bounds of one season, for the screen-reader table: "플래티넘 12,000위까지, 골드 55,000위까지, 실버 100,000위까지".
+export function formatTierBounds(bands: RaidRankTierBands | null): string {
+  if (!bands) return "–";
+  return TIER_LINES.map((tier) => `${RAID_RANK_TIER_LABEL[tier]} ${formatRaidRank(bands[tier])}까지`).join(", ");
 }
 
 export type TierLineSegment = { x1: number; x2: number; y1: number; y2: number };
@@ -173,10 +179,6 @@ export function RaidRecordTrendChart({ points }: { points: RaidRecordTrendPoint[
   const bands = ordered.map((point): RaidRankTierBands | null =>
     raidRankTierBands(point.server, point.raidType, point.seasonIndex),
   );
-  const lastBands = bands[bands.length - 1] ?? null;
-  const tierLabels = TIER_LINES.filter(
-    (tier) => lastBands !== null && lastBands[tier] >= domain[0] && lastBands[tier] <= domain[1],
-  );
   const showsTierLines = TIER_LINES.some((tier) =>
     bands.some((band) => band !== null && band[tier] >= domain[0] && band[tier] <= domain[1]),
   );
@@ -189,6 +191,21 @@ export function RaidRecordTrendChart({ points }: { points: RaidRecordTrendPoint[
   const y = (rank: number) => MARGIN.top + ((rank - domain[0]) / (domain[1] - domain[0] || 1)) * plotHeight;
   const slot = ordered.length > 0 ? plotWidth / ordered.length : 0;
   const x = (index: number) => marginLeft + slot * (index + 0.5);
+  const plotRight = width - marginRight;
+  const tierLines = TIER_LINES.map((tier) => {
+    const segments = buildTierLineSegments(
+      bands.map((band) => band?.[tier] ?? null),
+      domain,
+      (index) => marginLeft + slot * index,
+      (index) => marginLeft + slot * (index + 1),
+      y,
+    );
+    // The badge marks where the line ends: in the right margin when it runs to the last season, or just past the end
+    // of its last level part when the later seasons' bound is off the chart.
+    const last = segments.filter((segment) => segment.y1 === segment.y2).at(-1) ?? null;
+    const label = last ? { x: last.x2 >= plotRight - 0.5 ? plotRight + 4 : last.x2 + 2, y: last.y1 } : null;
+    return { tier, segments, label };
+  });
   const labelEvery = Math.max(1, Math.ceil(ordered.length / Math.max(1, Math.floor(plotWidth / 44))));
   const active = ordered.find((point) => point.key === activeKey) ?? null;
   const activeIndex = active ? ordered.indexOf(active) : -1;
@@ -242,14 +259,8 @@ export function RaidRecordTrendChart({ points }: { points: RaidRecordTrendPoint[
                 </text>
               </g>
             ))}
-            {TIER_LINES.map((tier) =>
-              buildTierLineSegments(
-                bands.map((band) => band?.[tier] ?? null),
-                domain,
-                (index) => marginLeft + slot * index,
-                (index) => marginLeft + slot * (index + 1),
-                y,
-              ).map((segment) => (
+            {tierLines.map(({ tier, segments }) =>
+              segments.map((segment) => (
                 <line
                   key={`tier-${tier}-${segment.x1}-${segment.y1}-${segment.y2}`}
                   {...segment}
@@ -260,16 +271,18 @@ export function RaidRecordTrendChart({ points }: { points: RaidRecordTrendPoint[
                 />
               )),
             )}
-            {tierLabels.map((tier) => (
-              <image
-                key={`tier-label-${tier}`}
-                href={`/icons/raid-tier-${tier}.png`}
-                x={width - marginRight + 4}
-                y={y((lastBands as RaidRankTierBands)[tier]) - TIER_ICON_HEIGHT / 2}
-                width={(TIER_ICON_HEIGHT * 96) / 72}
-                height={TIER_ICON_HEIGHT}
-              />
-            ))}
+            {tierLines.map(({ tier, label }) =>
+              label ? (
+                <image
+                  key={`tier-label-${tier}`}
+                  href={`/icons/raid-tier-${tier}.png`}
+                  x={label.x}
+                  y={label.y - TIER_ICON_HEIGHT / 2}
+                  width={(TIER_ICON_HEIGHT * 96) / 72}
+                  height={TIER_ICON_HEIGHT}
+                />
+              ) : null,
+            )}
             {ordered.slice(1).map((point, index) => {
               const previous = ordered[index];
               const dashed = point.rankStatus === "provisional" || previous.rankStatus === "provisional";
@@ -362,10 +375,11 @@ export function RaidRecordTrendChart({ points }: { points: RaidRecordTrendPoint[
               <th scope="col">시즌</th>
               <th scope="col">순위</th>
               <th scope="col">점수</th>
+              <th scope="col">트로피 기준 순위</th>
             </tr>
           </thead>
           <tbody>
-            {ordered.map((point) => (
+            {ordered.map((point, index) => (
               <tr key={point.key}>
                 <th scope="row">{seasonName(point)}</th>
                 <td>
@@ -378,6 +392,7 @@ export function RaidRecordTrendChart({ points }: { points: RaidRecordTrendPoint[
                   />
                 </td>
                 <td>{formatRaidScore(point.score)}</td>
+                <td>{formatTierBounds(bands[index])}</td>
               </tr>
             ))}
           </tbody>

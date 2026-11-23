@@ -127,7 +127,7 @@ export function RankStatusPill({ status, className }: { status: RaidRecordRankSt
   );
 }
 
-const RAID_RANK_TIER_LABEL: Record<RaidRankTier, string> = {
+export const RAID_RANK_TIER_LABEL: Record<RaidRankTier, string> = {
   platinum: "플래티넘",
   gold: "골드",
   silver: "실버",

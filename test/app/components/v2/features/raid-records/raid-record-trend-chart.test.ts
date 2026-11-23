@@ -5,6 +5,7 @@ import {
   buildTicks,
   buildTierLineSegments,
   formatRankTick,
+  formatTierBounds,
   RaidRecordTrendChart,
   type RaidRecordTrendPoint,
 } from "~/components/v2/features/raid-records/RaidRecordTrendChart";
@@ -46,6 +47,8 @@ describe("RaidRecordTrendChart", () => {
     // Firefox clips a table's own overflow and clip-path without its caption, so sr-only must sit on a wrapper.
     expect(markup).toContain('<div class="sr-only"><table><caption>시즌별 순위</caption>');
     expect(markup).not.toContain('<table class="sr-only">');
+    expect(markup).toContain('<th scope="col">트로피 기준 순위</th>');
+    expect(markup).toContain("<td>플래티넘 10,000위까지, 골드 50,000위까지, 실버 100,000위까지</td>");
   });
 });
 
@@ -76,5 +79,13 @@ describe("buildTierLineSegments", () => {
       { x1: 10, x2: 20, y1: 12, y2: 12 },
     ]);
     expect(buildTierLineSegments([240_000, 240_000], [0, 100_000], left, right, y)).toEqual([]);
+  });
+});
+
+describe("formatTierBounds", () => {
+  it("reads each trophy's last rank of the season", () => {
+    expect(formatTierBounds({ platinum: 10_000, gold: 50_000, silver: 100_000 })).toBe(
+      "플래티넘 10,000위까지, 골드 50,000위까지, 실버 100,000위까지",
+    );
   });
 });
