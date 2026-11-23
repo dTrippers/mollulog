@@ -71,6 +71,7 @@ export type NavigationGroupId =
   | "home"
   | "game"
   | "planner"
+  | "ai"
   | "personal"
   | "community"
   | "news"
@@ -150,6 +151,13 @@ export const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
     SolidIcon: CalculatorIconSolid,
   },
   {
+    id: "ai",
+    name: "Arona Intelligence",
+    shortName: "Arona Intelligence",
+    OutlineIcon: SparklesIconOutline,
+    SolidIcon: SparklesIconSolid,
+  },
+  {
     id: "community",
     name: "커뮤니티",
     shortName: "커뮤니티",
@@ -176,6 +184,7 @@ const NAVIGATION_SEARCH_GROUP_ORDER: readonly NavigationGroupId[] = [
   "home",
   "game",
   "planner",
+  "ai",
   "community",
   "personal",
   "news",
@@ -222,6 +231,8 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
       return pathname === "/products" || pathname.startsWith("/products/");
     case "coupons":
       return pathname.startsWith("/coupons");
+    case "recruit-recommendation":
+      return normalizedPathname === "/ai" || normalizedPathname.startsWith("/ai/recruit");
     case "ai-question":
       return pathname === "/chat" || pathname.startsWith("/chat/");
     case "integrated-planner":
@@ -286,6 +297,7 @@ export function getNavigationCatalog({
   upcomingEvent,
   hasOngoingRaid,
   hasUnconsumedCoupons,
+  isAdmin = false,
   currentUsername = null,
   hasRecentNews = false,
   hasUnreadFeedbackReplies = false,
@@ -302,6 +314,33 @@ export function getNavigationCatalog({
       OutlineIcon: HomeIconOutline,
       SolidIcon: HomeIconSolid,
       isActive: itemIsActive("home", pathname, currentUsername),
+    },
+    {
+      menuId: "recruit-recommendation",
+      group: "ai",
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
+      to: "/ai/recruit",
+      name: "모집 추천",
+      mobileNavigationId: "recruit-recommendation",
+      favoriteId: "recruit-recommendation",
+      description: "다가오는 픽업 학생의 모집 우선순위를 확인해보세요",
+      OutlineIcon: SparklesIconOutline,
+      SolidIcon: SparklesIconSolid,
+      isActive: itemIsActive("recruit-recommendation", pathname, currentUsername),
+    },
+    {
+      menuId: "ai-question",
+      group: "ai",
+      // Only admins can open the chatbot yet. Everyone else sees the entry as coming soon, and search leaves it out.
+      surfaces: isAdmin ? ["desktop", "more", "search"] : ["desktop", "more"],
+      to: "/chat",
+      name: "AI 챗봇",
+      description: "블루 아카이브에 대해 궁금한 점을 AI에게 물어보세요",
+      disabled: !isAdmin,
+      badgeLabel: isAdmin ? undefined : "준비중",
+      OutlineIcon: ChatBubbleLeftRightIconOutline,
+      SolidIcon: ChatBubbleLeftRightIconSolid,
+      isActive: itemIsActive("ai-question", pathname, currentUsername),
     },
     {
       menuId: "community-feed",
@@ -418,18 +457,6 @@ export function getNavigationCatalog({
       SolidIcon: TicketIconSolid,
       isActive: itemIsActive("coupons", pathname, currentUsername),
       dot: hasUnconsumedCoupons ? "account" : undefined,
-    },
-    {
-      menuId: "ai-question",
-      group: "game",
-      surfaces: ["desktop", "more", "search"],
-      to: "/chat",
-      name: "AI 챗봇",
-      description: "블루 아카이브에 대해 궁금한 점을 AI에게 물어보세요",
-      requiresAdmin: true,
-      OutlineIcon: SparklesIconOutline,
-      SolidIcon: SparklesIconSolid,
-      isActive: itemIsActive("ai-question", pathname, currentUsername),
     },
     {
       menuId: "integrated-planner",

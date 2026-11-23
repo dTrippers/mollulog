@@ -77,36 +77,40 @@ describe("global navigation catalog", () => {
     );
   });
 
-  it("places AI questions last in game information and omits them from the mobile bottom bar", () => {
-    const catalog = getNavigationCatalog({ ...guestOptions, pathname: "/chat" });
-    const item = catalog.find(({ menuId }) => menuId === "ai-question");
-    const mobile = getMobileNavigationItems(guestOptions);
+  it("groups recruit recommendations and the chatbot under Arona Intelligence", () => {
+    const catalog = getNavigationCatalog({ ...guestOptions, pathname: "/ai/recruit" });
+    const aiItems = catalog.filter(({ group }) => group === "ai");
 
-    expect(item).toMatchObject({
-      to: "/chat",
-      name: "AI 챗봇",
-      description: "블루 아카이브에 대해 궁금한 점을 AI에게 물어보세요",
-      group: "game",
-      surfaces: ["desktop", "more", "search"],
-      requiresAdmin: true,
+    expect(aiItems.map(({ menuId }) => menuId)).toEqual(["recruit-recommendation", "ai-question"]);
+    expect(aiItems[0]).toMatchObject({
+      to: "/ai/recruit",
+      name: "모집 추천",
+      favoriteId: "recruit-recommendation",
+      mobileNavigationId: "recruit-recommendation",
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       isActive: true,
     });
-    expect(catalog.filter(({ group }) => group === "game").at(-1)).toBe(item);
-    expect(mobile).not.toContainEqual(expect.objectContaining({ menuId: "ai-question" }));
+    expect(aiItems[0].requiresSignIn).toBeUndefined();
+    expect(aiItems[0].requiresAdmin).toBeUndefined();
+    const recruitActive = (pathname: string) =>
+      getNavigationCatalog({ ...guestOptions, pathname }).find(({ menuId }) => menuId === "recruit-recommendation")
+        ?.isActive;
+    expect(recruitActive("/ai")).toBe(true);
+    expect(recruitActive("/aibot")).toBe(false);
+    expect(recruitActive("/chat")).toBe(false);
+    expect(getDesktopNavigation(guestOptions).groups.find(({ id }) => id === "ai")?.name).toBe("Arona Intelligence");
   });
 
-  it("shows AI questions on desktop, more, and search only to admins", () => {
+  it("shows the chatbot as coming soon to non-admins and opens it only for admins", () => {
     for (const options of [guestOptions, signedInOptions]) {
-      expect(
-        getDesktopNavigation(options)
-          .groups.flatMap(({ items }) => items)
-          .some(({ to }) => to === "/chat"),
-      ).toBe(false);
-      expect(
-        getMoreNavigationSections(options)
-          .flatMap(({ items }) => items)
-          .some(({ to }) => to === "/chat"),
-      ).toBe(false);
+      const desktopChat = getDesktopNavigation(options)
+        .groups.flatMap(({ items }) => items)
+        .find(({ to }) => to === "/chat");
+      const moreChat = getMoreNavigationSections(options)
+        .flatMap(({ items }) => items)
+        .find(({ to }) => to === "/chat");
+      expect(desktopChat).toMatchObject({ name: "AI 챗봇", disabled: true, badgeLabel: "준비중" });
+      expect(moreChat).toMatchObject({ disabled: true, badgeLabel: "준비중" });
       expect(
         getSearchableMenuItems({
           currentUsername: options.isSignedIn ? "sensei" : null,
@@ -115,19 +119,17 @@ describe("global navigation catalog", () => {
       ).toBe(false);
     }
 
-    expect(
-      getDesktopNavigation(adminOptions)
-        .groups.flatMap(({ items }) => items)
-        .some(({ to }) => to === "/chat"),
-    ).toBe(true);
-    expect(
-      getMoreNavigationSections(adminOptions)
-        .flatMap(({ items }) => items)
-        .some(({ to }) => to === "/chat"),
-    ).toBe(true);
-    expect(getSearchableMenuItems({ currentUsername: "sensei", isAdmin: true }).some(({ to }) => to === "/chat")).toBe(
-      true,
+    const adminChat = getDesktopNavigation(adminOptions)
+      .groups.flatMap(({ items }) => items)
+      .find(({ to }) => to === "/chat");
+    expect(adminChat).toMatchObject({ name: "AI 챗봇", disabled: false, badgeLabel: undefined });
+    expect(adminChat?.OutlineIcon).not.toBe(
+      getNavigationCatalog(guestOptions).find(({ menuId }) => menuId === "recruit-recommendation")?.OutlineIcon,
     );
+    expect(getSearchableMenuItems({ currentUsername: "sensei", isAdmin: true })).toContainEqual(
+      expect.objectContaining({ id: "ai-question", to: "/chat" }),
+    );
+    expect(getMobileNavigationItems(guestOptions)).not.toContainEqual(expect.objectContaining({ menuId: "ai-question" }));
   });
 
   it("exposes the public API screens in the settings group and marks nested pages active", () => {
@@ -184,8 +186,14 @@ describe("global navigation catalog", () => {
     const desktop = getDesktopNavigation(guestOptions);
 
     // A signed-out visitor has no 나의 데이터 group, because every item in it needs a sign-in.
-    expect(desktop.groups.map(({ name }) => name)).toEqual(["게임 정보", "플래너·계산기", "커뮤니티", "소식·도움말"]);
-    expect(desktop.groups.map(({ id }) => id)).toEqual(["game", "planner", "community", "news"]);
+    expect(desktop.groups.map(({ name }) => name)).toEqual([
+      "게임 정보",
+      "플래너·계산기",
+      "Arona Intelligence",
+      "커뮤니티",
+      "소식·도움말",
+    ]);
+    expect(desktop.groups.map(({ id }) => id)).toEqual(["game", "planner", "ai", "community", "news"]);
     expect(desktop.groups.flatMap(({ name }) => [name])).not.toEqual(
       expect.arrayContaining(["컨텐츠", "플래너 & 계산기", "게임 외 정보", "내 정보", "서비스"]),
     );
@@ -194,6 +202,7 @@ describe("global navigation catalog", () => {
     expect(signedIn.groups.map(({ name }) => name)).toEqual([
       "게임 정보",
       "플래너·계산기",
+      "Arona Intelligence",
       "커뮤니티",
       "나의 데이터",
       "소식·도움말",
@@ -215,9 +224,6 @@ describe("global navigation catalog", () => {
   it("keeps every existing game and planner destination in its new group", () => {
     const desktop = getDesktopNavigation(guestOptions);
     const itemsByGroup = Object.fromEntries(desktop.groups.map(({ id, items }) => [id, items.map(({ to }) => to)]));
-    const adminGameDestinations = getDesktopNavigation(adminOptions)
-      .groups.find(({ id }) => id === "game")
-      ?.items.map(({ to }) => to);
 
     expect(itemsByGroup.game).toEqual([
       "/futures",
@@ -229,7 +235,6 @@ describe("global navigation catalog", () => {
       "/products/recruit-tickets",
       "/coupons",
     ]);
-    expect(adminGameDestinations).toEqual([...itemsByGroup.game, "/chat"]);
     expect(itemsByGroup.planner).toEqual([
       "/planner",
       "/utils/pyroxene",
@@ -241,6 +246,7 @@ describe("global navigation catalog", () => {
       "/utils/relationship",
       "/utils/raidscore",
     ]);
+    expect(itemsByGroup.ai).toEqual(["/ai/recruit", "/chat"]);
     expect(itemsByGroup.community).toEqual(["/community", "/timelines"]);
     expect(itemsByGroup.personal).toBeUndefined();
     expect(itemsByGroup.news).toEqual(["/news", "/contact"]);
@@ -277,6 +283,7 @@ describe("global navigation catalog", () => {
       "relationship-calculator",
       "strategy-timeline",
       "raid-score-calculator",
+      "recruit-recommendation",
     ]);
     expect(options.map(({ name }) => name)).toEqual([
       "피드",
@@ -294,10 +301,11 @@ describe("global navigation catalog", () => {
       "인연 계산기",
       "공략",
       "점수 계산기",
+      "모집 추천",
     ]);
   });
 
-  it("projects the More groups and keeps AI questions hidden from non-admins", () => {
+  it("projects the More groups with the chatbot as coming soon to non-admins", () => {
     const guestSections = getMoreNavigationSections(guestOptions);
     const signedInSections = getMoreNavigationSections(signedInOptions);
     const adminSections = getMoreNavigationSections(adminOptions);
@@ -305,6 +313,7 @@ describe("global navigation catalog", () => {
     expect(guestSections.map(({ name }) => name)).toEqual([
       "게임 정보",
       "플래너·계산기",
+      "Arona Intelligence",
       "커뮤니티",
       "소식·도움말",
       "설정",
@@ -318,12 +327,16 @@ describe("global navigation catalog", () => {
       "상품 / 패키지",
       "쿠폰",
     ]);
-    expect(guestSections.flatMap(({ items }) => items).some(({ to }) => to === "/chat")).toBe(false);
-    expect(signedInSections.flatMap(({ items }) => items).some(({ to }) => to === "/chat")).toBe(false);
-    expect(adminSections.find(({ id }) => id === "game")?.items.at(-1)?.to).toBe("/chat");
+    expect(guestSections.find(({ id }) => id === "ai")?.items.map(({ to, disabled }) => [to, disabled])).toEqual([
+      ["/ai/recruit", undefined],
+      ["/chat", true],
+    ]);
+    expect(signedInSections.find(({ id }) => id === "ai")?.items.at(-1)).toMatchObject({ to: "/chat", disabled: true });
+    expect(adminSections.find(({ id }) => id === "ai")?.items.at(-1)).toMatchObject({ to: "/chat", disabled: false });
     expect(signedInSections.map(({ name }) => name)).toEqual([
       "게임 정보",
       "플래너·계산기",
+      "Arona Intelligence",
       "커뮤니티",
       "나의 데이터",
       "소식·도움말",
@@ -403,7 +416,8 @@ describe("global navigation catalog", () => {
     expect(guestItems.some(({ requiresSignIn }) => requiresSignIn)).toBe(false);
     expect(guestItems.some(({ to }) => to === "/chat")).toBe(false);
     expect(signedInItems.some(({ to }) => to === "/chat")).toBe(false);
-    expect(adminItems).toContainEqual(expect.objectContaining({ id: "ai-question", to: "/chat", requiresAdmin: true }));
+    expect(adminItems).toContainEqual(expect.objectContaining({ id: "ai-question", to: "/chat" }));
+    expect(guestItems).toContainEqual(expect.objectContaining({ id: "recruit-recommendation", to: "/ai/recruit" }));
     expect(guestItems.some(({ to }) => to === "/unauthorized")).toBe(false);
     expect(guestItems).toEqual(expect.arrayContaining([expect.objectContaining({ name: "이벤트", to: "/events" })]));
     expect(signedInItems).toEqual(

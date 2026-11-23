@@ -22,6 +22,7 @@ export const NAVIGATION_MENU_IDS = [
   "event-shop-calculator",
   "relationship-calculator",
   "raid-score-calculator",
+  "recruit-recommendation",
   "community-feed",
   "community-timelines",
   "profile",

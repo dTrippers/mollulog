@@ -14,6 +14,7 @@ export const MOBILE_NAVIGATION_IDS = [
   "relationship-calculator",
   "strategy-timeline",
   "raid-score-calculator",
+  "recruit-recommendation",
 ] as const;
 
 export type MobileNavigationId = (typeof MOBILE_NAVIGATION_IDS)[number];
