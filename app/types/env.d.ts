@@ -1,5 +1,7 @@
 import type { QuestionRequest } from "~/models/al1s-question-contract";
+import type { RecruitRecommendationRequest } from "~/models/recruit-recommendation-contract";
 
+type Al1sRecommendationBinding = { getRecruitRecommendations(request: RecruitRecommendationRequest): Promise<unknown> };
 type Al1sBinding = { runQuestion(request: QuestionRequest, onEvent?: (event: unknown) => void): Promise<unknown> };
 
 declare global {
@@ -14,5 +16,6 @@ declare global {
     API_READ_RATE_LIMITER?: RateLimit;
     QUESTION_RATE_LIMITER: RateLimit;
     AL1S: Al1sBinding;
+    AL1S_RECOMMENDATIONS: Al1sRecommendationBinding;
   }
 }

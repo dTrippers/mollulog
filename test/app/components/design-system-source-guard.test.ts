@@ -98,6 +98,8 @@ const migratedRouteFiles: string[] = [
   "routes/students.$id._components/UsageBarChart.tsx",
   "routes/students.$id._components/raidTierVisual.ts",
   "routes/students.$id._components/formatUsagePercent.ts",
+  "routes/ai.recruit.tsx",
+  "routes/ai._index.tsx",
   "routes/futures.tsx",
   "routes/futures._components/futures-navigation.ts",
   "routes/futures._components/futures-view-state.ts",

@@ -15,6 +15,7 @@ export { PageStackedSummary } from "./PageStackedSummary";
 export { PageToolbar, type PageToolbarProps } from "./PageToolbar";
 export { PanelAction, type PanelActionProps } from "./PanelAction";
 export { PanelSheet, type PanelSheetProps } from "./PanelSheet";
+export { PLAN_SHEET_PANEL_ID, PlanSheet } from "./PlanSheet";
 export { ScreenNavigation, ScreenNavigationToolbar } from "./ScreenNavigation";
 export { ScreenNavigationFocusScope } from "./screen-navigation-focus";
 export { type ScreenTabItem, ScreenTabs, type ScreenTabsProps } from "./ScreenTabs";

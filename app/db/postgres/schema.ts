@@ -24,6 +24,7 @@ import type {
   RaidRecordScoreMode,
   RaidRecordServer,
 } from "~/domain/raid-record";
+import type { RecruitGoal } from "~/domain/recruit-recommendation";
 import type { SiteBannerPreset, SiteBannerScreen } from "~/domain/site-banner";
 import type {
   MenuBadgeLabelMode,
@@ -1605,6 +1606,19 @@ export const pgRecruitTicketsTable = pgTable(
       .where(sql`${table.productUid} is not null`),
     uniqueIndex("recruit_tickets_item_uidx").on(table.itemUid).where(sql`${table.productUid} is null`),
   ],
+);
+
+// The goal a Sensei chose on 모집 추천; one row per user.
+export const pgRecruitRecommendationProfilesTable = pgTable(
+  "recruit_recommendation_profiles",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    goal: text().$type<RecruitGoal>().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("recruit_recommendation_profiles_user_id_uidx").on(table.userId)],
 );
 
 // A Sensei's own result in one 총력전 or 대결전 season on one game server; one row per (user, server, raid type, season).

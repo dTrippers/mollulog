@@ -15,10 +15,12 @@ import { bossImageUrl, eventIconImageUrl } from "~/models/assets";
 import type { EventType, RaidType } from "~/models/content.d";
 import { useImageFailure } from "../../primitives/use-image-failure";
 
-export type ContentMediaSize = "timeline" | "row" | "table" | "header" | "mark";
+export type ContentMediaSize = "timeline" | "feed" | "row" | "table" | "header" | "mark";
 
 const sizeClassName: Record<ContentMediaSize, string> = {
   timeline: "size-10 md:size-11 lg:size-12",
+  // A fixed 40px for a feed whose left column does not grow with the viewport, such as 모집 추천.
+  feed: "size-10",
   row: "size-8",
   table: "size-7 lg:size-9",
   // Fills the `PageHeader` media slot beside a page title.
@@ -29,6 +31,7 @@ const sizeClassName: Record<ContentMediaSize, string> = {
 
 const iconSizeClassName: Record<ContentMediaSize, string> = {
   timeline: "size-5 md:size-[1.375rem]",
+  feed: "size-5",
   row: "size-4 lg:size-3.5",
   table: "size-3.5",
   header: "size-7",

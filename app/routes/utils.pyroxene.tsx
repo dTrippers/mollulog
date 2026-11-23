@@ -35,7 +35,7 @@ import {
   PickupBasisPanel,
 } from "~/components/v2/features/pyroxene/PickupBasis";
 import { PlannerSchedule } from "~/components/v2/features/pyroxene/PlannerSchedule";
-import { PLAN_SHEET_PANEL_ID, PlanSheet } from "~/components/v2/features/pyroxene/PlanSheet";
+import { PLAN_SHEET_PANEL_ID, PlanSheet } from "~/components/v2/layout/PlanSheet";
 import { AsideLinks } from "~/components/v2/layout/AsideLinks";
 import { MobileActionBar } from "~/components/v2/layout/MobileActionBar";
 import { PageAside } from "~/components/v2/layout/PageAside";

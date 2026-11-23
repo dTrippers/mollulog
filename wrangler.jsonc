@@ -59,7 +59,8 @@
     }
   ],
   "services": [
-    { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" }
+    { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" },
+    { "binding": "AL1S_RECOMMENDATIONS", "service": "mollulog-al1s", "entrypoint": "RecommendationService" }
   ],
   "r2_buckets": [
     { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-dev", "remote": true }
@@ -127,7 +128,8 @@
         }
       ],
       "services": [
-        { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" }
+        { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" },
+        { "binding": "AL1S_RECOMMENDATIONS", "service": "mollulog-al1s", "entrypoint": "RecommendationService" }
       ],
       "r2_buckets": [
         { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
@@ -190,7 +192,8 @@
         }
       ],
       "services": [
-        { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" }
+        { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" },
+        { "binding": "AL1S_RECOMMENDATIONS", "service": "mollulog-al1s", "entrypoint": "RecommendationService" }
       ],
       "r2_buckets": [
         { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
