@@ -39,6 +39,8 @@ Run `mise exec -- pnpm dev:db:migrate <new-file.sql>` for the task's selected SQ
 Existing untracked files have unknown application history and must not be replayed.
 This local command is separate from the production procedure below.
 
+A migration changes the schema only. Data changes such as backfills and conversions go in `db/operations/*.sql`, run by the owner after the migration they depend on.
+
 Migration files use `yyyymmddhhmmss_{name}.sql` and are applied through the repository's approved PostgreSQL migration process. Apply and verify every required migration before deploying code that depends on the new schema. Runtime deploy commands never apply schema migrations automatically.
 
 ## Student state tables

@@ -134,9 +134,9 @@ describe("parseGuideBody", () => {
     expect(() => parseGuideBody(doc(list))).toThrow(InvalidGuideBodyError);
   });
 
-  it("accepts the shape the description migration writes", () => {
-    // 20261123120000_add_raid_walkthrough_body: one paragraph per line, an empty line as an empty paragraph, and each
-    // http(s) URL as a link on its own text node.
+  it("accepts the shape the description backfill writes", () => {
+    // db/operations/20261123120100_backfill_raid_walkthrough_body.sql: one paragraph per line, an empty line as an
+    // empty paragraph, and each http(s) URL as a link on its own text node.
     const migrated = doc(
       {
         type: "paragraph",
