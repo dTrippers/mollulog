@@ -208,6 +208,7 @@ UI copy uses these terms for these game and product concepts. Add a term here on
 ### Icons and images
 
 - Show game objects (currencies, items, students, the exclusive weapon) with their game images, not their names or a generic icon.
+- Show a value that belongs to a game object next to that object's game image, such as a boss's usage rate next to the boss image. Do not invent a new visual notation, such as pictograms or a custom chart, for a value that an existing image and a number can show.
 - Keep status, category, and count labels as text. Do not replace them with icons.
 - Game icon images carry transparent padding, so they look smaller than their box. Size them by the visible object, next to the text they go with.
 - Growth-tier stars use `text-v2-star`, and the exclusive weapon uses its game icon (`TierInput`, `GrowthTier`).
