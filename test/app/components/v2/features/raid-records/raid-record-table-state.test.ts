@@ -1,14 +1,15 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  forgetStoredRaidTableDrafts,
   initialRaidTableDraft,
   isRaidTableRowChanged,
+  mergeStoredRaidTableDrafts,
   type RaidTableDraft,
   raidTableErrorLabel,
   raidTableRowErrors,
   raidTableRowStatus,
   restoreRaidTableDrafts,
   toRaidTableSubmissionRow,
-  toStoredRaidTableDrafts,
 } from "~/components/v2/features/raid-records/raid-record-table-state";
 import type { RaidRecordRankStatus, RaidRecordScoreMode } from "~/domain/raid-record";
 import { Terrain } from "~/graphql/graphql";
@@ -320,20 +321,20 @@ describe("raid record table drafts kept in the browser", () => {
   const empty = row("total_assault", null);
 
   it("keeps only the changed rows, with the record version each was typed over", () => {
-    const stored = toStoredRaidTableDrafts([saved], {
+    const stored = mergeStoredRaidTableDrafts(null, [saved], {
       88: draft({ special: 31_000_000 }, 20_000),
     });
     expect(stored).toEqual({
       version: 1,
       rows: { "88": { recordUpdatedAt: "2026-11-05T00:00:00.000Z", draft: draft({ special: 31_000_000 }, 20_000) } },
     });
-    expect(toStoredRaidTableDrafts([saved], { 88: initialRaidTableDraft(saved) })).toBeNull();
-    expect(toStoredRaidTableDrafts([saved], {})).toBeNull();
+    expect(mergeStoredRaidTableDrafts(null, [saved], { 88: initialRaidTableDraft(saved) })).toBeNull();
+    expect(mergeStoredRaidTableDrafts(null, [saved], {})).toBeNull();
   });
 
   it("restores a kept row only while its record is the version it was typed over", () => {
     const typed = draft({ special: 31_000_000 }, 20_000);
-    const stored = toStoredRaidTableDrafts([saved], { 88: typed });
+    const stored = mergeStoredRaidTableDrafts(null, [saved], { 88: typed });
     expect(restoreRaidTableDrafts([saved], JSON.parse(JSON.stringify(stored)))).toEqual({ 88: typed });
     const changedSince = {
       ...saved,
@@ -341,7 +342,7 @@ describe("raid record table drafts kept in the browser", () => {
     };
     expect(restoreRaidTableDrafts([changedSince], stored)).toEqual({});
     // A new row kept before the save has a record after it, so it is not restored either.
-    const newRow = toStoredRaidTableDrafts([empty], { 88: draft({ special: 1_000_000 }, 30_000) });
+    const newRow = mergeStoredRaidTableDrafts(null, [empty], { 88: draft({ special: 1_000_000 }, 30_000) });
     expect(restoreRaidTableDrafts([empty], newRow)).toEqual({ 88: draft({ special: 1_000_000 }, 30_000) });
     expect(restoreRaidTableDrafts([saved], newRow)).toEqual({});
   });
@@ -379,5 +380,38 @@ describe("raid record table drafts kept in the browser", () => {
       rows: { "88": { recordUpdatedAt: null, draft: draft({ special: 1_000_000 }, 30_000) } },
     };
     expect(restoreRaidTableDrafts([unavailable], stored)).toEqual({});
+  });
+});
+
+describe("raid record table drafts across tabs and saves", () => {
+  const saved = row("total_assault", { scores: { special: 30_000_000 }, rank: 20_000, rankStatus: "confirmed" });
+  const other = { ...row("total_assault", null), season: { ...season("total_assault"), seasonIndex: 87 } };
+  const kept = (_seasonIndex: number, rank: number) => ({
+    recordUpdatedAt: null,
+    draft: draft({ special: 1_000_000 }, rank),
+  });
+
+  it("writes only the rows this table holds a draft for, keeping rows another tab kept", () => {
+    const stored = { version: 1, rows: { "87": kept(87, 30_000) } };
+    expect(mergeStoredRaidTableDrafts(stored, [saved, other], { 88: draft({ special: 31_000_000 }, 20_000) })).toEqual({
+      version: 1,
+      rows: {
+        "87": kept(87, 30_000),
+        "88": { recordUpdatedAt: "2026-11-05T00:00:00.000Z", draft: draft({ special: 31_000_000 }, 20_000) },
+      },
+    });
+    // A row this table put back to what is saved is removed; the other tab's row stays.
+    expect(
+      mergeStoredRaidTableDrafts({ version: 1, rows: { "87": kept(87, 30_000), "88": kept(88, 1) } }, [saved, other], {
+        88: initialRaidTableDraft(saved),
+      }),
+    ).toEqual({ version: 1, rows: { "87": kept(87, 30_000) } });
+  });
+
+  it("forgets only the given seasons, and nothing is left once every row is forgotten", () => {
+    const stored = { version: 1, rows: { "87": kept(87, 30_000), "88": kept(88, 1) } };
+    expect(forgetStoredRaidTableDrafts(stored, [88])).toEqual({ version: 1, rows: { "87": kept(87, 30_000) } });
+    expect(forgetStoredRaidTableDrafts(stored, [87, 88])).toBeNull();
+    expect(forgetStoredRaidTableDrafts("broken", [88])).toBeNull();
   });
 });

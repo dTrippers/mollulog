@@ -52,9 +52,11 @@ import {
   raidTableRowErrors,
   raidTableRowStatus,
   raidTableShowsTotal,
+  forgetStoredRaidTableDrafts,
+  mergeStoredRaidTableDrafts,
   restoreRaidTableDrafts,
+  type StoredRaidTableDrafts,
   toRaidTableSubmissionRow,
-  toStoredRaidTableDrafts,
 } from "./raid-record-table-state";
 
 export type RaidRecordTableRowError = {
@@ -64,12 +66,14 @@ export type RaidRecordTableRowError = {
   message: string;
 };
 
-export type RaidRecordTableActionData = {
-  ok: false;
-  // A failure of the whole table, shown above it.
-  message: string | null;
-  rowErrors: RaidRecordTableRowError[];
-};
+export type RaidRecordTableActionData =
+  | {
+      ok: false;
+      // A failure of the whole table, shown above it.
+      message: string | null;
+      rowErrors: RaidRecordTableRowError[];
+    }
+  | { ok: true; redirectTo: string };
 
 const SERVER_OPTIONS = [
   { value: "kr", label: RAID_RECORD_SERVER_LABEL.kr },
@@ -133,47 +137,66 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
   const filterId = useId();
 
   const [drafts, setDrafts] = useState<Record<number, RaidTableDraft>>({});
-  const [serverErrors, setServerErrors] = useState<RaidRecordTableActionData["rowErrors"]>([]);
+  const [serverErrors, setServerErrors] = useState<RaidRecordTableRowError[]>([]);
   const [onlyUnrecorded, setOnlyUnrecorded] = useState(false);
   const [visibleCount, setVisibleCount] = useState(ROWS_PER_PAGE);
   const savingRef = useRef(false);
   // Drafts are written to the browser only after the kept ones are read, so the first empty render never erases them.
   const [draftsLoaded, setDraftsLoaded] = useState(false);
-  const [restoredCount, setRestoredCount] = useState(0);
+  // The seasons restored on opening, which 되돌리기 puts back to what is saved.
+  const [restoredSeasons, setRestoredSeasons] = useState<number[]>([]);
+  // The seasons of the save in flight, forgotten in the browser once it succeeds.
+  const submittedSeasonsRef = useRef<number[]>([]);
   const storageKey = raidTableDraftStorageKey(username, server, raidType);
 
+  // Every access to the kept drafts goes through here: unreadable storage or a malformed entry keeps nothing, and the
+  // table still works without the copy kept across reloads.
+  const updateStoredDrafts = useCallback(
+    (update: (stored: unknown) => StoredRaidTableDrafts | null) => {
+      try {
+        const current = window.localStorage.getItem(storageKey);
+        const next = update(current ? JSON.parse(current) : null);
+        if (next) window.localStorage.setItem(storageKey, JSON.stringify(next));
+        else window.localStorage.removeItem(storageKey);
+      } catch {
+        // Nothing kept, or nothing to keep.
+      }
+    },
+    [storageKey],
+  );
+
   // Read once per table: the page remounts the table for another server or raid type, and a revalidation after a failed
-  // save must not announce the drafts on screen as restored.
+  // save must not announce the drafts on screen as restored. Kept rows that no longer apply are dropped here.
   const initialRowsRef = useRef(rows);
   useEffect(() => {
     let restored: Record<number, RaidTableDraft> = {};
-    try {
-      const stored = window.localStorage.getItem(storageKey);
-      restored = stored ? restoreRaidTableDrafts(initialRowsRef.current, JSON.parse(stored)) : {};
-    } catch {
-      // Unreadable storage or a malformed entry restores nothing; the table starts from what is saved.
-    }
+    updateStoredDrafts((stored) => {
+      restored = restoreRaidTableDrafts(initialRowsRef.current, stored);
+      return mergeStoredRaidTableDrafts(null, initialRowsRef.current, restored);
+    });
     setDrafts(restored);
-    setRestoredCount(Object.keys(restored).length);
+    setRestoredSeasons(Object.keys(restored).map(Number));
     setDraftsLoaded(true);
-  }, [storageKey]);
+  }, [updateStoredDrafts]);
 
+  // Writes only the rows this table holds a draft for, so a second tab on the same table keeps its own rows.
   useEffect(() => {
     if (!draftsLoaded) return;
-    try {
-      const stored = toStoredRaidTableDrafts(rows, drafts);
-      if (stored) window.localStorage.setItem(storageKey, JSON.stringify(stored));
-      else window.localStorage.removeItem(storageKey);
-    } catch {
-      // Without storage the table still works; only the copy kept across reloads is lost.
-    }
-  }, [draftsLoaded, storageKey, rows, drafts]);
+    updateStoredDrafts((stored) => mergeStoredRaidTableDrafts(stored, rows, drafts));
+  }, [draftsLoaded, updateStoredDrafts, rows, drafts]);
 
   useEffect(() => {
     if (fetcher.state !== "idle") return;
+    if (fetcher.data?.ok) {
+      // Forgotten before leaving, so a saved row is never offered again, even after its record is deleted. The save
+      // flag stays set, so the leave guard lets the move through.
+      updateStoredDrafts((stored) => forgetStoredRaidTableDrafts(stored, submittedSeasonsRef.current));
+      navigate(fetcher.data.redirectTo);
+      return;
+    }
     savingRef.current = false;
-    if (fetcher.data && !fetcher.data.ok) setServerErrors(fetcher.data.rowErrors);
-  }, [fetcher.state, fetcher.data]);
+    if (fetcher.data) setServerErrors(fetcher.data.rowErrors);
+  }, [fetcher.state, fetcher.data, updateStoredDrafts, navigate]);
 
   const models = useMemo(
     () =>
@@ -240,6 +263,7 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
   const save = () => {
     if (!canSave) return;
     savingRef.current = true;
+    submittedSeasonsRef.current = changedModels.map((model) => model.row.season.seasonIndex);
     fetcher.submit(
       { server, raidType, rows: changedModels.map((model) =>
           toRaidTableSubmissionRow(model.row, model.draft, model.maxScores, model.maxTotalScore),
@@ -276,7 +300,7 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
         </span>
       </div>
 
-      {restoredCount > 0 && dirty ? (
+      {restoredSeasons.length > 0 && dirty ? (
         <StatusNotice
           tone="neutral"
           boxed
@@ -285,15 +309,21 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
               variant="text"
               size="sm"
               onClick={() => {
-                setDrafts({});
-                setRestoredCount(0);
+                // Only the restored rows go back; a row typed since the notice keeps its value.
+                updateStoredDrafts((stored) => forgetStoredRaidTableDrafts(stored, restoredSeasons));
+                setDrafts((current) =>
+                  Object.fromEntries(
+                    Object.entries(current).filter(([seasonIndex]) => !restoredSeasons.includes(Number(seasonIndex))),
+                  ),
+                );
+                setRestoredSeasons([]);
               }}
             >
               되돌리기
             </Button>
           }
         >
-          저장하지 않은 기록 {restoredCount}개를 불러왔어요.
+          저장하지 않은 기록 {restoredSeasons.length}개를 불러왔어요.
         </StatusNotice>
       ) : null}
 
@@ -409,12 +439,9 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
           <Button
             variant="danger"
             onClick={() => {
-              // Removed here as well: the page leaves before the effect that writes the drafts would run.
-              try {
-                window.localStorage.removeItem(storageKey);
-              } catch {
-                // Nothing kept to remove.
-              }
+              // Forgotten here: the page leaves before the effect that writes the drafts would run. Rows another tab
+              // keeps stay.
+              updateStoredDrafts((stored) => forgetStoredRaidTableDrafts(stored, Object.keys(drafts).map(Number)));
               setDrafts({});
               blocker.proceed?.();
             }}

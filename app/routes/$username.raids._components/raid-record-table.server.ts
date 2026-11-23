@@ -1,4 +1,4 @@
-import { data, redirect } from "react-router";
+import { data } from "react-router";
 import type {
   RaidRecordTableActionData,
   RaidRecordTableRowError,
@@ -174,5 +174,6 @@ export async function handleRaidRecordTableAction({
     logger.error("Raid record table save failed", error, { server, raidType, rows: inputs.length });
     return failure("저장하지 못했어요. 잠시 후 다시 시도해 주세요.", [], 500);
   }
-  return redirect(raidRecordListPath(username, { server }));
+  // Data rather than a redirect: the table forgets the rows it kept in the browser before it leaves.
+  return data({ ok: true, redirectTo: raidRecordListPath(username, { server }) } satisfies RaidRecordTableActionData);
 }

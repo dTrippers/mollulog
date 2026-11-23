@@ -136,7 +136,7 @@ describe("raid record table action", () => {
           { seasonIndex: 34, recordUid: null, scores: [{ defenseType: "elastic", score: "39,000,000" }], rank: "900" },
         ]),
       ),
-    ).resolves.toEqual({ status: 302, location: "/@sensei/raids?server=kr" });
+    ).resolves.toEqual({ status: 200, body: { ok: true, redirectTo: "/@sensei/raids?server=kr" } });
 
     const rows = mockSaveTable.mock.calls[0][2];
     expect(rows.map((row) => [row.season.seasonIndex, row.current?.uid ?? null, row.scores, row.rank])).toEqual([
@@ -157,7 +157,7 @@ describe("raid record table action", () => {
           { seasonIndex: 34, recordUid: null, scoreMode: "total", scores: [], totalScore: "90,000,000", rank: 900 },
         ]),
       ),
-    ).resolves.toMatchObject({ status: 302 });
+    ).resolves.toMatchObject({ status: 200, body: { ok: true } });
     expect(mockSaveTable.mock.calls[0][2][0]).toMatchObject({ scoreMode: "total", scores: [], totalScore: 90_000_000 });
 
     await expect(

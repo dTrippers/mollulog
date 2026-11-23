@@ -242,18 +242,39 @@ export function raidTableDraftStorageKey(username: string, server: string, raidT
   return `raid-record-table-drafts:${username}:${server}:${raidType}`;
 }
 
-// The changed rows to keep, or null when no row is changed.
-export function toStoredRaidTableDrafts(
+function storedRowsOf(stored: unknown): StoredRaidTableDrafts["rows"] {
+  if (typeof stored !== "object" || stored === null) return {};
+  const { version, rows } = stored as Partial<StoredRaidTableDrafts>;
+  return version === 1 && typeof rows === "object" && rows !== null ? { ...rows } : {};
+}
+
+function storedOrNull(rows: StoredRaidTableDrafts["rows"]): StoredRaidTableDrafts | null {
+  return Object.keys(rows).length > 0 ? { version: 1, rows } : null;
+}
+
+// What to keep after this table's drafts changed, or null when nothing is left. Only the rows this table holds a draft
+// for are written: a changed row is kept and an unchanged one removed. Rows another tab keeps stay as they are.
+export function mergeStoredRaidTableDrafts(
+  stored: unknown,
   rows: readonly RaidRecordTableRowView[],
   drafts: Record<number, RaidTableDraft>,
 ): StoredRaidTableDrafts | null {
-  const stored: StoredRaidTableDrafts["rows"] = {};
+  const kept = storedRowsOf(stored);
   for (const row of rows) {
     const draft = drafts[row.season.seasonIndex];
-    if (!draft || !isRaidTableRowChanged(row, draft)) continue;
-    stored[String(row.season.seasonIndex)] = { recordUpdatedAt: row.record?.updatedAt ?? null, draft };
+    if (!draft) continue;
+    const key = String(row.season.seasonIndex);
+    if (isRaidTableRowChanged(row, draft)) kept[key] = { recordUpdatedAt: row.record?.updatedAt ?? null, draft };
+    else delete kept[key];
   }
-  return Object.keys(stored).length > 0 ? { version: 1, rows: stored } : null;
+  return storedOrNull(kept);
+}
+
+// What to keep after the given seasons were saved or discarded, or null when nothing is left.
+export function forgetStoredRaidTableDrafts(stored: unknown, seasonIndexes: readonly number[]): StoredRaidTableDrafts | null {
+  const kept = storedRowsOf(stored);
+  for (const seasonIndex of seasonIndexes) delete kept[String(seasonIndex)];
+  return storedOrNull(kept);
 }
 
 function isNullableNumber(value: unknown): value is number | null {
@@ -284,13 +305,11 @@ export function restoreRaidTableDrafts(
   rows: readonly RaidRecordTableRowView[],
   stored: unknown,
 ): Record<number, RaidTableDraft> {
-  if (typeof stored !== "object" || stored === null) return {};
-  const { version, rows: storedRows } = stored as Partial<StoredRaidTableDrafts>;
-  if (version !== 1 || typeof storedRows !== "object" || storedRows === null) return {};
+  const storedRows = storedRowsOf(stored);
   const restored: Record<number, RaidTableDraft> = {};
   for (const row of rows) {
     if (row.unavailableRecordUid !== null) continue;
-    const entry = (storedRows as Record<string, unknown>)[String(row.season.seasonIndex)];
+    const entry: unknown = storedRows[String(row.season.seasonIndex)];
     if (typeof entry !== "object" || entry === null) continue;
     const { recordUpdatedAt, draft } = entry as Record<string, unknown>;
     if (recordUpdatedAt !== (row.record?.updatedAt ?? null)) continue;
