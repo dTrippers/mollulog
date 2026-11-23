@@ -145,8 +145,11 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
   const [draftsLoaded, setDraftsLoaded] = useState(false);
   // The seasons restored on opening, which 되돌리기 puts back to what is saved.
   const [restoredSeasons, setRestoredSeasons] = useState<number[]>([]);
-  // The seasons of the save in flight, forgotten in the browser once it succeeds.
-  const submittedSeasonsRef = useRef<number[]>([]);
+  // The seasons edited in this tab. Only these are written to the browser, so a row restored here but changed later in
+  // another tab is never overwritten with the copy this tab read.
+  const editedSeasonsRef = useRef(new Set<number>());
+  // The drafts of the save in flight, forgotten in the browser once it succeeds.
+  const submittedDraftsRef = useRef<Record<number, RaidTableDraft>>({});
   const storageKey = raidTableDraftStorageKey(username, server, raidType);
 
   // Every access to the kept drafts goes through here: unreadable storage or a malformed entry keeps nothing, and the
@@ -179,10 +182,13 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
     setDraftsLoaded(true);
   }, [updateStoredDrafts]);
 
-  // Writes only the rows this table holds a draft for, so a second tab on the same table keeps its own rows.
+  // Writes only the rows edited in this tab, so a second tab on the same table keeps its own rows.
   useEffect(() => {
     if (!draftsLoaded) return;
-    updateStoredDrafts((stored) => mergeStoredRaidTableDrafts(stored, rows, drafts));
+    const edited = Object.fromEntries(
+      Object.entries(drafts).filter(([seasonIndex]) => editedSeasonsRef.current.has(Number(seasonIndex))),
+    );
+    updateStoredDrafts((stored) => mergeStoredRaidTableDrafts(stored, rows, edited));
   }, [draftsLoaded, updateStoredDrafts, rows, drafts]);
 
   useEffect(() => {
@@ -190,7 +196,7 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
     if (fetcher.data?.ok) {
       // Forgotten before leaving, so a saved row is never offered again, even after its record is deleted. The save
       // flag stays set, so the leave guard lets the move through.
-      updateStoredDrafts((stored) => forgetStoredRaidTableDrafts(stored, submittedSeasonsRef.current));
+      updateStoredDrafts((stored) => forgetStoredRaidTableDrafts(stored, submittedDraftsRef.current));
       navigate(fetcher.data.redirectTo);
       return;
     }
@@ -241,6 +247,11 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
 
   const updateDraft = useCallback((row: RaidRecordTableRowView, change: (draft: RaidTableDraft) => RaidTableDraft) => {
     const seasonIndex = row.season.seasonIndex;
+    editedSeasonsRef.current.add(seasonIndex);
+    // An edited row is the Sensei's input now, so 되돌리기 leaves it as it is.
+    setRestoredSeasons((current) =>
+      current.includes(seasonIndex) ? current.filter((s) => s !== seasonIndex) : current,
+    );
     setDrafts((current) => ({ ...current, [seasonIndex]: change(current[seasonIndex] ?? initialRaidTableDraft(row)) }));
     setServerErrors((current) => current.filter((error) => error.seasonIndex !== seasonIndex));
   }, []);
@@ -263,7 +274,9 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
   const save = () => {
     if (!canSave) return;
     savingRef.current = true;
-    submittedSeasonsRef.current = changedModels.map((model) => model.row.season.seasonIndex);
+    submittedDraftsRef.current = Object.fromEntries(
+      changedModels.map((model) => [model.row.season.seasonIndex, model.draft]),
+    );
     fetcher.submit(
       { server, raidType, rows: changedModels.map((model) =>
           toRaidTableSubmissionRow(model.row, model.draft, model.maxScores, model.maxTotalScore),
@@ -303,14 +316,23 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
       {restoredSeasons.length > 0 && dirty ? (
         <StatusNotice
           tone="neutral"
-          boxed
+          className="items-center"
           action={
             <Button
-              variant="text"
               size="sm"
               onClick={() => {
                 // Only the restored rows go back; a row typed since the notice keeps its value.
-                updateStoredDrafts((stored) => forgetStoredRaidTableDrafts(stored, restoredSeasons));
+                updateStoredDrafts((stored) =>
+                  forgetStoredRaidTableDrafts(
+                    stored,
+                    Object.fromEntries(
+                      restoredSeasons.flatMap((seasonIndex) => {
+                        const draft = drafts[seasonIndex];
+                        return draft ? [[seasonIndex, draft]] : [];
+                      }),
+                    ),
+                  ),
+                );
                 setDrafts((current) =>
                   Object.fromEntries(
                     Object.entries(current).filter(([seasonIndex]) => !restoredSeasons.includes(Number(seasonIndex))),
@@ -441,7 +463,7 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
             onClick={() => {
               // Forgotten here: the page leaves before the effect that writes the drafts would run. Rows another tab
               // keeps stay.
-              updateStoredDrafts((stored) => forgetStoredRaidTableDrafts(stored, Object.keys(drafts).map(Number)));
+              updateStoredDrafts((stored) => forgetStoredRaidTableDrafts(stored, drafts));
               setDrafts({});
               blocker.proceed?.();
             }}

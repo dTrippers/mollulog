@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { RaidRecordTable } from "~/components/v2/features/raid-records/RaidRecordTable";
 import { RaidRecordTrophyHelp } from "~/components/v2/features/raid-records/RaidRecordTrophyHelp";
@@ -25,6 +25,20 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const sensei = await requireRaidRecordOwner(env, ctx, request, params, "raids/table");
   return handleRaidRecordTableAction({ env, ctx, request, userId: sensei.id, username: sensei.username });
 };
+
+// A save that went through leaves the table for the list, so the table is not loaded again first: a failed reload would
+// show the error screen over a save that was kept, before the table forgets the saved drafts and moves on.
+export const shouldRevalidate: ShouldRevalidateFunction = ({ actionResult, defaultShouldRevalidate }) =>
+  isSavedTableResult(actionResult) ? false : defaultShouldRevalidate;
+
+function isSavedTableResult(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { ok?: unknown }).ok === true &&
+    typeof (value as { redirectTo?: unknown }).redirectTo === "string"
+  );
+}
 
 export function ErrorBoundary() {
   return <RaidRecordPageError title="표로 입력" />;

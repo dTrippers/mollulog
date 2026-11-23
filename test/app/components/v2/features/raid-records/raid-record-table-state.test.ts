@@ -410,8 +410,17 @@ describe("raid record table drafts across tabs and saves", () => {
 
   it("forgets only the given seasons, and nothing is left once every row is forgotten", () => {
     const stored = { version: 1, rows: { "87": kept(87, 30_000), "88": kept(88, 1) } };
-    expect(forgetStoredRaidTableDrafts(stored, [88])).toEqual({ version: 1, rows: { "87": kept(87, 30_000) } });
-    expect(forgetStoredRaidTableDrafts(stored, [87, 88])).toBeNull();
-    expect(forgetStoredRaidTableDrafts("broken", [88])).toBeNull();
+    expect(forgetStoredRaidTableDrafts(stored, { 88: kept(88, 1).draft })).toEqual({
+      version: 1,
+      rows: { "87": kept(87, 30_000) },
+    });
+    expect(forgetStoredRaidTableDrafts(stored, { 87: kept(87, 30_000).draft, 88: kept(88, 1).draft })).toBeNull();
+    expect(forgetStoredRaidTableDrafts("broken", { 88: kept(88, 1).draft })).toBeNull();
+  });
+
+  it("keeps a newer draft another tab wrote over the one saved or discarded here", () => {
+    const stored = JSON.parse(JSON.stringify({ version: 1, rows: { "88": kept(88, 1_300) } }));
+    expect(forgetStoredRaidTableDrafts(stored, { 88: kept(88, 1_200).draft })).toEqual(stored);
+    expect(forgetStoredRaidTableDrafts(stored, { 88: kept(88, 1_300).draft })).toBeNull();
   });
 });

@@ -270,10 +270,32 @@ export function mergeStoredRaidTableDrafts(
   return storedOrNull(kept);
 }
 
-// What to keep after the given seasons were saved or discarded, or null when nothing is left.
-export function forgetStoredRaidTableDrafts(stored: unknown, seasonIndexes: readonly number[]): StoredRaidTableDrafts | null {
+function sameStoredDraft(value: unknown, draft: RaidTableDraft): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const stored = value as Record<string, unknown>;
+  if (stored.scoreMode !== draft.scoreMode || stored.totalScore !== draft.totalScore || stored.rank !== draft.rank) {
+    return false;
+  }
+  if (typeof stored.scores !== "object" || stored.scores === null) return false;
+  const storedScores = stored.scores as Record<string, unknown>;
+  const scores = draft.scores as Record<string, number | null | undefined>;
+  const keys = new Set([...Object.keys(storedScores), ...Object.keys(scores)]);
+  return [...keys].every((key) => (storedScores[key] ?? null) === (scores[key] ?? null));
+}
+
+// What to keep after the given drafts were saved or discarded, or null when nothing is left. A season is forgotten only
+// while the browser still keeps the same draft: a newer one written by another tab stays.
+export function forgetStoredRaidTableDrafts(
+  stored: unknown,
+  drafts: Record<number, RaidTableDraft>,
+): StoredRaidTableDrafts | null {
   const kept = storedRowsOf(stored);
-  for (const seasonIndex of seasonIndexes) delete kept[String(seasonIndex)];
+  for (const [seasonIndex, draft] of Object.entries(drafts)) {
+    const entry: unknown = kept[seasonIndex];
+    if (typeof entry === "object" && entry !== null && sameStoredDraft((entry as { draft?: unknown }).draft, draft)) {
+      delete kept[seasonIndex];
+    }
+  }
   return storedOrNull(kept);
 }
 
