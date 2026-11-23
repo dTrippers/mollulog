@@ -44,7 +44,7 @@ export type ScoreRange = {
   lt?: number;
 };
 
-type SelectedRange = {
+export type SelectedRange = {
   // Set when the range is a whole difficulty band chosen from the rail, not a drag. Range stats
   // are then requested by difficulty, because score bounds rebuilt from the band's per-second
   // buckets drop the entries of its fastest clear second.
@@ -305,7 +305,18 @@ export default function RaidScoreHistogram({
   }
 
   const selectBand = (bandKey: string) => {
-    setSelectedBandKey(bandKey);
+    if (bandKey !== selectedBandKey) {
+      setSelectedBandKey(bandKey);
+      return;
+    }
+    const reselected = getReselectedBandRange({
+      bandKey,
+      selectedRange,
+      chartDistribution: distributionLoading ? null : chartDistribution,
+    });
+    if (reselected !== undefined) {
+      setSelectedRange(reselected);
+    }
   };
 
   const selectRange = (range: SelectedRange) => {
@@ -704,7 +715,10 @@ function DifficultySummaryRail({
   );
 }
 
-function buildClearTimeChartData(distribution: ClearTimeDistribution, selectedBandKey: string): HistogramChartData {
+export function buildClearTimeChartData(
+  distribution: ClearTimeDistribution,
+  selectedBandKey: string,
+): HistogramChartData {
   if (selectedBandKey === "all") {
     return buildAllDifficultyClearTimeChartData(distribution);
   }
@@ -939,7 +953,28 @@ function setCachedRangeStats(cacheKey: string, stats: RangeStats): void {
   }
 }
 
-function distributionToSelectedRange(
+// Pressing the active rail button again replaces a dragged range with the whole selection the
+// button stands for. A drag never carries `difficulty`, so this is the way back to the band
+// request. Returns undefined when the selection should stay as it is.
+export function getReselectedBandRange({
+  bandKey,
+  selectedRange,
+  chartDistribution,
+}: {
+  bandKey: string;
+  selectedRange: SelectedRange | null;
+  chartDistribution: ClearTimeDistribution | null;
+}): SelectedRange | null | undefined {
+  if (!selectedRange || selectedRange.difficulty) {
+    return undefined;
+  }
+  if (bandKey === "all") {
+    return null;
+  }
+  return chartDistribution ? distributionToSelectedRange(chartDistribution, bandKey) : undefined;
+}
+
+export function distributionToSelectedRange(
   distribution: ClearTimeDistribution,
   selectedBandKey: string,
 ): SelectedRange | null {
@@ -1025,7 +1060,7 @@ function rowsBetween(
   return rows.filter((row) => row.x >= xStart && row.x <= xEnd);
 }
 
-function rowsToSelection(rows: HistogramChartRow[]): SelectedRange | null {
+export function rowsToSelection(rows: HistogramChartRow[]): SelectedRange | null {
   if (rows.length === 0) {
     return null;
   }
@@ -1233,7 +1268,7 @@ function getOftenUsedPartySignature(party: RangeStats["oftenUsedParties"][number
   return JSON.stringify(party.parties);
 }
 
-async function fetchSelectedRangeStats({
+export async function fetchSelectedRangeStats({
   raidType,
   season,
   defenseType,
@@ -1266,7 +1301,7 @@ async function fetchSelectedRangeStats({
   );
 }
 
-function getRangeStatsCacheKey(params: {
+export function getRangeStatsCacheKey(params: {
   raidType: RaidType;
   season: number;
   defenseType: Defense;
@@ -1286,7 +1321,7 @@ function isSameRange(left: ScoreRange, right: ScoreRange): boolean {
   return left.gte === right.gte && left.lt === right.lt;
 }
 
-function isSameSelectedRange(left: SelectedRange, right: SelectedRange): boolean {
+export function isSameSelectedRange(left: SelectedRange, right: SelectedRange): boolean {
   if (left.difficulty !== right.difficulty || left.scoreRanges.length !== right.scoreRanges.length) {
     return false;
   }
