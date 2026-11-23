@@ -24,6 +24,7 @@ import {
   type RaidRecordSeasonRules,
   type RaidRecordStudentInfo,
   raidRankTier,
+  raidRankTierBands,
   readStoredRaidRecordParties,
   readStoredRaidRecordScores,
   readStoredRaidRecordTotal,
@@ -169,6 +170,13 @@ describe("raid rank tier", () => {
     expect(raidRankTier("kr", "total_assault", 88, 55_001)).toBe("silver");
     expect(raidRankTier("kr", "total_assault", 88, 100_000)).toBe("silver");
     expect(raidRankTier("kr", "total_assault", 88, 100_001)).toBe("bronze");
+  });
+
+  it("gives the bands of one season, changed once for kr 총력전 at season 44", () => {
+    expect(raidRankTierBands("kr", "total_assault", 43)).toEqual({ platinum: 10_000, gold: 50_000, silver: 100_000 });
+    expect(raidRankTierBands("kr", "total_assault", 44)).toEqual({ platinum: 12_000, gold: 55_000, silver: 100_000 });
+    expect(raidRankTierBands("kr", "elimination", 1)).toEqual({ platinum: 12_000, gold: 55_000, silver: 100_000 });
+    expect(raidRankTierBands("jp", "total_assault", 1)).toEqual({ platinum: 20_000, gold: 120_000, silver: 240_000 });
   });
 
   it("uses the bands of the season the record belongs to", () => {

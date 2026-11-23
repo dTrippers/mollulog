@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { RaidRecordRaidType, RaidRecordRankStatus, RaidRecordServer } from "~/domain/raid-record";
+import {
+  type RaidRankTierBands,
+  type RaidRecordRaidType,
+  type RaidRecordRankStatus,
+  type RaidRecordServer,
+  raidRankTierBands,
+} from "~/domain/raid-record";
 import { formatRaidRank, formatRaidScore, RAID_RECORD_RAID_TYPE_LABEL } from "./raid-record-format";
 import { RANK_STATUS_LABEL, RaidRankTierBadge } from "./RaidRecordBits";
 
@@ -20,7 +26,19 @@ export type RaidRecordTrendPoint = {
 export const RAID_RECORD_TREND_MIN_POINTS = 3;
 
 const HEIGHT = 168;
-const MARGIN = { top: 12, right: 12, bottom: 22, left: 48 };
+const MARGIN = { top: 12, right: 12, bottom: 22 };
+// Room on the right for the tier badge at the end of each tier line.
+const TIER_LABEL_MARGIN = 26;
+const TIER_ICON_HEIGHT = 14;
+// The tick labels are 11px tabular digits; this is a little wider than one digit or comma, so the longest label fits.
+const TICK_CHAR_WIDTH = 6.6;
+const TICK_LABEL_GAP = 8;
+const TIER_LINES = ["platinum", "gold", "silver"] as const;
+const TIER_LINE_CLASS: Record<(typeof TIER_LINES)[number], string> = {
+  platinum: "stroke-v2-raid-tier-platinum",
+  gold: "stroke-v2-raid-tier-gold",
+  silver: "stroke-v2-raid-tier-silver",
+};
 const POINT_RADIUS = 4;
 
 function niceStep(range: number, targetTicks: number): number {
@@ -46,11 +64,42 @@ export function buildTicks(min: number, max: number): { domain: [number, number]
   return { domain: [low, high], ticks };
 }
 
-// Large ranks shorten to thousands. The fraction is kept, so ticks a step under 1,000 apart stay distinct (10.5K, 11K).
 export function formatRankTick(value: number): string {
-  return value >= 10_000
-    ? `${(value / 1000).toLocaleString("ko-KR", { maximumFractionDigits: 3 })}K`
-    : value.toLocaleString("ko-KR");
+  return value.toLocaleString("ko-KR");
+}
+
+export type TierLineSegment = { x1: number; x2: number; y1: number; y2: number };
+
+// The last rank of one tier across the seasons, as a step line: level over each season's column, and a vertical step
+// where the bands change. Only the parts inside the rank domain are drawn, so a band off the chart draws nothing.
+export function buildTierLineSegments(
+  bounds: (number | null)[],
+  domain: [number, number],
+  columnLeft: (index: number) => number,
+  columnRight: (index: number) => number,
+  y: (rank: number) => number,
+): TierLineSegment[] {
+  const inside = (bound: number | null): bound is number => bound !== null && bound >= domain[0] && bound <= domain[1];
+  const segments: TierLineSegment[] = [];
+  let runStart = -1;
+  for (let index = 0; index <= bounds.length; index += 1) {
+    const bound = bounds[index] ?? null;
+    const previous = index > 0 ? bounds[index - 1] : null;
+    if (runStart >= 0 && (index === bounds.length || bound !== previous)) {
+      const level = y(previous as number);
+      segments.push({ x1: columnLeft(runStart), x2: columnRight(index - 1), y1: level, y2: level });
+      runStart = -1;
+    }
+    if (index === bounds.length) break;
+    if (inside(bound)) {
+      if (runStart < 0) runStart = index;
+      if (inside(previous) && previous !== bound) {
+        const x = columnLeft(index);
+        segments.push({ x1: x, x2: x, y1: y(previous), y2: y(bound) });
+      }
+    }
+  }
+  return segments;
 }
 
 function useMeasuredWidth() {
@@ -119,14 +168,27 @@ export function RaidRecordTrendChart({ points }: { points: RaidRecordTrendPoint[
   const raidTypes = useMemo(() => [...new Set(ordered.map((point) => point.raidType))], [ordered]);
   const mixed = raidTypes.length > 1;
 
-  const plotWidth = Math.max(width - MARGIN.left - MARGIN.right, 0);
-  const plotHeight = HEIGHT - MARGIN.top - MARGIN.bottom;
   const ranks = ordered.map((point) => point.rank);
   const { domain, ticks } = buildTicks(Math.min(...ranks), Math.max(...ranks));
+  const bands = ordered.map((point): RaidRankTierBands | null =>
+    raidRankTierBands(point.server, point.raidType, point.seasonIndex),
+  );
+  const lastBands = bands[bands.length - 1] ?? null;
+  const tierLabels = TIER_LINES.filter(
+    (tier) => lastBands !== null && lastBands[tier] >= domain[0] && lastBands[tier] <= domain[1],
+  );
+  const showsTierLines = TIER_LINES.some((tier) =>
+    bands.some((band) => band !== null && band[tier] >= domain[0] && band[tier] <= domain[1]),
+  );
+  const marginLeft =
+    Math.ceil(Math.max(...ticks.map((tick) => formatRankTick(tick).length)) * TICK_CHAR_WIDTH) + TICK_LABEL_GAP;
+  const marginRight = showsTierLines ? TIER_LABEL_MARGIN : MARGIN.right;
+  const plotWidth = Math.max(width - marginLeft - marginRight, 0);
+  const plotHeight = HEIGHT - MARGIN.top - MARGIN.bottom;
   // Rank 1 is the best, so small numbers go at the top.
   const y = (rank: number) => MARGIN.top + ((rank - domain[0]) / (domain[1] - domain[0] || 1)) * plotHeight;
   const slot = ordered.length > 0 ? plotWidth / ordered.length : 0;
-  const x = (index: number) => MARGIN.left + slot * (index + 0.5);
+  const x = (index: number) => marginLeft + slot * (index + 0.5);
   const labelEvery = Math.max(1, Math.ceil(ordered.length / Math.max(1, Math.floor(plotWidth / 44))));
   const active = ordered.find((point) => point.key === activeKey) ?? null;
   const activeIndex = active ? ordered.indexOf(active) : -1;
@@ -162,15 +224,15 @@ export function RaidRecordTrendChart({ points }: { points: RaidRecordTrendPoint[
             {ticks.map((tick) => (
               <g key={tick}>
                 <line
-                  x1={MARGIN.left}
-                  x2={width - MARGIN.right}
+                  x1={marginLeft}
+                  x2={width - marginRight}
                   y1={y(tick)}
                   y2={y(tick)}
                   className="stroke-v2-divider"
                   strokeWidth={1}
                 />
                 <text
-                  x={MARGIN.left - 8}
+                  x={marginLeft - TICK_LABEL_GAP}
                   y={y(tick)}
                   textAnchor="end"
                   dominantBaseline="middle"
@@ -179,6 +241,34 @@ export function RaidRecordTrendChart({ points }: { points: RaidRecordTrendPoint[
                   {formatRankTick(tick)}
                 </text>
               </g>
+            ))}
+            {TIER_LINES.map((tier) =>
+              buildTierLineSegments(
+                bands.map((band) => band?.[tier] ?? null),
+                domain,
+                (index) => marginLeft + slot * index,
+                (index) => marginLeft + slot * (index + 1),
+                y,
+              ).map((segment) => (
+                <line
+                  key={`tier-${tier}-${segment.x1}-${segment.y1}-${segment.y2}`}
+                  {...segment}
+                  className={TIER_LINE_CLASS[tier]}
+                  strokeWidth={1}
+                  strokeOpacity={0.7}
+                  strokeDasharray="3 3"
+                />
+              )),
+            )}
+            {tierLabels.map((tier) => (
+              <image
+                key={`tier-label-${tier}`}
+                href={`/icons/raid-tier-${tier}.png`}
+                x={width - marginRight + 4}
+                y={y((lastBands as RaidRankTierBands)[tier]) - TIER_ICON_HEIGHT / 2}
+                width={(TIER_ICON_HEIGHT * 96) / 72}
+                height={TIER_ICON_HEIGHT}
+              />
             ))}
             {ordered.slice(1).map((point, index) => {
               const previous = ordered[index];

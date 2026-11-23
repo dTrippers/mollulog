@@ -37,7 +37,7 @@ export const RAID_RANK_TIERS = ["platinum", "gold", "silver", "bronze"] as const
 export type RaidRankTier = (typeof RAID_RANK_TIERS)[number];
 
 // The last rank of each tier; every rank past silver is bronze.
-type RaidRankTierBands = { platinum: number; gold: number; silver: number };
+export type RaidRankTierBands = { platinum: number; gold: number; silver: number };
 // Each entry applies from its season until the next entry of the same server and raid type. The bands have changed
 // once (kr 총력전 from season 44), so they stay here rather than in a table. jp holds one set for every season.
 type RaidRankTierBandsFrom = { fromSeasonIndex: number; bands: RaidRankTierBands };
@@ -60,6 +60,19 @@ const RAID_RANK_TIER_BANDS: Record<RaidRecordServer, Record<RaidRecordRaidType, 
   },
 };
 
+// The tier bands of one season.
+export function raidRankTierBands(
+  server: RaidRecordServer,
+  raidType: RaidRecordRaidType,
+  seasonIndex: number,
+): RaidRankTierBands | null {
+  let bands: RaidRankTierBands | null = null;
+  for (const entry of RAID_RANK_TIER_BANDS[server][raidType]) {
+    if (entry.fromSeasonIndex <= seasonIndex) bands = entry.bands;
+  }
+  return bands;
+}
+
 export function raidRankTier(
   server: RaidRecordServer,
   raidType: RaidRecordRaidType,
@@ -67,10 +80,7 @@ export function raidRankTier(
   rank: number,
 ): RaidRankTier | null {
   if (!Number.isInteger(rank) || rank <= 0) return null;
-  let bands: RaidRankTierBands | null = null;
-  for (const entry of RAID_RANK_TIER_BANDS[server][raidType]) {
-    if (entry.fromSeasonIndex <= seasonIndex) bands = entry.bands;
-  }
+  const bands = raidRankTierBands(server, raidType, seasonIndex);
   if (!bands) return null;
   if (rank <= bands.platinum) return "platinum";
   if (rank <= bands.gold) return "gold";

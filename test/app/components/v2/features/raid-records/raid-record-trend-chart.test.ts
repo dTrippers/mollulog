@@ -3,21 +3,17 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildTicks,
+  buildTierLineSegments,
   formatRankTick,
   RaidRecordTrendChart,
   type RaidRecordTrendPoint,
 } from "~/components/v2/features/raid-records/RaidRecordTrendChart";
 
 describe("formatRankTick", () => {
-  it("keeps small ranks as full numbers", () => {
+  it("writes the whole rank with thousands separators", () => {
     expect(formatRankTick(1)).toBe("1");
     expect(formatRankTick(9_500)).toBe("9,500");
-  });
-
-  it("shortens large ranks without merging ticks under 1,000 apart", () => {
-    const labels = [10_000, 10_500, 11_000, 11_500].map(formatRankTick);
-    expect(labels).toEqual(["10K", "10.5K", "11K", "11.5K"]);
-    expect(new Set([10_100, 10_200, 10_300].map(formatRankTick)).size).toBe(3);
+    expect([10_000, 10_500, 100_000].map(formatRankTick)).toEqual(["10,000", "10,500", "100,000"]);
   });
 
   it("puts only whole ranks on the axis, with distinct labels, when ranks are one apart", () => {
@@ -50,5 +46,35 @@ describe("RaidRecordTrendChart", () => {
     // Firefox clips a table's own overflow and clip-path without its caption, so sr-only must sit on a wrapper.
     expect(markup).toContain('<div class="sr-only"><table><caption>시즌별 순위</caption>');
     expect(markup).not.toContain('<table class="sr-only">');
+  });
+});
+
+describe("buildTierLineSegments", () => {
+  const left = (index: number) => index * 10;
+  const right = (index: number) => (index + 1) * 10;
+  const y = (rank: number) => rank / 1000;
+
+  it("draws one level line while the bands stay the same", () => {
+    expect(buildTierLineSegments([12_000, 12_000, 12_000], [0, 100_000], left, right, y)).toEqual([
+      { x1: 0, x2: 30, y1: 12, y2: 12 },
+    ]);
+  });
+
+  it("steps where the bands change", () => {
+    expect(buildTierLineSegments([10_000, 10_000, 12_000, 12_000], [0, 100_000], left, right, y)).toEqual([
+      { x1: 0, x2: 20, y1: 10, y2: 10 },
+      { x1: 20, x2: 20, y1: 10, y2: 12 },
+      { x1: 20, x2: 40, y1: 12, y2: 12 },
+    ]);
+  });
+
+  it("leaves out the seasons whose bound is off the rank domain, without a step to it", () => {
+    expect(buildTierLineSegments([50_000, 55_000, 55_000], [0, 52_000], left, right, y)).toEqual([
+      { x1: 0, x2: 10, y1: 50, y2: 50 },
+    ]);
+    expect(buildTierLineSegments([null, 12_000], [0, 100_000], left, right, y)).toEqual([
+      { x1: 10, x2: 20, y1: 12, y2: 12 },
+    ]);
+    expect(buildTierLineSegments([240_000, 240_000], [0, 100_000], left, right, y)).toEqual([]);
   });
 });
