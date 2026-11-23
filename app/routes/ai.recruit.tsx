@@ -1,5 +1,5 @@
 import { CalendarIcon, CreditCardIcon, FlagIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   type LoaderFunctionArgs,
   type MetaFunction,
@@ -59,6 +59,7 @@ import {
 import { buildRecruitTimeline } from "~/domain/recruit-recommendation-timeline";
 import { formatInstant, isInstantAfter, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
+import { createLatestSaveQueue } from "~/lib/latest-save-queue";
 import { captureClientError } from "~/lib/observability.client";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import { canonicalLink, socialMeta } from "~/lib/seo";
@@ -265,6 +266,14 @@ function storeGoal(goal: RecruitGoal) {
   }
 }
 
+// A signed-in Sensei's goal saves, one at a time with the last goal picked sent last. The queue sits outside the page,
+// so a goal still waiting when the Sensei leaves is saved too. The page sets the sender each time it mounts.
+const GOAL_SAVE_FETCHER_KEY = "recruit-goal-save";
+let submitGoalSave: ((goal: RecruitGoal) => Promise<void>) | null = null;
+const goalSaves = createLatestSaveQueue<RecruitGoal>(async (goal) => {
+  await submitGoalSave?.(goal);
+});
+
 const UNAVAILABLE_FAVORITES: ViewerLoaded<FavoriteKey[] | null> = { status: "unavailable" };
 const NO_FAVORITES: Promise<ViewerLoaded<FavoriteKey[] | null>> = Promise.resolve({ status: "available", value: null });
 
@@ -292,35 +301,25 @@ export default function RecruitRecommendationPage() {
     if (goal === null && loaderData.status === "available" && loaderData.signedIn) setGoal(loaderData.savedGoal);
   }
 
-  // One save at a time: a goal picked while a save is in flight waits for it and replaces any goal still waiting, so
-  // the last goal picked is the one saved.
-  const goalFetcher = useFetcher<RecruitGoalActionData>();
-  const submitGoalRef = useRef(goalFetcher.submit);
-  submitGoalRef.current = goalFetcher.submit;
-  const queuedGoalRef = useRef<RecruitGoal | null>(null);
-  const [goalSaveFailed, setGoalSaveFailed] = useState(false);
-  const submitGoal = useCallback((next: RecruitGoal) => {
-    void submitGoalRef.current(
-      { goal: next },
-      { action: "/api/recruit-recommendations", method: "post", encType: "application/json" },
-    );
-  }, []);
+  // The saves go through the module's queue, which outlives the page. A failure shows once no goal waits behind it,
+  // and a new save hides the notice until its own result.
+  const goalFetcher = useFetcher<RecruitGoalActionData>({ key: GOAL_SAVE_FETCHER_KEY });
   useEffect(() => {
-    if (goalFetcher.state !== "idle") return;
-    const queued = queuedGoalRef.current;
-    if (queued !== null) {
-      queuedGoalRef.current = null;
-      submitGoal(queued);
-      return;
+    submitGoalSave = (next) =>
+      goalFetcher.submit(
+        { goal: next },
+        { action: "/api/recruit-recommendations", method: "post", encType: "application/json" },
+      );
+  }, [goalFetcher.submit]);
+  const [goalSaveFailed, setGoalSaveFailed] = useState(false);
+  useEffect(() => {
+    if (goalFetcher.state === "idle" && goalFetcher.data && !goalSaves.hasWaiting()) {
+      setGoalSaveFailed(!goalFetcher.data.ok);
     }
-    if (goalFetcher.data) setGoalSaveFailed(!goalFetcher.data.ok);
-  }, [goalFetcher.state, goalFetcher.data, submitGoal]);
+  }, [goalFetcher.state, goalFetcher.data]);
   const saveGoal = (next: RecruitGoal) => {
-    if (goalFetcher.state !== "idle") {
-      queuedGoalRef.current = next;
-      return;
-    }
-    submitGoal(next);
+    setGoalSaveFailed(false);
+    goalSaves.save(next);
   };
   const handleGoalChange = (next: RecruitGoal) => {
     setGoal(next);
