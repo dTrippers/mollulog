@@ -263,33 +263,36 @@ export function RaidRecordTrendChart({ points }: { points: RaidRecordTrendPoint[
           </div>
         ) : null}
       </div>
-      <table className="sr-only">
-        <caption>시즌별 순위</caption>
-        <thead>
-          <tr>
-            <th scope="col">시즌</th>
-            <th scope="col">순위</th>
-            <th scope="col">점수</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ordered.map((point) => (
-            <tr key={point.key}>
-              <th scope="row">{seasonName(point)}</th>
-              <td>
-                {formatRaidRank(point.rank)} {RANK_STATUS_LABEL[point.rankStatus]}{" "}
-                <RaidRankTierBadge
-                  server={point.server}
-                  raidType={point.raidType}
-                  seasonIndex={point.seasonIndex}
-                  rank={point.rank}
-                />
-              </td>
-              <td>{formatRaidScore(point.score)}</td>
+      {/* sr-only goes on a wrapper: Firefox clips a table's own overflow and clip-path without its caption. */}
+      <div className="sr-only">
+        <table>
+          <caption>시즌별 순위</caption>
+          <thead>
+            <tr>
+              <th scope="col">시즌</th>
+              <th scope="col">순위</th>
+              <th scope="col">점수</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {ordered.map((point) => (
+              <tr key={point.key}>
+                <th scope="row">{seasonName(point)}</th>
+                <td>
+                  {formatRaidRank(point.rank)} {RANK_STATUS_LABEL[point.rankStatus]}{" "}
+                  <RaidRankTierBadge
+                    server={point.server}
+                    raidType={point.raidType}
+                    seasonIndex={point.seasonIndex}
+                    rank={point.rank}
+                  />
+                </td>
+                <td>{formatRaidScore(point.score)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

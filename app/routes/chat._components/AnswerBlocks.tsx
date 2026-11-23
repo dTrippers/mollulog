@@ -65,18 +65,21 @@ function AnswerBarChart({ block }: { block: Extract<AnswerBlock, { type: "bar_ch
           </Fragment>;
         }))}
       </div>
-      <table className="sr-only">
-        <caption>{block.title}</caption>
-        <thead><tr><th scope="col">항목</th>{block.series.map((series, index) => <th
-          scope="col"
-          // biome-ignore lint/suspicious/noArrayIndexKey: source IDs may repeat; the series position keeps each column distinct.
-          key={`${seriesKey(series)}:${index}`}
-        >{series.name ?? "값"}</th>)}</tr></thead>
-        <tbody>{block.categories.map((category, index) => <tr key={category}><th scope="row">{category}</th>{block.series.map((series, seriesIndex) => <td
-          // biome-ignore lint/suspicious/noArrayIndexKey: source IDs may repeat; the series position keeps each cell distinct.
-          key={`${seriesKey(series)}:${seriesIndex}`}
-        >{format(series.values[index] ?? null)}</td>)}</tr>)}</tbody>
-      </table>
+      {/* sr-only goes on a wrapper: Firefox clips a table's own overflow and clip-path without its caption. */}
+      <div className="sr-only">
+        <table>
+          <caption>{block.title}</caption>
+          <thead><tr><th scope="col">항목</th>{block.series.map((series, index) => <th
+            scope="col"
+            // biome-ignore lint/suspicious/noArrayIndexKey: source IDs may repeat; the series position keeps each column distinct.
+            key={`${seriesKey(series)}:${index}`}
+          >{series.name ?? "값"}</th>)}</tr></thead>
+          <tbody>{block.categories.map((category, index) => <tr key={category}><th scope="row">{category}</th>{block.series.map((series, seriesIndex) => <td
+            // biome-ignore lint/suspicious/noArrayIndexKey: source IDs may repeat; the series position keeps each cell distinct.
+            key={`${seriesKey(series)}:${seriesIndex}`}
+          >{format(series.values[index] ?? null)}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
     </figure>
   );
 }

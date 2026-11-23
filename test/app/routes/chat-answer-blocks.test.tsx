@@ -48,7 +48,7 @@ describe("chat answer blocks", () => {
       ],
     }]} />);
     expect(chart).toContain("aria-hidden=\"true\"");
-    expect(chart).toContain("<table class=\"sr-only\">");
+    expect(chart).toContain("<div class=\"sr-only\"><table><caption>사용률</caption>");
     expect(chart).toContain("grid-cols-[fit-content(6rem)_minmax(0,1fr)_auto]");
     expect(chart).toContain("&lt;0.1%");
     expect(chart).toContain("–");
