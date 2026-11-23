@@ -122,7 +122,7 @@ describe("recruit recommendation service call", () => {
   const request = { goal: "top" as const, pickups: [{ studentUid: "10001", startAt: "2026-11-25T02:00:00.000Z" }] };
 
   function binding(result: () => Promise<unknown>) {
-    const getRecruitRecommendations = jest.fn(result);
+    const getRecruitRecommendations = jest.fn<(request: unknown) => Promise<unknown>>(result);
     return { env: { AL1S_RECOMMENDATIONS: { getRecruitRecommendations } } as never, getRecruitRecommendations };
   }
 

@@ -82,7 +82,7 @@ export function VerdictPill({ goal, verdict }: { goal: RecruitGoal; verdict: Rec
   );
 }
 
-// The community rating as three neutral dots and its name. Null is a student the community sources do not agree on.
+// The community rating as three neutral dots and its name. Null is a student fewer than two community sources rate.
 export function CommunityLevel({ level, dotClassName = "w-4" }: { level: 0 | 1 | 2 | null; dotClassName?: string }) {
   if (level === null) {
     return <span className="text-xs text-v2-fg-tertiary">평가 부족</span>;

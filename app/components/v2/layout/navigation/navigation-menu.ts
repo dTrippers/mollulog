@@ -153,7 +153,7 @@ export const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
   {
     id: "ai",
     name: "Arona Intelligence",
-    shortName: "Arona Intelligence",
+    shortName: "Arona",
     OutlineIcon: SparklesIconOutline,
     SolidIcon: SparklesIconSolid,
   },
