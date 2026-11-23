@@ -1,11 +1,10 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, useRef, useSyncExternalStore } from "react";
 import { type RecruitGoal, recruitEvidenceLabels, usageColumnLabel } from "~/domain/recruit-recommendation";
 import { formatCommunityTagLines } from "~/domain/recruit-recommendation-display";
 import { cn } from "~/lib/utils";
 import type { RecruitBossUsage, RecruitRecommendationStudent } from "~/models/recruit-recommendation-contract";
 import { v2FocusRing } from "../../layout/styles";
-import { useV2Page } from "../../layout/V2Page";
 import { Popover } from "../../primitives/Popover";
 import { Sheet } from "../../primitives/Sheet";
 import { AiRecommendedMark } from "../ai/AiMarks";
@@ -14,9 +13,27 @@ import { RecruitStudentDetail } from "./RecruitStudentDetail";
 import { BossIcon, CommunityLevel, FavoriteToggle, formatShare, GrowthSummary, VerdictPill } from "./RecruitValues";
 import type { RecruitPickupView } from "./types";
 
+// The evidence opens as a popover under the tile wherever the desktop navigation shows (1024px and up), also when the
+// page stacks its Aside beside a wide sidebar, and as a sheet below that.
+const POPOVER_EVIDENCE_QUERY = "(min-width: 1024px)";
+
+function subscribePopoverEvidence(onChange: () => void) {
+  const query = window.matchMedia(POPOVER_EVIDENCE_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function usePopoverEvidence(): boolean {
+  return useSyncExternalStore(
+    subscribePopoverEvidence,
+    () => window.matchMedia(POPOVER_EVIDENCE_QUERY).matches,
+    () => true,
+  );
+}
+
 // One recommended student: the portrait, the verdict, and three columns of evidence (usage, community rating, growth
-// tier). The whole tile opens the full evidence, as a popover under the tile on side-by-side and a sheet on stacked. The
-// heart button sits above the tile's own button, so it stays a separate control.
+// tier). The whole tile opens the full evidence. The heart button sits above the tile's own button, so it stays a
+// separate control.
 export function RecruitStudentTile({
   goal,
   pickup,
@@ -36,7 +53,7 @@ export function RecruitStudentTile({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { stacked } = useV2Page();
+  const popover = usePopoverEvidence();
   const tileRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const studentLabel = pickup.variant ? `${pickup.name}(${pickup.variant})` : pickup.name;
@@ -122,7 +139,7 @@ export function RecruitStudentTile({
         className="pointer-events-none absolute right-3 bottom-3 size-4 text-v2-fg-tertiary"
       />
       <Popover
-        open={open && !stacked}
+        open={open && popover}
         label={`${studentLabel} 근거`}
         onClose={() => onOpenChange(false)}
         returnFocusRef={triggerRef}
@@ -131,7 +148,7 @@ export function RecruitStudentTile({
       >
         {detail(true)}
       </Popover>
-      <Sheet open={open && stacked} title={studentLabel} onClose={() => onOpenChange(false)}>
+      <Sheet open={open && !popover} title={studentLabel} onClose={() => onOpenChange(false)}>
         {detail(false)}
       </Sheet>
     </div>
