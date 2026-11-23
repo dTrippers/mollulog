@@ -31,6 +31,9 @@ export type FutureStudentEntry = {
   completionMeta: RecruitmentCompletionMeta;
   // Result edit link of this recruitment group. Null when the viewer has no result for it.
   resultEditLink: string | null;
+  // True when the Sensei's recruit recommendation goal recommends this pickup student. 미래시 sets it; other screens leave
+  // it out.
+  aiRecommended?: boolean;
   onToggleFavorite: (favorited: boolean) => void;
   onToggleComplete: (completed: boolean) => void;
 };

@@ -8,17 +8,10 @@ import { v2FocusRing } from "../../layout/styles";
 import { useV2Page } from "../../layout/V2Page";
 import { Popover } from "../../primitives/Popover";
 import { Sheet } from "../../primitives/Sheet";
+import { AiRecommendedMark } from "../ai/AiMarks";
 import { StudentThumb } from "../students/StudentThumb";
 import { RecruitStudentDetail } from "./RecruitStudentDetail";
-import {
-  AiRecommendedMark,
-  BossIcon,
-  CommunityLevel,
-  FavoriteToggle,
-  formatShare,
-  GrowthSummary,
-  VerdictPill,
-} from "./RecruitValues";
+import { BossIcon, CommunityLevel, FavoriteToggle, formatShare, GrowthSummary, VerdictPill } from "./RecruitValues";
 import type { RecruitPickupView } from "./types";
 
 // One recommended student: the portrait, the verdict, and three columns of evidence (usage, community rating, growth
@@ -49,7 +42,7 @@ export function RecruitStudentTile({
   const studentLabel = pickup.variant ? `${pickup.name}(${pickup.variant})` : pickup.name;
   const { recommendation } = student;
   const newbie = goal === "newbie" ? recommendation.newbie : null;
-  const evidence = newbie ? newbie.evidence === "community" ? "community" : null : recommendation.verdict.evidence;
+  const evidence = newbie ? (newbie.evidence === "community" ? "community" : null) : recommendation.verdict.evidence;
   const tagLines = formatCommunityTagLines(student.tags, substituteNames);
   const detail = (showHeader: boolean) => (
     <RecruitStudentDetail

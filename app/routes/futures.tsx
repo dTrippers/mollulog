@@ -1,4 +1,4 @@
-import { Bars3BottomLeftIcon, CalendarDaysIcon, TableCellsIcon } from "@heroicons/react/24/outline";
+import { Bars3BottomLeftIcon, CalendarDaysIcon, SparklesIcon, TableCellsIcon } from "@heroicons/react/24/outline";
 import { FunnelIcon } from "@heroicons/react/24/solid";
 import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -30,6 +30,7 @@ import {
 } from "~/components/v2/features/futures/FutureStates";
 import { FutureTimeline } from "~/components/v2/features/futures/FutureTimeline";
 import { eventFilterOptions, raidFilterOptions } from "~/components/v2/features/futures/filter-options";
+import { RecruitRecommendationBanner } from "~/components/v2/features/futures/RecruitRecommendationBanner";
 import type { FutureBannerId, FutureOpinionState, FutureViewContent } from "~/components/v2/features/futures/types";
 import type { FutureStudentEntry } from "~/components/v2/features/students/types";
 import {
@@ -60,6 +61,8 @@ import {
   isFutureContentLinkable,
   matchesContentFilter,
 } from "~/domain/futures/futures-view-model";
+import { isRecruitGoal, RECRUIT_GOAL_STORAGE_KEY } from "~/domain/recruit-recommendation";
+import { recruitPickupKey } from "~/domain/recruit-recommendation-timeline";
 import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import {
   applyRecruitmentResultStudentCompletion,
@@ -84,6 +87,7 @@ import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { type FutureContent, getFutureContents } from "~/views/futures";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData, CommentResponse } from "./api.contents.$uid.comments";
+import type { RecruitMarksLoaderData } from "./api.recruit-recommendations";
 import type { ActionData as RecruitmentResultActionData } from "./api.recruitment-results";
 import {
   applyFavoriteCountChange,
@@ -507,7 +511,8 @@ function describeSelectedFilters(filter: ContentFilterState): string[] {
   return labels;
 }
 
-// Tabs for the three views. The skeleton and the screen share this, so the tab bar never changes shape.
+// Tabs for the three views, and on the stacked layout a link to 모집 추천, which the side-by-side layout offers in the
+// Aside. The skeleton and the screen share this, so the tab bar never changes shape.
 type FutureTabView = "timeline" | "compact" | "table";
 function buildFutureTabs(
   view: FutureTabView,
@@ -535,6 +540,14 @@ function buildFutureTabs(
       active: view === "table",
       onClick: () => onViewChange("table"),
       hiddenStacked: true,
+    },
+    {
+      key: "recruit-recommendation",
+      text: "모집 추천",
+      Icon: SparklesIcon,
+      link: "/ai/recruit",
+      stackedOnly: true,
+      accentIcon: true,
     },
   ];
 }
@@ -622,6 +635,7 @@ function FutureSkeletonPage({ viewState }: { viewState: FutureViewState }) {
             opinionSettingFocusRequest={0}
           />
         </PanelSheet>
+        <RecruitRecommendationBanner />
       </PageAside>
       <MobileActionBar panels={[{ panelId: FILTER_PANEL_ID, title: "필터", Icon: FunnelIcon }]} />
       <PageMain>
@@ -789,6 +803,25 @@ function FutureContentsScreen({
     );
     setRecruitmentResults(results.value);
   }, [resolvedViewer]);
+
+  // The "AI 추천" marks of the Sensei's 모집 추천 goal. A signed-in Sensei's goal is saved, so the request leaves it out;
+  // a guest's is in this browser, and a guest without one asks for nothing. Without a goal, or when a read failed, no
+  // mark shows.
+  const marksFetcher = useFetcher<RecruitMarksLoaderData>();
+  const loadMarksRef = useRef(marksFetcher.load);
+  loadMarksRef.current = marksFetcher.load;
+  useEffect(() => {
+    let goal: string | null = null;
+    if (!signedIn) {
+      try {
+        goal = localStorage.getItem(RECRUIT_GOAL_STORAGE_KEY);
+      } catch {
+        goal = null;
+      }
+      if (!isRecruitGoal(goal)) return;
+    }
+    void loadMarksRef.current(`/api/recruit-recommendations?view=marks${goal ? `&goal=${goal}` : ""}`);
+  }, [signedIn]);
 
   const commentFetcher = useFetcher<CommentResponse>();
   const submitComment = (contentUid: string, data: CommentActionData) =>
@@ -1146,6 +1179,18 @@ function FutureContentsScreen({
     () => new Set(completedRecruitmentStudents.map((item) => `${item.recruitmentGroupUid}\u0000${item.studentUid}`)),
     [completedRecruitmentStudents],
   );
+  // The marks wait for the viewer's own records, and stay hidden when they failed, so a recruited student is never
+  // marked. A student recruited on this screen loses the mark at once, before the marks are read again.
+  const aiMarkKeys = useMemo(() => {
+    const marks = marksFetcher.data;
+    if (!viewerStateReady || marks?.status !== "ok") return null;
+    const recruitedHere = new Set(completedRecruitmentStudents.map((item) => item.studentUid));
+    return new Set(
+      marks.marks
+        .filter((mark) => !recruitedHere.has(mark.studentUid))
+        .map((mark) => recruitPickupKey(mark.studentUid, mark.startAt)),
+    );
+  }, [marksFetcher.data, viewerStateReady, completedRecruitmentStudents]);
   const resultLinkByGroup = useMemo(
     () => new Map(recruitmentResultEditLinks.map((item) => [item.recruitmentGroupUid, item.link])),
     [recruitmentResultEditLinks],
@@ -1236,6 +1281,12 @@ function FutureContentsScreen({
         canComplete,
         viewerPending: viewerStatus === "pending",
         viewerUnavailable: viewerStatus === "failed",
+        aiRecommended: Boolean(
+          aiMarkKeys &&
+            studentUid &&
+            recruitment.pickup &&
+            aiMarkKeys.has(recruitPickupKey(studentUid, recruitment.since)),
+        ),
         completionMeta,
         resultEditLink: content.recruitmentGroupUid
           ? (resultLinkByGroup.get(content.recruitmentGroupUid) ?? null)
@@ -1485,6 +1536,7 @@ function FutureContentsScreen({
             opinionSettingFocusRequest={opinionSettingFocusRequest}
           />
         </PanelSheet>
+        <RecruitRecommendationBanner />
         {showFeaturedContent && featuredViewContent ? (
           <FeaturedContentAsideBlock
             content={featuredViewContent}

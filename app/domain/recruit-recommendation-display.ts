@@ -10,7 +10,10 @@ export function formatUsageSeason(boss: Pick<RecruitBossUsage, "source" | "raidT
 }
 
 /** The text of one community tag. A 대체 tag names its substitute; null when the name is not known. */
-export function formatCommunityTag(tag: RecruitCommunityTag, substituteNames: ReadonlyMap<string, string>): string | null {
+export function formatCommunityTag(
+  tag: RecruitCommunityTag,
+  substituteNames: ReadonlyMap<string, string>,
+): string | null {
   let text = tag.value;
   if (tag.substituteStudentUid !== undefined) {
     const name = substituteNames.get(tag.substituteStudentUid);

@@ -26,7 +26,8 @@ export function RecruitGoalCards({ onSelect }: { onSelect: (goal: RecruitGoal) =
               type="button"
               onClick={() => onSelect(goal)}
               className={cn(
-                "flex w-full cursor-pointer items-center gap-3 rounded-lg bg-v2-surface px-4 py-3.5 text-left hover:bg-v2-hover v2-interaction-transition",
+                "relative flex w-full cursor-pointer items-center gap-3 rounded-lg bg-v2-surface px-4 py-3.5 text-left",
+                "before:pointer-events-none before:absolute before:inset-0 before:rounded-lg before:content-[''] hover:before:bg-v2-hover before:v2-interaction-transition",
                 v2FocusRing,
               )}
             >

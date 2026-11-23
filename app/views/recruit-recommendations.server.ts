@@ -1,10 +1,11 @@
 import type { RecruitGoal } from "~/domain/recruit-recommendation";
+import { selectRecruitMarks } from "~/domain/recruit-recommendation-timeline";
 import { isInstantAfter, nowUtcIso } from "~/lib/date-time";
-import { getRecruitedStudents } from "~/models/recruited-student";
-import { getAllStudentsMap } from "~/models/student";
-import type { RecruitRecommendationAnswer } from "~/models/recruit-recommendation-contract";
 import { getRecruitRecommendations } from "~/models/recruit-recommendation.server";
+import type { RecruitRecommendationAnswer } from "~/models/recruit-recommendation-contract";
+import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
+import { getAllStudentsMap } from "~/models/student";
 import type { FutureContent } from "./futures";
 
 /**
@@ -127,4 +128,42 @@ export async function loadRecruitRecommendations(
   if (!call.ok) return { status: "unavailable" };
   const { answer, substituteNames } = await resolveSubstituteNames(env, call.answer, input.onUnknownSubstitute);
   return { status: "ok", answer, recruited, recruitedStudentUids, substituteNames };
+}
+
+export type RecruitMarksView =
+  | { status: "ok"; marks: { studentUid: string; startAt: string }[] }
+  | { status: "hidden" };
+
+/**
+ * The 미래시 "AI 추천" marks of a goal: the recommended pickups without the recruited students. When the recruited
+ * students or the answer cannot be read, no mark shows, so a recruited student is never marked.
+ */
+export async function loadRecruitMarks(
+  env: Env,
+  input: {
+    goal: RecruitGoal;
+    userId: number | null;
+    contents: FutureContent[];
+    onRecruitedReadFailure?: (error: unknown) => void;
+    onServiceFailure?: () => void;
+  },
+): Promise<RecruitMarksView> {
+  let recruitedStudentUids: string[] = [];
+  if (input.userId !== null) {
+    try {
+      recruitedStudentUids = await readRecruitedStudentUids(env, input.userId, input.contents);
+    } catch (error) {
+      input.onRecruitedReadFailure?.(error);
+      return { status: "hidden" };
+    }
+  }
+  const call = await getRecruitRecommendations(env, {
+    goal: input.goal,
+    pickups: collectRecommendationPickups(input.contents),
+  });
+  if (!call.ok) {
+    input.onServiceFailure?.();
+    return { status: "hidden" };
+  }
+  return { status: "ok", marks: selectRecruitMarks(call.answer.pickups, new Set(recruitedStudentUids)) };
 }

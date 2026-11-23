@@ -78,6 +78,7 @@ export function StudentSlot({
         isNew={isNewRecruitment({ recruitmentType: entry.recruitmentType, rerun: entry.rerun })}
         favorite={favorite}
         personalStatePending={entry.viewerPending}
+        aiRecommended={entry.aiRecommended}
         expanded={panelOpen}
         large={large}
         onOpen={() => onOpenChange(true)}

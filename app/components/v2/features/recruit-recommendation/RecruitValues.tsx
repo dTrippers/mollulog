@@ -1,8 +1,8 @@
-import { HeartIcon as OutlineHeartIcon, ShieldCheckIcon, SparklesIcon } from "@heroicons/react/24/outline";
+import { HeartIcon as OutlineHeartIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as SolidHeartIcon } from "@heroicons/react/24/solid";
 import { formatFavoriteCount, formatThousands } from "~/domain/futures/futures-view-model";
-import { communityLevelLabels, type RecruitVerdict, recruitVerdictLabel } from "~/domain/recruit-recommendation";
 import type { RecruitGoal } from "~/domain/recruit-recommendation";
+import { communityLevelLabels, type RecruitVerdict, recruitVerdictLabel } from "~/domain/recruit-recommendation";
 import { cn } from "~/lib/utils";
 import { bossImageUrl } from "~/models/assets";
 import type { RecruitGrowthTier } from "~/models/recruit-recommendation-contract";
@@ -82,24 +82,8 @@ export function VerdictPill({ goal, verdict }: { goal: RecruitGoal; verdict: Rec
   );
 }
 
-// The 미래시 and 모집 추천 mark of a student the goal recommends.
-export function AiRecommendedMark() {
-  return (
-    <span className="inline-flex items-center gap-1 text-xs font-semibold whitespace-nowrap">
-      <SparklesIcon className="size-3 shrink-0 text-v2-accent" aria-hidden="true" />
-      <span className="bg-v2-ai-gradient bg-clip-text text-transparent">AI 추천</span>
-    </span>
-  );
-}
-
 // The community rating as three neutral dots and its name. Null is a student the community sources do not agree on.
-export function CommunityLevel({
-  level,
-  dotClassName = "w-4",
-}: {
-  level: 0 | 1 | 2 | null;
-  dotClassName?: string;
-}) {
+export function CommunityLevel({ level, dotClassName = "w-4" }: { level: 0 | 1 | 2 | null; dotClassName?: string }) {
   if (level === null) {
     return <span className="text-xs text-v2-fg-tertiary">평가 부족</span>;
   }
@@ -127,8 +111,11 @@ export function GrowthSummary({ modal }: { modal: (RecruitGrowthTier & { share: 
   return (
     <>
       <span className="flex items-center gap-1.5">
-        <span className="text-[0.8125rem] font-semibold text-v2-fg" aria-label={tierMeaning(tier)}>
-          <TierFace tier={tier} iconClassName="size-4" />
+        <span className="text-[0.8125rem] font-semibold text-v2-fg">
+          <span className="sr-only">{tierMeaning(tier)}</span>
+          <span aria-hidden="true">
+            <TierFace tier={tier} iconClassName="size-4" />
+          </span>
         </span>
         <span
           aria-hidden="true"
@@ -140,7 +127,9 @@ export function GrowthSummary({ modal }: { modal: (RecruitGrowthTier & { share: 
           />
         </span>
       </span>
-      <span className="mt-1 block text-xs leading-4 font-semibold text-v2-fg tabular-nums">{formatShare(modal.share)}</span>
+      <span className="mt-1 block text-xs leading-4 font-semibold text-v2-fg tabular-nums">
+        {formatShare(modal.share)}
+      </span>
     </>
   );
 }

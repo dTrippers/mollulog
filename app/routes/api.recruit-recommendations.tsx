@@ -4,18 +4,26 @@ import { isRecruitGoal, type RecruitGoal } from "~/domain/recruit-recommendation
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import { getRecruitGoal, setRecruitGoal } from "~/models/recruit-recommendation-profile";
 import { getFutureContents } from "~/views/futures";
-import { loadRecruitRecommendations, type RecruitRecommendationView } from "~/views/recruit-recommendations.server";
+import {
+  loadRecruitMarks,
+  loadRecruitRecommendations,
+  type RecruitMarksView,
+  type RecruitRecommendationView,
+} from "~/views/recruit-recommendations.server";
 
 export type RecruitRecommendationsLoaderData =
   | (Extract<RecruitRecommendationView, { status: "ok" }> & { goal: RecruitGoal })
   | { status: "no_goal" }
   | { status: "unavailable" };
 
+// 미래시 asks for the marks alone (`view=marks`). With no goal, or when a read failed, it shows no mark.
+export type RecruitMarksLoaderData = RecruitMarksView | { status: "no_goal" };
+
 export type RecruitGoalActionData = { ok: true; goal: RecruitGoal } | { ok: false };
 
 /**
  * The recommendations for a goal: the `goal` parameter, or for a signed-in user without one, the saved goal. A guest
- * keeps the goal in the browser and always sends it.
+ * keeps the goal in the browser and always sends it. With `view=marks`, only the pickups 미래시 marks.
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const { env } = context.cloudflare;
@@ -26,16 +34,35 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     logger.error("Failed to load recruit recommendations", error, errorContext);
     captureServerError(error, errorContext);
   };
-  const requestedGoal = new URL(request.url).searchParams.get("goal");
+  const searchParams = new URL(request.url).searchParams;
+  const requestedGoal = searchParams.get("goal");
+  const marksOnly = searchParams.get("view") === "marks";
   if (requestedGoal !== null && !isRecruitGoal(requestedGoal)) {
-    return data<RecruitRecommendationsLoaderData>({ status: "unavailable" }, { status: 400 });
+    return marksOnly
+      ? data<RecruitMarksLoaderData>({ status: "hidden" }, { status: 400 })
+      : data<RecruitRecommendationsLoaderData>({ status: "unavailable" }, { status: 400 });
   }
 
   try {
     const sensei = await getActiveSensei(env, request, ctx);
     const goal = requestedGoal ?? (sensei ? await getRecruitGoal(env, sensei.id, { ctx }) : null);
-    if (goal === null) return data<RecruitRecommendationsLoaderData>({ status: "no_goal" });
+    if (goal === null) {
+      return marksOnly
+        ? data<RecruitMarksLoaderData>({ status: "no_goal" })
+        : data<RecruitRecommendationsLoaderData>({ status: "no_goal" });
+    }
     const contents = await getFutureContents(env, false, ctx);
+    if (marksOnly) {
+      const marks = await loadRecruitMarks(env, {
+        goal,
+        userId: sensei?.id ?? null,
+        contents,
+        onRecruitedReadFailure: (error) => report(error, "recruited_students"),
+        onServiceFailure: () =>
+          report(new Error("The recommendation service gave no answer."), "recommendation_service"),
+      });
+      return data<RecruitMarksLoaderData>(marks);
+    }
     const view = await loadRecruitRecommendations(env, {
       goal,
       userId: sensei?.id ?? null,
@@ -51,7 +78,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     return data<RecruitRecommendationsLoaderData>({ ...view, goal });
   } catch (error) {
     report(error, "load");
-    return data<RecruitRecommendationsLoaderData>({ status: "unavailable" }, { status: 503 });
+    return marksOnly
+      ? data<RecruitMarksLoaderData>({ status: "hidden" }, { status: 503 })
+      : data<RecruitRecommendationsLoaderData>({ status: "unavailable" }, { status: 503 });
   }
 }
 

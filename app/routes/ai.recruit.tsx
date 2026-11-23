@@ -11,6 +11,7 @@ import {
   useRouteError,
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { getFutureMediaTypeLabel } from "~/components/v2/features/futures/labels";
 import { RecruitCriteria, RecruitGoalChoice } from "~/components/v2/features/recruit-recommendation/RecruitPanels";
 import {
   RecruitAllRecruited,
@@ -20,7 +21,6 @@ import {
   RecruitTimelineSkeleton,
   RecruitViewerNotice,
 } from "~/components/v2/features/recruit-recommendation/RecruitStates";
-import { getFutureMediaTypeLabel } from "~/components/v2/features/futures/labels";
 import { RecruitTimeline } from "~/components/v2/features/recruit-recommendation/RecruitTimeline";
 import type {
   RecruitContentView,
@@ -67,8 +67,8 @@ import type { EventType, RaidType } from "~/models/content.d";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRecruitGoal } from "~/models/recruit-recommendation-profile";
 import { type FutureContent, getFutureContents } from "~/views/futures";
-import type { RecruitGoalActionData, RecruitRecommendationsLoaderData } from "./api.recruit-recommendations";
 import type { ActionData as ContentsActionData } from "./api.contents";
+import type { RecruitGoalActionData, RecruitRecommendationsLoaderData } from "./api.recruit-recommendations";
 import {
   applyFavoriteCountChange,
   equalFavorites,
@@ -161,7 +161,9 @@ function toRecruitContents(contents: FutureContent[], now: UtcIsoString): Recrui
   return contents.flatMap((content): RecruitContentLoaderData[] => {
     if (content.endAt !== null && !isInstantAfter(content.endAt, now)) return [];
     const pickups = content.recruitments
-      .filter((recruitment) => recruitment.pickup && (recruitment.until === null || isInstantAfter(recruitment.until, now)))
+      .filter(
+        (recruitment) => recruitment.pickup && (recruitment.until === null || isInstantAfter(recruitment.until, now)),
+      )
       .map(
         (recruitment): RecruitPickupLoaderData => ({
           favoriteKey: recruitment.favoriteKey,
@@ -212,10 +214,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
   let rawContents: FutureContent[];
   let savedGoal: RecruitGoal | null;
   try {
-    [sensei, rawContents] = await Promise.all([
-      getActiveSensei(env, request, ctx),
-      getFutureContents(env, false, ctx),
-    ]);
+    [sensei, rawContents] = await Promise.all([getActiveSensei(env, request, ctx), getFutureContents(env, false, ctx)]);
     savedGoal = sensei ? await getRecruitGoal(env, sensei.id, { ctx }) : null;
   } catch (error) {
     report(error, "page");
@@ -226,7 +225,11 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
   const favoriteKeys = [...new Set(contents.flatMap((content) => content.pickups.map((pickup) => pickup.favoriteKey)))];
   const favoritedCounts = await getFavoritedCounts(env, favoriteKeys, { ctx }).then(
     (counts): FavoritedCountEntry[] =>
-      counts.map((favorite) => ({ contentUid: favorite.contentId, studentUid: favorite.studentId, count: favorite.count })),
+      counts.map((favorite) => ({
+        contentUid: favorite.contentId,
+        studentUid: favorite.studentId,
+        count: favorite.count,
+      })),
     (error: unknown) => {
       report(error, "favorited_counts");
       return null;
@@ -289,7 +292,10 @@ export default function RecruitRecommendationPage() {
     if (goalFetcher.state === "idle" && goalFetcher.data) setGoalSaveFailed(!goalFetcher.data.ok);
   }, [goalFetcher.state, goalFetcher.data]);
   const saveGoal = (next: RecruitGoal) => {
-    goalFetcher.submit({ goal: next }, { action: "/api/recruit-recommendations", method: "post", encType: "application/json" });
+    goalFetcher.submit(
+      { goal: next },
+      { action: "/api/recruit-recommendations", method: "post", encType: "application/json" },
+    );
   };
   const handleGoalChange = (next: RecruitGoal) => {
     setGoal(next);
@@ -300,21 +306,23 @@ export default function RecruitRecommendationPage() {
     }
   };
 
-  // The recommendations of the chosen goal. A goal change, or a retry, loads them again. The result counts only for the
-  // goal it was requested for, so a previous goal's result never shows under the new one.
-  const recommendationFetcher = useFetcher<RecruitRecommendationsLoaderData>();
+  // The recommendations of the chosen goal. A goal change, or a retry, loads them again. Each goal has its own fetcher,
+  // so a previous goal's result never shows under the new one, and a reload after a favorite change keeps the timeline
+  // on screen. A retry after a failure shows the skeleton until the new result arrives.
+  const recommendationFetcher = useFetcher<RecruitRecommendationsLoaderData>({
+    key: `recruit-recommendations:${goal ?? "none"}`,
+  });
   const loadRecommendationsRef = useRef(recommendationFetcher.load);
   loadRecommendationsRef.current = recommendationFetcher.load;
   const [recommendationRequest, setRecommendationRequest] = useState(0);
-  const [requestedGoal, setRequestedGoal] = useState<RecruitGoal | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a retry bumps the request count to load the goal again
   useEffect(() => {
     if (goal === null) return;
-    setRequestedGoal(goal);
     void loadRecommendationsRef.current(`/api/recruit-recommendations?goal=${goal}`);
   }, [goal, recommendationRequest]);
   const recommendations = recommendationFetcher.data;
   const recommendationsReady =
-    recommendationFetcher.state === "idle" && recommendations !== undefined && requestedGoal === goal;
+    recommendations !== undefined && (recommendations.status === "ok" || recommendationFetcher.state === "idle");
 
   // Favorites: the counts follow each loader result while no favorite call is in flight, and the viewer's own state
   // streams in after the page renders.
@@ -324,7 +332,11 @@ export default function RecruitRecommendationPage() {
     source: loaderData,
     counts: loadedCounts ?? [],
   }));
-  const nextCountsSync = syncFavoriteCounts(countsSync, { source: loaderData, counts: loadedCounts ?? [] }, favoriteFetcher.state);
+  const nextCountsSync = syncFavoriteCounts(
+    countsSync,
+    { source: loaderData, counts: loadedCounts ?? [] },
+    favoriteFetcher.state,
+  );
   if (nextCountsSync !== countsSync) setCountsSync(nextCountsSync);
   const resolvedFavorites = useSettledValue(available ? loaderData.favorites : NO_FAVORITES, UNAVAILABLE_FAVORITES);
   const [favorites, setFavorites] = useState<FavoriteKey[]>([]);
@@ -540,7 +552,13 @@ export default function RecruitRecommendationPage() {
         </PanelSheet>
         <AsideLinks
           items={[
-            { key: "futures", title: "미래시", description: "다가오는 컨텐츠 일정", Icon: CalendarIcon, to: "/futures" },
+            {
+              key: "futures",
+              title: "미래시",
+              description: "다가오는 컨텐츠 일정",
+              Icon: CalendarIcon,
+              to: "/futures",
+            },
             {
               key: "pyroxene",
               title: "청휘석 플래너",

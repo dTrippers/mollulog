@@ -41,8 +41,21 @@ export type RecruitTimeline<C, P> = {
   allRecommendedRecruited: boolean;
 };
 
-function pickupKey(studentUid: string, startAt: string): string {
+/** The key of one pickup of one student, as the answer and the 미래시 marks match them. */
+export function recruitPickupKey(studentUid: string, startAt: string): string {
   return `${studentUid}\u0000${startAt}`;
+}
+
+/**
+ * The pickups 미래시 marks "AI 추천": the ones the answer recommends, without the students the Sensei has recruited.
+ */
+export function selectRecruitMarks(
+  pickups: RecruitRecommendationAnswer["pickups"],
+  recruitedStudentUids: ReadonlySet<string>,
+): { studentUid: string; startAt: string }[] {
+  return pickups
+    .filter((pickup) => pickup.aiRecommended && !recruitedStudentUids.has(pickup.studentUid))
+    .map(({ studentUid, startAt }) => ({ studentUid, startAt }));
 }
 
 /**
@@ -65,7 +78,9 @@ export function buildRecruitTimeline<C extends RecruitTimelineContentInput<P>, P
 }): RecruitTimeline<C, P> {
   const studentByUid = new Map(answer.students.map((student) => [student.studentUid, student]));
   const aiRecommended = new Set(
-    answer.pickups.filter((pickup) => pickup.aiRecommended).map((pickup) => pickupKey(pickup.studentUid, pickup.startAt)),
+    answer.pickups
+      .filter((pickup) => pickup.aiRecommended)
+      .map((pickup) => recruitPickupKey(pickup.studentUid, pickup.startAt)),
   );
   let recruitedRecommended = 0;
   let remainingRecommended = 0;
@@ -93,7 +108,7 @@ export function buildRecruitTimeline<C extends RecruitTimelineContentInput<P>, P
         recommended.push({
           pickup,
           student,
-          aiRecommended: aiRecommended.has(pickupKey(student.studentUid, pickup.since)),
+          aiRecommended: aiRecommended.has(recruitPickupKey(student.studentUid, pickup.since)),
         });
       } else {
         notRecommended.push({ pickup, student });

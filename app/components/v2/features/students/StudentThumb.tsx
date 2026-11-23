@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import type { FavoriteLabelState } from "~/domain/futures/futures-view-model";
 import { cn } from "~/lib/utils";
 import { getV2LinkTransitionProps } from "../../layout/screen-transition";
+import { AiRecommendedMark } from "../ai/AiMarks";
 import { FavoriteLabel } from "./FavoriteLabel";
 import StudentPortrait from "./StudentPortrait";
 
@@ -57,6 +58,9 @@ export type StudentThumbProps = {
   captionPlacement?: "below" | "overlay";
   // Hides an overlay caption below the md breakpoint, for dense mobile grids where portraits stay clean.
   hideOverlayCaptionOnMobile?: boolean;
+  // The 미래시 mark of a student the Sensei's recruit recommendation goal recommends, as a third caption line. A student
+  // without a variant keeps the variant line empty, so every mark in a row sits at the same height.
+  aiRecommended?: boolean;
 };
 
 // A linked or clickable thumbnail fades on hover, as every 2.0 pressable element does. It never scales. The fade needs a
@@ -98,6 +102,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     fluid = false,
     captionPlacement = "below",
     hideOverlayCaptionOnMobile = false,
+    aiRecommended = false,
   },
   ref,
 ) {
@@ -106,7 +111,14 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
   const actionLabel = onSelect ? (selectionActionLabel ?? "상세") : "상세";
   const detailName = `${name}${variant ? `(${variant})` : ""} ${actionLabel}`;
   const selectionName = onSelect ? (selected ? "선택됨" : "선택 안 됨") : null;
-  const accessibleName = [detailName, scrimAriaLabel, favorite?.visible ? favorite.accessibleName : null, selectionName]
+  const showAiMark = aiRecommended && showCaption && captionPlacement === "below";
+  const accessibleName = [
+    detailName,
+    scrimAriaLabel,
+    favorite?.visible ? favorite.accessibleName : null,
+    showAiMark ? "AI 추천" : null,
+    selectionName,
+  ]
     .filter(Boolean)
     .join(", ");
   const overlayCaption = captionPlacement === "overlay";
@@ -194,7 +206,10 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
           <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
             {variant}
           </span>
+        ) : showAiMark ? (
+          <span aria-hidden="true" className="block h-4" />
         ) : null}
+        {showAiMark ? <AiRecommendedMark size="sm" className="mt-0.5" /> : null}
       </>
     ) : null;
 

@@ -616,6 +616,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-raid-tier-silver: var(--v2-raid-tier-silver);
   --background-image-v2-ai-gradient: linear-gradient(135deg, var(--v2-ai-from), var(--v2-ai-to));
   --shadow-v2-ai-glow: 0 0 1.25rem var(--v2-ai-glow);
+  --shadow-v2-ai-banner: 0 0 0.75rem var(--v2-ai-banner-glow-from), 0 0 2rem var(--v2-ai-banner-glow-to);
   --shadow-v2-popover: 0 10px 15px -3px var(--v2-popover-shadow), 0 4px 6px -4px var(--v2-popover-shadow);
   --animate-v2-ai-working: v2-ai-working 2s ease-in-out infinite;
 }
@@ -718,6 +719,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-ai-to: oklch(0.606 0.25 292.717);
   --v2-info: var(--v2-accent);
   --v2-ai-glow: oklch(0.606 0.25 292.717 / 16%);
+  --v2-ai-banner-glow-from: color-mix(in oklab, var(--v2-ai-from) 40%, transparent);
+  --v2-ai-banner-glow-to: color-mix(in oklab, var(--v2-ai-to) 45%, transparent);
   --v2-nav: oklch(0.945 0 0);
   --v2-nav-active: oklch(0.89 0 0);
   --v2-unread: oklch(0.577 0.245 27.325);
@@ -841,6 +844,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-ai-to: oklch(0.702 0.183 293.541);
   --v2-info: var(--v2-accent);
   --v2-ai-glow: oklch(0.702 0.183 293.541 / 24%);
+  --v2-ai-banner-glow-from: color-mix(in oklab, var(--v2-ai-from) 40%, transparent);
+  --v2-ai-banner-glow-to: color-mix(in oklab, var(--v2-ai-to) 50%, transparent);
   --v2-nav: oklch(0.205 0 0);
   --v2-nav-active: oklch(0.30 0 0);
   --v2-unread: oklch(0.704 0.191 22.216);

@@ -129,7 +129,9 @@ describe("global navigation catalog", () => {
     expect(getSearchableMenuItems({ currentUsername: "sensei", isAdmin: true })).toContainEqual(
       expect.objectContaining({ id: "ai-question", to: "/chat" }),
     );
-    expect(getMobileNavigationItems(guestOptions)).not.toContainEqual(expect.objectContaining({ menuId: "ai-question" }));
+    expect(getMobileNavigationItems(guestOptions)).not.toContainEqual(
+      expect.objectContaining({ menuId: "ai-question" }),
+    );
   });
 
   it("exposes the public API screens in the settings group and marks nested pages active", () => {

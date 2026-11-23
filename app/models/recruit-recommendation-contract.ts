@@ -62,7 +62,9 @@ export type RecruitRecommendationAnswer = {
 };
 
 function record(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function nonEmptyString(value: unknown): value is string {
@@ -131,7 +133,8 @@ function parseBoss(value: unknown): RecruitBossUsage | null {
 
 function parseGrowthTier(value: Record<string, unknown>): RecruitGrowthTier | null {
   if (!count(value.tier) || value.tier < 1 || value.tier > 5) return null;
-  if (value.weaponTier !== null && (!count(value.weaponTier) || value.weaponTier < 1 || value.weaponTier > 4)) return null;
+  if (value.weaponTier !== null && (!count(value.weaponTier) || value.weaponTier < 1 || value.weaponTier > 4))
+    return null;
   return { tier: value.tier, weaponTier: value.weaponTier as number | null };
 }
 
@@ -208,7 +211,8 @@ export function parseRecruitRecommendationAnswer(value: unknown): RecruitRecomme
   if (!answer) return { status: "unexpected" };
   if (answer.status === "unavailable") return { status: "unavailable" };
   if (answer.status === "invalid_request") return { status: "invalid_request" };
-  if (answer.status !== "ok" || !isRecruitGoal(answer.goal) || !instant(answer.computedAt)) return { status: "unexpected" };
+  if (answer.status !== "ok" || !isRecruitGoal(answer.goal) || !instant(answer.computedAt))
+    return { status: "unexpected" };
   const students = list(answer.students, (item) => {
     const student = record(item);
     if (!student || !nonEmptyString(student.studentUid)) return null;
@@ -218,7 +222,10 @@ export function parseRecruitRecommendationAnswer(value: unknown): RecruitRecomme
   });
   const pickups = list(answer.pickups, (item) => {
     const pickup = record(item);
-    return pickup && nonEmptyString(pickup.studentUid) && instant(pickup.startAt) && typeof pickup.aiRecommended === "boolean"
+    return pickup &&
+      nonEmptyString(pickup.studentUid) &&
+      instant(pickup.startAt) &&
+      typeof pickup.aiRecommended === "boolean"
       ? { studentUid: pickup.studentUid, startAt: pickup.startAt, aiRecommended: pickup.aiRecommended }
       : null;
   });

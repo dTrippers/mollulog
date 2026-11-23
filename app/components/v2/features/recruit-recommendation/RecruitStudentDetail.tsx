@@ -18,15 +18,9 @@ import type {
 } from "~/models/recruit-recommendation-contract";
 import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { v2FocusRing } from "../../layout/styles";
+import { AiRecommendedMark } from "../ai/AiMarks";
 import { TierFace, tierMeaning } from "../students/TierFace";
-import {
-  AiRecommendedMark,
-  BossIcon,
-  CommunityLevel,
-  formatShare,
-  growthTierValue,
-  VerdictPill,
-} from "./RecruitValues";
+import { BossIcon, CommunityLevel, formatShare, growthTierValue, VerdictPill } from "./RecruitValues";
 
 // The tile's evidence in full: the verdict and its evidence, every boss at 30% or more, the community rating with its
 // tags, and the growth tiers of the placements. The popover shows the name as its header; the sheet has its own.
@@ -71,7 +65,9 @@ export function RecruitStudentDetail({
           <>
             <VerdictPill goal={goal} verdict={recommendation.verdict} />
             {recommendation.verdict.evidence ? (
-              <span className="text-xs text-v2-fg-secondary">{recruitEvidenceLabels[recommendation.verdict.evidence]}</span>
+              <span className="text-xs text-v2-fg-secondary">
+                {recruitEvidenceLabels[recommendation.verdict.evidence]}
+              </span>
             ) : null}
             {aiRecommended ? <AiRecommendedMark /> : null}
           </>
@@ -175,7 +171,9 @@ function BossRow({ boss, timeZone }: { boss: RecruitBossUsage; timeZone: string 
         />
       </span>
       <span className="text-right font-semibold text-v2-fg tabular-nums">{formatShare(boss.usage)}</span>
-      <span className="text-xs whitespace-nowrap text-v2-fg-tertiary tabular-nums">{formatUsageSeason(boss, timeZone)}</span>
+      <span className="text-xs whitespace-nowrap text-v2-fg-tertiary tabular-nums">
+        {formatUsageSeason(boss, timeZone)}
+      </span>
     </>
   );
 }

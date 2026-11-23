@@ -91,7 +91,15 @@ export function RecruitTimeline({
   );
 }
 
-function DateDivider({ groupDate, now, timeZone }: { groupDate: UtcIsoString | null; now: UtcIsoString; timeZone: string }) {
+function DateDivider({
+  groupDate,
+  now,
+  timeZone,
+}: {
+  groupDate: UtcIsoString | null;
+  now: UtcIsoString;
+  timeZone: string;
+}) {
   const className = "relative mt-7 mb-3 text-xs first:mt-1 @md:ml-[3.25rem]";
   if (groupDate === null) {
     return (

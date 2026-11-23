@@ -12,6 +12,7 @@ import { formatThousands } from "~/domain/futures/futures-view-model";
 import { cn } from "~/lib/utils";
 import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { v2FocusRing } from "../../layout/styles";
+import { AiSparklesIcon } from "../ai/AiMarks";
 import { AttributeStripes } from "./AttributeStripes";
 import type { FutureStudentEntry } from "./types";
 
@@ -21,8 +22,8 @@ const rowClassName = cn(
 );
 
 // Quick panel content for one student. The popover shows the name and attributes as its header. The sheet carries the name
-// and attributes in its own header, so its body shows only the rows. Rows: the detail link, favorite, completion, and the
-// result edit link. The action rows wait for the viewer's own state. Guests get a sign-in note, and their actions open
+// and attributes in its own header, so its body shows only the rows. Rows: the 모집 추천 link of a recommended student, the
+// detail link, favorite, completion, and the result edit link. The action rows wait for the viewer's own state. Guests get a sign-in note, and their actions open
 // the sign-in flow.
 export function StudentQuickPanelBody({
   entry,
@@ -61,6 +62,23 @@ export function StudentQuickPanelBody({
         ) : null}
       </div>
       <div className="-mx-2 space-y-0.5">
+        {entry.aiRecommended ? (
+          <Link
+            to="/ai/recruit"
+            prefetch="intent"
+            className={cn(rowClassName, "items-start py-2")}
+            {...getV2LinkTransitionProps("forward")}
+          >
+            <AiSparklesIcon className="mt-0.5 size-4" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">AI 모집 추천</span>
+              <span className="mt-0.5 block text-xs break-keep text-v2-fg-tertiary">
+                "모집 추천" 메뉴에서 상세 정보를 확인해보세요
+              </span>
+            </span>
+            <ChevronRightIcon className="mt-0.5 size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+          </Link>
+        ) : null}
         {detailHref ? (
           <Link to={detailHref} prefetch="intent" className={rowClassName} {...getV2LinkTransitionProps("forward")}>
             <IdentificationIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
@@ -115,7 +133,7 @@ export function StudentQuickPanelBody({
         ) : null}
       </div>
       {!signedIn ? (
-        <p className="px-2 pt-1 text-xs text-v2-fg-tertiary">로그인하면 관심 학생과 모집 결과를 기록할 수 있어요</p>
+        <p className="px-2 pt-1 text-xs text-v2-fg-tertiary">로그인 후 더 많은 정보를 확인해보세요</p>
       ) : null}
     </div>
   );

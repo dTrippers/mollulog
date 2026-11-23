@@ -19,6 +19,10 @@ export type ScreenTabItem = {
   linkState?: unknown;
   onClick?: () => void;
   hiddenStacked?: boolean;
+  // Shown only on the stacked layout, such as a link that the side-by-side layout offers in the Aside instead.
+  stackedOnly?: boolean;
+  // Colors the icon with the accent, for a link tab to another screen beside the tabs of this screen's views.
+  accentIcon?: boolean;
 };
 
 type ScreenNavigationItemRendererProps = {
@@ -39,6 +43,7 @@ export function ScreenNavigationItemRenderer({
           "relative flex min-h-v2-row-min shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm whitespace-nowrap hover:bg-v2-hover v2-interaction-transition",
           item.active ? "v2-tab-active font-semibold text-v2-fg" : "font-medium text-v2-fg-secondary",
           item.hiddenStacked && "v2-hidden-stacked",
+          item.stackedOnly && "v2-stacked-only",
           item.disabled && "cursor-not-allowed text-v2-fg-disabled hover:bg-transparent",
           v2FocusRing,
         )
@@ -46,6 +51,7 @@ export function ScreenNavigationItemRenderer({
           "relative flex min-h-v2-row-min items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-left text-sm v2-interaction-transition",
           item.active ? "bg-v2-inset font-semibold text-v2-fg" : "font-medium text-v2-fg-secondary",
           item.hiddenStacked && "v2-hidden-stacked",
+          item.stackedOnly && "v2-stacked-only",
           item.disabled
             ? "cursor-not-allowed text-v2-fg-disabled"
             : item.active
@@ -55,7 +61,13 @@ export function ScreenNavigationItemRenderer({
         );
   const content = (
     <>
-      <Icon className={cn("size-4 shrink-0", item.active ? "text-v2-fg" : "text-v2-fg-tertiary")} aria-hidden="true" />
+      <Icon
+        className={cn(
+          "size-4 shrink-0",
+          item.accentIcon ? "text-v2-accent" : item.active ? "text-v2-fg" : "text-v2-fg-tertiary",
+        )}
+        aria-hidden="true"
+      />
       <span className={orientation === "vertical" ? "min-w-0 flex-1 truncate" : undefined}>{item.text}</span>
       {item.label ? <span className="text-xs tabular-nums text-v2-fg-tertiary">{item.label}</span> : null}
     </>
