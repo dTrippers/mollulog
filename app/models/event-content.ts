@@ -1,4 +1,12 @@
-import type { MinigameConfig, MinigamePayment, RewardItem, ShopResource } from "~/domain/event-shop";
+import type {
+  BoxGachaData,
+  BoxGachaItem,
+  BoxGachaRound,
+  MinigameConfig,
+  MinigamePayment,
+  RewardItem,
+  ShopResource,
+} from "~/domain/event-shop";
 import { graphql } from "~/graphql";
 import type {
   EventContentShopContentQuery,
@@ -344,6 +352,18 @@ const eventContentShopContentQuery = graphql(`
           }
           equipments { uid unlockStageUid tiers { tier attackPower hitPoint } }
         }
+        boxGacha {
+          loopRound
+          rounds {
+            round
+            drawCost { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+            drawCount
+            items {
+              groupId displayOrder count isPrize
+              rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+            }
+          }
+        }
         rewardGroups {
           condition { type value values divisor remainders }
           payments {
@@ -520,6 +540,60 @@ type ServerTreasureHunt = NonNullable<EventContentData>["minigameConfigs"][numbe
 type ServerCardFlip = NonNullable<EventContentData>["minigameConfigs"][number]["cardFlip"];
 type ServerRoadPuzzle = NonNullable<EventContentData>["minigameConfigs"][number]["roadPuzzle"];
 type ServerJanken = NonNullable<EventContentData>["minigameConfigs"][number]["janken"];
+type ServerBoxGacha = NonNullable<EventContentData>["minigameConfigs"][number]["boxGacha"];
+
+// Configs imported before BAQL carried box details return null: the composition is then unavailable, not invalid.
+function transformBoxGacha(boxGacha: ServerBoxGacha): BoxGachaData {
+  if (!boxGacha) return { status: "unavailable" };
+  const invalid = { status: "invalid" } as const;
+  if (!Array.isArray(boxGacha.rounds) || boxGacha.rounds.length === 0) return invalid;
+
+  const rounds: BoxGachaRound[] = [];
+  for (const round of boxGacha.rounds) {
+    const { drawCost } = round;
+    if (!Number.isSafeInteger(round.round) || round.round < 1) return invalid;
+    if (!drawCost.resource || !(drawCost.quantity > 0)) return invalid;
+    if (!Array.isArray(round.items) || round.items.length === 0) return invalid;
+    if (round.items.some((item) => !Number.isSafeInteger(item.count) || item.count < 1)) return invalid;
+    if (round.items.reduce((sum, item) => sum + item.count, 0) !== round.drawCount) return invalid;
+
+    const items: BoxGachaItem[] = [];
+    for (const item of round.items) {
+      if (item.rewards.length === 0) return invalid;
+      const rewards: RewardItem[] = [];
+      for (const reward of item.rewards) {
+        if (!reward.resource || !(reward.quantity > 0)) return invalid;
+        rewards.push({
+          resourceType: reward.resource.type,
+          resourceUid: reward.resource.uid,
+          resourceName: reward.resource.name,
+          imageUrl: getEmblemImageUrl(reward.resource),
+          quantity: reward.quantity,
+          rarity: reward.resource.rarity ?? undefined,
+        });
+      }
+      items.push({ groupId: item.groupId, displayOrder: item.displayOrder, count: item.count, isPrize: item.isPrize, rewards });
+    }
+    rounds.push({
+      round: round.round,
+      drawCost: {
+        resourceType: drawCost.resource.type,
+        resourceUid: drawCost.resource.uid,
+        resourceName: drawCost.resource.name,
+        imageUrl: getEmblemImageUrl(drawCost.resource),
+        quantity: drawCost.quantity,
+      },
+      drawCount: round.drawCount,
+      items,
+    });
+  }
+
+  const roundNumbers = new Set(rounds.map(({ round }) => round));
+  if (roundNumbers.size !== rounds.length) return invalid;
+  const { loopRound } = boxGacha;
+  if (loopRound !== null && !roundNumbers.has(loopRound)) return invalid;
+  return { status: "available", loopRound, rounds };
+}
 
 function transformJanken(janken: ServerJanken): MinigameConfig["janken"] {
   if (!janken) return { status: "unavailable" };
@@ -993,6 +1067,7 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
     cardFlip: transformedCardFlip,
     ...(serverConfig.minigameType === "road_puzzle" ? { roadPuzzle: transformedRoadPuzzle } : {}),
     ...(serverConfig.minigameType === "janken" ? { janken: transformedJanken ?? { status: "unavailable" as const } } : {}),
+    ...(serverConfig.minigameType === "box_gacha" ? { boxGacha: transformBoxGacha(serverConfig.boxGacha) } : {}),
     payment: {
       resourceType: paymentResource.type,
       resourceUid: paymentResource.uid,
@@ -1056,7 +1131,7 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
 
   return fetchLazySourceCached(
     env,
-    cacheKey("source", "event-shop", 6, cacheQuery({ contentUid: shopContentUid, runType })),
+    cacheKey("source", "event-shop", 7, cacheQuery({ contentUid: shopContentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,
@@ -1075,7 +1150,11 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
       };
     },
     // The shop screens show "no data" for a missing or itemless shop, so that snapshot must not outlive data entry.
-    (shop) => (shop === null || shop.shopResources.length === 0 ? EVENT_UNREGISTERED_CONTENT_TTL : EVENT_STATIC_CONTENT_TTL),
+    // BAQL also fills box gacha details after the event itself, so a box gacha without them is rechecked as soon.
+    (shop) =>
+      shop === null || shop.shopResources.length === 0 || shop.minigameConfig?.boxGacha?.status === "unavailable"
+        ? EVENT_UNREGISTERED_CONTENT_TTL
+        : EVENT_STATIC_CONTENT_TTL,
     forceRefresh,
   );
 }

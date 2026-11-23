@@ -68,6 +68,15 @@ beforeEach(() => {
 });
 
 describe("MoreIndexPage SSR rendering", () => {
+  it("announces the account dot on the available-coupon summary row", () => {
+    const markup = renderMore({ ...createCurrentUser(), availableCouponCount: 1 });
+    const couponRow = markup.match(/<a[^>]*href="\/coupons"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? "";
+
+    expect(couponRow).toContain("사용 가능한 쿠폰");
+    expect(couponRow).toContain('data-navigation-dot="account"');
+    expect(couponRow).toContain('<span class="sr-only">, 확인할 내 정보 있음</span>');
+  });
+
   it.each([null, createCurrentUser()])("renders the /more page without throwing for %s", (currentUser) => {
     const markup = renderMore(currentUser);
 

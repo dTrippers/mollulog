@@ -110,30 +110,30 @@ describe("pyroxene planner view", () => {
     ]);
   });
 
-  it("groups income between events and folds hidden or unnamed sources into one row", () => {
+  it("lists income between events row by row and folds hidden or unnamed sources into one row with a breakdown", () => {
     const timeline = [
       incomeEntry("2026-11-10", "buy", 6600, 6600, { description: "청휘석 구매", uid: "buy-1" }),
       incomeEntry("2026-11-11", "daily_mission", 20, 6620),
-      incomeEntry("2026-11-12", "raid", 1200, 7820, { description: "총력전" }),
+      incomeEntry("2026-11-11", "ap_charge", -30, 6590),
+      incomeEntry("2026-11-12", "daily_mission", 20, 6610),
+      incomeEntry("2026-11-12", "raid", 1200, 7810, { description: "총력전" }),
       eventEntry("a", "2026-12-01", 500, { ruleSet: "call_charge_v1" }),
       incomeEntry("2027-01-02", "weekly_mission", 120, 620),
     ];
     const rows = buildPlannerTimelineRows(timeline, rowOptions({ markers: numberTargetEvents(timeline) }));
-    expect(rows.map((row) => row.kind)).toEqual(["year", "income-group", "event", "year", "income"]);
-    const group = rows[1];
-    if (group.kind !== "income-group") throw new Error("expected a group");
-    // The repeated-income row sits at its last entry, so the balances read in time order.
-    expect(group.rows.map((row) => [row.label, row.delta.pyroxene, row.itemUid, row.balance])).toEqual([
+    expect(rows.map((row) => row.kind)).toEqual(["year", "income", "income", "income", "event", "year", "income"]);
+    const incomes = rows.flatMap((row) => (row.kind === "income" ? [row.row] : []));
+    // The aggregate row sits at its last entry, so the balances read in time order.
+    expect(incomes.map((row) => [row.label, row.delta.pyroxene, row.itemUid, row.balance])).toEqual([
       ["청휘석 구매", 6600, "buy-1", 6600],
-      ["미표시 수급처", 20, undefined, 6620],
-      ["총력전", 1200, undefined, 7820],
+      ["숨긴 항목 합계", 10, undefined, 6610],
+      ["총력전", 1200, undefined, 7810],
+      ["숨긴 항목 합계", 120, undefined, 620],
     ]);
-    expect(group.leadIndex).toBe(0);
-    expect(group.delta).toBe(7820);
-    expect(group.balance).toBe(7820);
-    const single = rows[4];
-    if (single.kind !== "income") throw new Error("expected a single row");
-    expect(single.row.label).toBe("미표시 수급처");
+    expect(incomes[1].breakdown?.map((item) => [item.label, item.delta.pyroxene])).toEqual([
+      ["일일 임무", 40],
+      ["AP 충전", -30],
+    ]);
   });
 
   it("hides events without favorites unless selected or completed", () => {
@@ -149,10 +149,9 @@ describe("pyroxene planner view", () => {
     expect(rows.flatMap((row) => (row.kind === "event" ? [row.entry.source.event?.uid] : []))).toEqual(["b", "c"]);
   });
 
-  it("sums a group from the actual balance change, not a collected row's shown reward", () => {
+  it("shows a received reward with its original amount and marks it received", () => {
     const timeline = [
       incomeEntry("2026-11-10", "raid", 0, 0, { description: "총력전", collectedSourceKey: "raid-key" }),
-      incomeEntry("2026-11-11", "daily_mission", 20, 20),
     ];
     const rows = buildPlannerTimelineRows(
       timeline,
@@ -161,9 +160,9 @@ describe("pyroxene planner view", () => {
         collectedSourceResources: new Map([["raid-key", resources(1000)]]),
       }),
     );
-    const group = rows.find((row) => row.kind === "income-group");
-    if (group?.kind !== "income-group") throw new Error("expected a group");
-    expect(group.delta).toBe(20);
+    const row = rows.find((item) => item.kind === "income");
+    if (row?.kind !== "income") throw new Error("expected an income row");
+    expect([row.row.collected, row.row.delta.pyroxene, row.row.balance]).toEqual([true, 1000, 0]);
   });
 
   it("recovers the attendance start date from its reward dates", () => {

@@ -31,6 +31,7 @@ import {
   type SimulationStudent,
 } from "~/domain/recruitment-simulator";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { getRecruitmentGroupByUid, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getTimelineContent } from "~/models/timeline-content.server";
@@ -92,11 +93,13 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   return { eventName: content.name, snapshot, ruleSet };
 };
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
+export const meta: MetaFunction<typeof loader> = ({ loaderData, location }) => {
   const title = loaderData?.eventName ? `${loaderData.eventName} - 모집 시뮬레이션` : "모집 시뮬레이션";
+  const description = "블루 아카이브 모집 결과를 저장 없이 시뮬레이션해보세요.";
   return [
     { title: `${title} | 몰루로그` },
-    { name: "description", content: "블루 아카이브 모집 결과를 저장 없이 시뮬레이션해보세요." },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
   ];
 };
 
@@ -318,9 +321,6 @@ export default function EventRecruitmentSimulator() {
           <div className="rounded-lg bg-v2-surface p-v2-block-p text-center">
             <SparklesIcon className="mx-auto size-8 text-v2-fg-tertiary" aria-hidden="true" />
             <h2 className="mt-3 text-base font-semibold text-v2-fg">시뮬레이션할 픽업 학생이 없어요</h2>
-            <p className="mt-1 text-sm text-v2-fg-secondary">
-              이 모집 기간에는 모집 시뮬레이션에 사용할 픽업 학생 정보가 없어요.
-            </p>
           </div>
         </div>
       </PageMain>
@@ -372,10 +372,7 @@ export default function EventRecruitmentSimulator() {
         </section>
 
         <section className="space-y-v2-block-gap">
-          <div>
-            <h2 className="text-base font-semibold text-v2-fg">모집 결과</h2>
-            <p className="mt-1 text-sm text-v2-fg-secondary tabular-nums">총 {totalCount.toLocaleString()}회 모집</p>
-          </div>
+          <h2 className="text-base font-semibold text-v2-fg">모집 결과</h2>
           {!selectedPickupStudentUid ? (
             <div className="rounded-lg bg-v2-surface px-v2-block-p py-7 text-center text-sm text-v2-fg-secondary">
               픽업 학생을 선택해주세요
@@ -431,18 +428,18 @@ export default function EventRecruitmentSimulator() {
         {selectedPickupStudentUid && totalCount > 0 ? (
           <PageActionBar
             ref={actionBarRef}
-            tone="elevated"
             className="bottom-[calc(var(--mobile-nav-height)+0.5rem)] gap-y-3 lg:bottom-4"
             summary={
               <div className="flex flex-col">
-                <span className="font-semibold text-v2-fg">총 {totalCount.toLocaleString()}회 모집</span>
-                <span className="inline-flex items-center gap-1 text-xs font-normal text-v2-fg-tertiary">
-                  소비한 청휘석
-                  <ResourceIcon resource="pyroxene" className="size-4" />
-                  {calculatePyroxeneCost(totalCount).toLocaleString()}개
-                </span>
-                <span className="text-xs font-normal text-v2-fg-tertiary">
-                  3성 학생 비율 {formatTier3Rate(tier3Count, totalCount)}
+                <span>총 {totalCount.toLocaleString()}회 모집</span>
+                <span className="mt-px flex flex-wrap items-center gap-x-1 text-xs font-medium text-v2-fg-secondary">
+                  <span className="inline-flex items-center gap-1">
+                    소비한 청휘석
+                    <ResourceIcon resource="pyroxene" className="size-4" />
+                    {calculatePyroxeneCost(totalCount).toLocaleString()}개
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span>3성 학생 비율 {formatTier3Rate(tier3Count, totalCount)}</span>
                 </span>
               </div>
             }
@@ -632,7 +629,6 @@ function RecruitmentStudentThumb({
       grayscaleWhenUnselected={dimUnselected}
       scrimAriaLabel={accessibleDetail}
       captionPlacement="overlay"
-      overlayOnMobile
       fluid
     />
   );
@@ -670,14 +666,9 @@ function TargetStudentChooser({
       aria-labelledby="target-student-title"
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 id="target-student-title" className="text-sm font-semibold text-v2-fg">
-            목표 학생을 선택해주세요
-          </h3>
-          <p className="mt-1 text-xs text-v2-fg-secondary">
-            픽업 대상 학생을 바로 고르거나, 픽업 외 학생을 검색할 수 있어요.
-          </p>
-        </div>
+        <h3 id="target-student-title" className="text-sm font-semibold text-v2-fg">
+          목표 학생을 선택해주세요
+        </h3>
         <Button size="sm" onClick={onClose}>
           닫기
         </Button>
@@ -863,7 +854,6 @@ function RecruitmentResultCard({
             favorite={emptyFavorite}
             showRecruitmentLabel={selectedPickup}
             captionPlacement="overlay"
-            overlayOnMobile
             fluid
           />
         </div>

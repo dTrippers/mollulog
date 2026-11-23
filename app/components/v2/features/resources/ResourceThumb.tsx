@@ -23,6 +23,8 @@ export type ResourceThumbProps = {
   nameTooltip?: boolean;
   // "inset" draws the label inside the image's bottom-right corner, for dense rows of small thumbnails.
   labelPlacement?: "corner" | "inset";
+  // A short capsule inside the image's top-left corner that marks the resource, such as a prize.
+  tag?: string;
 };
 
 const sizeClassName = {
@@ -48,6 +50,7 @@ export function ResourceThumb({
   tooltip = false,
   nameTooltip = false,
   labelPlacement = "corner",
+  tag,
 }: ResourceThumbProps) {
   const [nameTooltipOpen, setNameTooltipOpen] = useState(false);
   const lastPointerType = useRef<string | null>(null);
@@ -81,8 +84,14 @@ export function ResourceThumb({
       </span>
     );
 
+  const tagBadge = tag ? (
+    <span className="pointer-events-none absolute top-0.5 left-0.5 rounded-full bg-v2-accent px-1 text-[0.625rem] leading-[0.875rem] font-semibold text-v2-on-accent">
+      {tag}
+    </span>
+  ) : null;
+
   // Keep existing ResourceThumb callers byte-for-byte equivalent unless an opt-in shop feature is used.
-  if (!bare && label == null && rarity == null && !tooltip && !nameTooltip && imageUrl === undefined) {
+  if (!bare && label == null && rarity == null && !tooltip && !nameTooltip && !tag && imageUrl === undefined) {
     return (
       <span
         className={cn(
@@ -151,7 +160,7 @@ export function ResourceThumb({
             <span
               id={nameTooltipId}
               role="tooltip"
-              className="absolute bottom-full left-0 z-10 mb-2 w-max max-w-[calc(100vw-2rem)] break-words whitespace-normal rounded-md bg-v2-scrim px-2 py-1 text-xs font-normal text-v2-on-media shadow-md"
+              className="absolute bottom-full left-0 z-10 mb-2 w-max max-w-[calc(100vw-2rem)] break-words whitespace-normal rounded-md bg-v2-scrim px-2 py-1 text-xs font-normal text-v2-on-media shadow-md backdrop-blur-md"
             >
               {tooltipText}
             </span>
@@ -171,6 +180,7 @@ export function ResourceThumb({
         </span>
       )}
       {!nameTooltip || !name ? labelBadge : null}
+      {tagBadge}
     </span>
   );
 }

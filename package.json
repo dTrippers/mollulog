@@ -71,7 +71,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.2",
-    "@cloudflare/vite-plugin": "^1.43.0",
+    "@cloudflare/vite-plugin": "^1.64.0",
     "@cloudflare/workers-types": "^4.20260702.1",
     "@graphql-codegen/cli": "^7.4.6",
     "@jest/globals": "^30.5.2",
@@ -92,7 +92,7 @@
     "ts-jest": "^29.4.15",
     "typescript": "^5.9.3",
     "vite": "^8.3.5",
-    "wrangler": "^4.127.1"
+    "wrangler": "^4.151.3"
   },
   "engines": {
     "node": ">=22.18.0"

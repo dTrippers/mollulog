@@ -1891,7 +1891,7 @@ function ResourceSourceSummary({ resources, inputAt }: { resources: PickupResour
 }
 
 function PlannerOptionsSummary({ options }: { options: PyroxenePlannerOptions }) {
-  const pickupChance = { average: "평균 (천장 미반영)", average_pity: "평균 (천장 반영)", ceil: "천장" }[
+  const pickupChance = { average: "평균 (천장 미반영)", average_pity: "평균", ceil: "천장" }[
     options.event.pickupChance
   ];
   const raidTier = { platinum: "플래티넘", gold: "골드", silver: "실버", bronze: "브론즈" }[options.raid.tier];
@@ -2098,7 +2098,7 @@ function getPlanReviewSections(
       title: "보너스 학생",
       lines: [
         `선택 방식: ${state.bonusStudentSelectionMode === "shared" ? "공통 선택" : "재화별 선택"}`,
-        `보유 학생 반영: ${state.includeRecruitedStudents ? "포함" : "미포함"}`,
+        `모집한 학생 반영: ${state.includeRecruitedStudents ? "포함" : "미포함"}`,
         ...bonuses,
       ],
     },

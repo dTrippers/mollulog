@@ -4,6 +4,7 @@ import {
   buildQuestionMemberSnapshot,
   mapQuestionSnapshotFavorites,
   mapQuestionSnapshotFormations,
+  mapQuestionSnapshotResources,
   mapQuestionSnapshotStudents,
 } from "~/models/question-member-snapshot.server";
 import type { RecruitedStudent } from "~/models/recruited-student";
@@ -37,6 +38,9 @@ const relationship = (studentId: string, currentLevel: number | null): Relations
   items: {},
 });
 
+const unenteredPlanner = async () => ({ pyroxene: { resources: null, eventData: {} }, ap: null });
+const noInventory = async () => ({});
+
 describe("question member snapshot student and favorite mapping", () => {
   it("maps student and weapon stars and preserves unentered values as null", () => {
     expect(
@@ -54,6 +58,7 @@ describe("question member snapshot student and favorite mapping", () => {
         equipmentTiers: [8, null, 6],
         equipSpecial: null,
         relationshipLevel: null,
+        eleph: null,
       },
       {
         studentUid: "weapon-three",
@@ -64,6 +69,7 @@ describe("question member snapshot student and favorite mapping", () => {
         equipmentTiers: [8, null, 6],
         equipSpecial: null,
         relationshipLevel: null,
+        eleph: null,
       },
     ]);
   });
@@ -118,7 +124,7 @@ describe("question member snapshot student and favorite mapping", () => {
     ]);
   });
 
-  it("builds the exact v1 snapshot shape and requests private parties by account id", async () => {
+  it("builds the exact v2 snapshot shape and requests private parties by account id", async () => {
     const getUserPartiesByUserId = jest.fn(
       async (_env: Env, userId: number, options?: { includePrivate?: boolean }) => {
         expect(userId).toBe(7);
@@ -142,10 +148,12 @@ describe("question member snapshot student and favorite mapping", () => {
       getRelationshipLevels: async () => [relationship("weapon-three", 32)],
       getUserFavoritedStudents: async () => [{ uid: "f1", studentId: "weapon-three", contentId: "pickup-1" }],
       getUserPartiesByUserId,
+      getPlannerState: unenteredPlanner,
+      getUserResourceInventoryMapByItemUids: noInventory,
     });
 
     expect(snapshot).toEqual({
-      version: 1,
+      version: 2,
       students: [
         {
           studentUid: "weapon-three",
@@ -156,6 +164,7 @@ describe("question member snapshot student and favorite mapping", () => {
           equipmentTiers: [8, null, 6],
           equipSpecial: null,
           relationshipLevel: 32,
+          eleph: null,
         },
       ],
       favorites: [{ studentUid: "weapon-three", contentId: "pickup-1" }],
@@ -167,8 +176,17 @@ describe("question member snapshot student and favorite mapping", () => {
           studentUids: [["weapon-three", null]],
         },
       ],
+      resources: null,
+      accountLevel: null,
     });
-    expect(Object.keys(snapshot).sort()).toEqual(["favorites", "formations", "students", "version"]);
+    expect(Object.keys(snapshot).sort()).toEqual([
+      "accountLevel",
+      "favorites",
+      "formations",
+      "resources",
+      "students",
+      "version",
+    ]);
     expect(Object.keys(snapshot.formations[0]).sort()).toEqual(["name", "raidType", "seasonIndex", "studentUids"]);
     expect(getUserPartiesByUserId).toHaveBeenCalledTimes(1);
   });
@@ -212,6 +230,8 @@ describe("question member snapshot student and favorite mapping", () => {
       getRelationshipLevels: async () => [],
       getUserFavoritedStudents: async () => [],
       getUserPartiesByUserId,
+      getPlannerState: unenteredPlanner,
+      getUserResourceInventoryMapByItemUids: noInventory,
     });
 
     expect(getUserPartiesByUserId).toHaveBeenCalledWith({} as Env, olderSession.id, { includePrivate: true });
@@ -223,5 +243,66 @@ describe("question member snapshot student and favorite mapping", () => {
         studentUids: [["student-a"]],
       },
     ]);
+  });
+
+  it("carries entered resources, plans, eleph, and account level, and asks only for owned students' eleph", async () => {
+    const getUserResourceInventoryMapByItemUids = jest.fn(async (_env: Env, _userId: number, itemUids: string[]) => {
+      expect(itemUids).toEqual(["owned-a", "owned-b"]);
+      return { "owned-a": 0 };
+    });
+    const snapshot = await buildQuestionMemberSnapshot({} as Env, 7, {
+      getRecruitedStudents: async () => [student(3, "owned-a"), student(9, "owned-b")],
+      getRelationshipLevels: async () => [],
+      getUserFavoritedStudents: async () => [],
+      getUserPartiesByUserId: async () => [],
+      getPlannerState: async () => ({
+        pyroxene: {
+          resources: {
+            inputAt: "2026-11-11T12:00:00.000Z",
+            pyroxene: 24000,
+            oneTimeTicket: 3,
+            tenTimeTicket: 0,
+            recruitmentStacks: { regular: 40, limited: 0 },
+          },
+          eventData: {
+            "dive-into-ocean": { completed: false, expectedTrials: null },
+            "5-5th-fes": { completed: false, expectedTrials: 200, targetTiers: { "owned-b": 7 } },
+          },
+        },
+        ap: { accountLevel: 90 },
+      }),
+      getUserResourceInventoryMapByItemUids,
+    });
+
+    expect(snapshot.students.map(({ studentUid, eleph }) => ({ studentUid, eleph }))).toEqual([
+      { studentUid: "owned-a", eleph: 0 },
+      { studentUid: "owned-b", eleph: null },
+    ]);
+    expect(snapshot.resources).toEqual({
+      inputAt: "2026-11-11T12:00:00.000Z",
+      pyroxene: 24000,
+      oneTimeTicket: 3,
+      tenTimeTicket: 0,
+      recruitmentStacks: { regular: 40, limited: 0 },
+    });
+    expect(snapshot.accountLevel).toBe(90);
+  });
+
+  it("keeps unentered resources, stacks, and account level as null instead of zero", () => {
+    expect(mapQuestionSnapshotResources(null)).toBeNull();
+    expect(
+      mapQuestionSnapshotResources({
+        inputAt: "2026-08-23T21:00:17.635Z",
+        pyroxene: 70250,
+        oneTimeTicket: 0,
+        tenTimeTicket: 0,
+      }),
+    ).toEqual({
+      inputAt: "2026-08-23T21:00:17.635Z",
+      pyroxene: 70250,
+      oneTimeTicket: 0,
+      tenTimeTicket: 0,
+      recruitmentStacks: null,
+    });
   });
 });

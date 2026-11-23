@@ -14,7 +14,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { Page } from "~/components/features/layout";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community.server";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
@@ -124,10 +124,7 @@ export const meta: MetaFunction = ({ location }) => {
   return [
     { title },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };

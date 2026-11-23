@@ -1,10 +1,12 @@
 import { MagnifyingGlassIcon, MegaphoneIcon, StarIcon as StarOutlineIcon } from "@heroicons/react/24/outline";
 import { StarIcon as StarSolidIcon } from "@heroicons/react/24/solid";
 import { Link } from "react-router";
+import type { NavigationDot } from "~/domain/navigation-menu-badges";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../styles";
-import type { NavigationGroup, NavigationItem } from "./navigation-menu";
+import { NAVIGATION_DOT_LABELS, NavigationDotMark } from "./NavigationDotMark";
+import { getNavigationGroupBadgeSummary, type NavigationGroup, type NavigationItem } from "./navigation-menu";
 
 export type NavigationRailGroup = Omit<
   Pick<NavigationGroup, "name" | "shortName" | "OutlineIcon" | "SolidIcon">,
@@ -51,7 +53,7 @@ export function NavigationRail({
         <Link
           to="/"
           className={cn(
-            "flex h-10 w-full items-center justify-center rounded-md transition-opacity duration-v2-fast ease-v2-standard hover:opacity-80",
+            "flex h-10 w-full items-center justify-center rounded-md hover:opacity-80 v2-interaction-transition",
             v2FocusRing,
           )}
           aria-label="몰루로그 홈으로 이동"
@@ -65,7 +67,7 @@ export function NavigationRail({
         <button
           type="button"
           className={cn(
-            "inline-flex size-10 items-center justify-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            "inline-flex size-10 items-center justify-center rounded-md text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
             v2FocusRing,
           )}
           aria-label="검색 열기"
@@ -80,7 +82,7 @@ export function NavigationRail({
           <button
             type="button"
             className={cn(
-              "inline-flex size-10 items-center justify-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+              "inline-flex size-10 items-center justify-center rounded-md text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
               v2FocusRing,
             )}
             aria-label="사이트 배너 열기"
@@ -102,7 +104,7 @@ export function NavigationRail({
           aria-current={homeItem.isActive ? "page" : undefined}
           aria-label={homeItem.name}
           className={cn(
-            "flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            "flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
             homeItem.isActive && "bg-v2-nav-active font-semibold text-v2-fg",
             v2FocusRing,
           )}
@@ -127,7 +129,7 @@ export function NavigationRail({
             items: favoriteItems,
           }}
           active={false}
-          hasRedDot={favoriteItems.some((item) => item.showRedDot)}
+          dot={getNavigationGroupBadgeSummary(favoriteItems)}
           expanded={activeFlyoutId === "favorites"}
           onOpen={onOpenGroup}
         />
@@ -136,7 +138,7 @@ export function NavigationRail({
             key={group.id}
             group={group}
             active={group.items.some((item) => item.isActive)}
-            hasRedDot={group.items.some((item) => item.showRedDot)}
+            dot={getNavigationGroupBadgeSummary(group.items)}
             expanded={activeFlyoutId === group.id}
             onOpen={onOpenGroup}
           />
@@ -148,7 +150,7 @@ export function NavigationRail({
           <RailGroupButton
             group={bottomGroup}
             active={bottomGroup.items.some((item) => item.isActive)}
-            hasRedDot={bottomGroup.items.some((item) => item.showRedDot)}
+            dot={getNavigationGroupBadgeSummary(bottomGroup.items)}
             expanded={activeFlyoutId === bottomGroup.id}
             onOpen={onOpenGroup}
           />
@@ -162,24 +164,24 @@ export function NavigationRail({
 function RailGroupButton({
   group,
   active,
-  hasRedDot,
+  dot,
   expanded,
   onOpen,
 }: {
   group: NavigationRailGroup;
   active: boolean;
-  hasRedDot: boolean;
+  dot: NavigationDot | undefined;
   expanded: boolean;
   onOpen: (group: NavigationRailGroup, trigger: HTMLButtonElement) => void;
 }) {
   const Icon = active ? group.SolidIcon : group.OutlineIcon;
-  const accessibleName = `${group.name}${hasRedDot ? ", 새 항목 있음" : ""}`;
+  const accessibleName = dot ? `${group.name}, ${NAVIGATION_DOT_LABELS[dot]}` : group.name;
 
   return (
     <button
       type="button"
       className={cn(
-        "relative flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+        "relative flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
         active && "bg-v2-nav-active font-semibold text-v2-fg",
         v2FocusRing,
       )}
@@ -190,9 +192,7 @@ function RailGroupButton({
     >
       <span className="relative flex size-5 items-center justify-center">
         <Icon className="size-5" aria-hidden="true" />
-        {hasRedDot ? (
-          <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-v2-unread" aria-hidden="true" />
-        ) : null}
+        {dot ? <NavigationDotMark dot={dot} className="absolute -top-0.5 -right-0.5" /> : null}
       </span>
       <span className="whitespace-nowrap text-[11px] leading-4 tracking-tighter">{group.shortName}</span>
     </button>

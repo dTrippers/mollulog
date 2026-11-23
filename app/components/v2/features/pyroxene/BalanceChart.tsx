@@ -79,7 +79,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
   const point = payload?.[0]?.payload;
   if (!active || !point) return null;
   return (
-    <div className="rounded-md bg-v2-popover-surface px-3 py-2 text-xs shadow-lg ring-1 ring-v2-divider tabular-nums">
+    <div className="rounded-md bg-v2-popover-surface px-3 py-2 text-xs shadow-v2-popover tabular-nums backdrop-blur-md">
       <p className="font-semibold text-v2-fg">{dayjs(point.ts).tz("Asia/Seoul").format("MM/DD")}</p>
       {point.events.map((event) => (
         <p key={event.marker} className="whitespace-pre-line text-v2-fg-secondary">
@@ -89,7 +89,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
       <p className={point.balance < 0 ? "text-v2-danger" : "text-v2-fg"}>청휘석 {formatAmount(point.balance)}</p>
       {point.range ? (
         <p className="text-v2-fg-tertiary">
-          상하위 10% 이내 {formatAmount(point.range[0])} ~ {formatAmount(point.range[1])}
+          예상 범위 (80%) {formatAmount(point.range[0])} ~ {formatAmount(point.range[1])}
         </p>
       ) : null}
     </div>

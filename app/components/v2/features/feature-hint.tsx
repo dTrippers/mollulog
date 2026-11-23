@@ -38,7 +38,7 @@ export function FeatureHint({
           type="button"
           onClick={onAction}
           className={cn(
-            "inline-flex h-6 cursor-pointer items-center rounded-md bg-v2-inset px-2 text-xs font-medium whitespace-nowrap text-v2-fg hover:bg-v2-filled-hover",
+            "inline-flex h-6 cursor-pointer items-center rounded-md bg-v2-inset px-2 text-xs font-medium whitespace-nowrap text-v2-fg hover:bg-v2-filled-hover v2-interaction-transition",
             v2FocusRing,
           )}
         >
@@ -50,7 +50,7 @@ export function FeatureHint({
           aria-label={closeLabel}
           onClick={onClose}
           className={cn(
-            "inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg",
+            "inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
             v2FocusRing,
           )}
         >

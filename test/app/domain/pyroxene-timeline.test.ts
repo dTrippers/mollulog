@@ -4,7 +4,12 @@ import {
   normalizePyroxenePlannerOptions,
   type PyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
-import { getRecruitmentTargetCopies, type RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
+import {
+  buildRecruitmentOwnedSnapshot,
+  getRecruitmentTargetCopies,
+  type RecruitmentOwnedStates,
+  type RecruitmentStacks,
+} from "~/domain/pyroxene-recruitment-goal";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import {
   buildTimeline,
@@ -143,6 +148,8 @@ function buildTestTimeline({
   bandMode,
   collectedSourceKeys = [],
   recruitmentStacks,
+  ownedStates,
+  ownedReadAt = "2026-07-01T00:00:00.000Z",
 }: {
   initialResources?: PickupResources;
   initialDate?: Date;
@@ -152,6 +159,8 @@ function buildTestTimeline({
   bandMode?: PyroxeneTimelineBandMode;
   collectedSourceKeys?: string[];
   recruitmentStacks?: RecruitmentStacks;
+  ownedStates?: RecruitmentOwnedStates;
+  ownedReadAt?: string;
 } = {}) {
   return buildTimeline(
     initialResources,
@@ -163,6 +172,7 @@ function buildTestTimeline({
     collectedSourceKeys,
     undefined,
     recruitmentStacks,
+    ownedStates ? { readAt: ownedReadAt, states: ownedStates } : undefined,
   );
 }
 
@@ -1159,5 +1169,132 @@ describe("buildTimeline recruitment rework planning", () => {
       eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 90 }]]),
     });
     expect(eventCost(withCarry, "event-b")!).toBeGreaterThan(eventCost(withoutCarry, "event-b")!);
+  });
+});
+
+describe("recruitment target copies from the owned state", () => {
+  const ceilOptions = { ...defaultOptions, event: { pickupChance: "ceil" as const } };
+  const pickupUid = "student-3-픽업 학생";
+  const legacyEvent = eventItem({ uid: "event-a", recruitmentRuleSet: "legacy_points" });
+
+  function eventEntry(timeline: ReturnType<typeof buildTestTimeline>) {
+    return timeline.find((entry) => entry.source.type === "event" && entry.source.event?.uid === "event-a");
+  }
+
+  function targetData(targetTier: 3 | 4 | 5 | 6 | 7 | 8 | 9, expectedTrials: number | null = null) {
+    return new Map<string, PyroxeneTimelineEventData>([
+      [
+        "event-a",
+        { completed: false, expectedTrials, targetTiers: targetTier === 3 ? {} : { [pickupUid]: targetTier } },
+      ],
+    ]);
+  }
+
+  it("keeps the unowned counts when no owned state is given", () => {
+    const tiers = [3, 4, 5, 6, 7, 8, 9] as const;
+    expect(tiers.map((tier) => getRecruitmentTargetCopies(tier, undefined))).toEqual([1, 1, 3, 3, 4, 6, 8]);
+    expect(tiers.map((tier) => getRecruitmentTargetCopies(tier, { tier: null, eleph: 0 }))).toEqual([
+      1, 1, 3, 3, 4, 6, 8,
+    ]);
+  });
+
+  it("subtracts held eleph from an unowned student but still needs the first copy", () => {
+    // ★5 needs 220 eleph from ★3; 150 held plus the 100 first-acquisition bonus cover it.
+    expect(getRecruitmentTargetCopies(5, { tier: null, eleph: 150 })).toBe(1);
+    // ★9 needs 720; 300 held and the bonus leave 320, so four duplicates follow the first copy.
+    expect(getRecruitmentTargetCopies(9, { tier: null, eleph: 300 })).toBe(5);
+  });
+
+  it("starts an owned student from its tier, counting duplicate and bonus eleph on the first copy", () => {
+    // Owned ★3 to ★4 needs 100 eleph; the first copy gives 200.
+    expect(getRecruitmentTargetCopies(4, { tier: 3, eleph: 0 })).toBe(1);
+    // Owned ★4 with 50 eleph to ★5 needs 70 more.
+    expect(getRecruitmentTargetCopies(5, { tier: 4, eleph: 50 })).toBe(1);
+    // Owned ★4 with 50 eleph to ★9 needs 570 more: 200 from the first copy, then 4 × 100.
+    expect(getRecruitmentTargetCopies(9, { tier: 4, eleph: 50 })).toBe(5);
+  });
+
+  it("needs no copy when the owned tier or held eleph already reaches the target", () => {
+    expect(getRecruitmentTargetCopies(3, { tier: 3, eleph: 0 })).toBe(0);
+    expect(getRecruitmentTargetCopies(5, { tier: 7, eleph: 0 })).toBe(0);
+    expect(getRecruitmentTargetCopies(5, { tier: 4, eleph: 120 })).toBe(0);
+  });
+
+  it("merges owned tiers and held eleph and reports an unavailable source as null", () => {
+    const readAt = "2026-07-01T00:00:00.000Z";
+    expect(buildRecruitmentOwnedSnapshot(readAt, ["a", "b", "c", "a"], { a: 4 }, { a: 30, b: 120 })).toEqual({
+      readAt,
+      states: { a: { tier: 4, eleph: 30 }, b: { tier: null, eleph: 120 } },
+    });
+    // Eleph without an inventory record is null (not entered); a recorded 0 stays 0.
+    expect(buildRecruitmentOwnedSnapshot(readAt, ["a", "b", "c"], { a: 4 }, { b: 0 })).toEqual({
+      readAt,
+      states: { a: { tier: 4, eleph: null }, b: { tier: null, eleph: 0 } },
+    });
+    expect(buildRecruitmentOwnedSnapshot(readAt, ["a"], null, {})).toBeNull();
+    expect(buildRecruitmentOwnedSnapshot(readAt, ["a"], { a: 4 }, null)).toBeNull();
+  });
+
+  it("keeps the unowned start for an event that began before the owned state was read", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: targetData(9),
+      scheduleItems: [legacyEvent],
+      options: ceilOptions,
+      ownedStates: { [pickupUid]: { tier: 4, eleph: 50 } },
+      ownedReadAt: "2026-07-02T12:00:00.000Z",
+    });
+    expect(eventEntry(timeline)?.resourceDelta.pyroxene).toBe(-8 * 200 * 120);
+  });
+
+  it("plans fewer pulls for an owned ★4 student with eleph", () => {
+    const unowned = buildTestTimeline({
+      eventDataMap: targetData(9),
+      scheduleItems: [legacyEvent],
+      options: ceilOptions,
+    });
+    const owned = buildTestTimeline({
+      eventDataMap: targetData(9),
+      scheduleItems: [legacyEvent],
+      options: ceilOptions,
+      ownedStates: { [pickupUid]: { tier: 4, eleph: 50 } },
+    });
+    expect(eventEntry(unowned)?.resourceDelta.pyroxene).toBe(-8 * 200 * 120);
+    expect(eventEntry(owned)?.resourceDelta.pyroxene).toBe(-5 * 200 * 120);
+  });
+
+  it("keeps a reached target as a target event with no pulls and leaves the stacks", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: targetData(3),
+      scheduleItems: [eventItem({ uid: "event-a", recruitmentRuleSet: "call_charge_v1" })],
+      options: ceilOptions,
+      recruitmentStacks: { regular: 40, limited: 0 },
+      ownedStates: { [pickupUid]: { tier: 3, eleph: 0 } },
+    });
+    const entry = eventEntry(timeline);
+    expect(entry?.resourceDelta).toEqual({ pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 });
+    expect(entry?.pickupPlan).toEqual({ basis: "ceil", basisOverridden: false, pulls: 0, freePulls: 0, stacks: [] });
+  });
+
+  it("still spends a manual count when the target is already reached", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: targetData(3, 30),
+      scheduleItems: [legacyEvent],
+      options: ceilOptions,
+      ownedStates: { [pickupUid]: { tier: 5, eleph: 0 } },
+    });
+    expect(eventEntry(timeline)?.resourceDelta.pyroxene).toBe(-30 * 120);
+    expect(eventEntry(timeline)?.pickupPlan?.basis).toBe("manual");
+  });
+
+  it("keeps one copy for a ★2 pickup student whatever its owned state", () => {
+    const tier2 = pickupRecruitment({ initialTier: 2 });
+    const event = eventItem({ uid: "event-a", recruitmentRuleSet: "legacy_points", recruitments: [tier2] });
+    const withoutOwned = buildTestTimeline({ scheduleItems: [event], options: ceilOptions });
+    const withOwned = buildTestTimeline({
+      scheduleItems: [event],
+      options: ceilOptions,
+      ownedStates: { "student-2-픽업 학생": { tier: 5, eleph: 500 } },
+    });
+    expect(eventEntry(withOwned)?.resourceDelta).toEqual(eventEntry(withoutOwned)?.resourceDelta);
   });
 });

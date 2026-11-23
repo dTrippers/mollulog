@@ -22,7 +22,7 @@ import {
 import { DEMO_WALKTHROUGH_BOSS_NAME, DEMO_WALKTHROUGH_TIMELINE } from "~/domain/walkthrough-timeline-demo";
 import { formatInstant } from "~/lib/date-time";
 import { trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import {
   defenseTypeColor,
   defenseTypeLocale,
@@ -37,14 +37,16 @@ import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getVisibleSenseisById } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
 
-export const meta: MetaFunction = ({ location }) => [
-  { title: "공략 타임라인 | 몰루로그" },
-  {
-    name: "description",
-    content: "보스와 지형, 방어 타입, 난이도에 맞는 공략 타임라인을 찾아보세요.",
-  },
-  canonicalLink(location.pathname),
-];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "공략 타임라인";
+  const description = "보스와 지형, 방어 타입, 난이도에 맞는 공략 타임라인을 찾아보세요.";
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+    canonicalLink(location.pathname),
+  ];
+};
 
 export const ErrorBoundary = RouteErrorBoundary;
 

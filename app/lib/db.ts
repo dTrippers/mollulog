@@ -7,12 +7,18 @@ export function isUniqueConstraintError(err: Error): { table: string; column: st
   return null;
 }
 
-/** Returns the PostgreSQL constraint name for a unique violation, if present. */
+/**
+ * Returns the PostgreSQL constraint name for a unique violation, if present. Drizzle wraps a failed query's pg error
+ * in a DrizzleQueryError as its `cause`, so the cause chain is searched too.
+ */
 export function postgresUniqueConstraintName(err: unknown): string | null {
-  if (!err || typeof err !== "object") return null;
-  const value = err as { code?: unknown; constraint?: unknown };
-  if (value.code !== "23505" || typeof value.constraint !== "string" || value.constraint.length === 0) {
-    return null;
+  let current = err;
+  for (let depth = 0; depth < 3 && current && typeof current === "object"; depth += 1) {
+    const value = current as { code?: unknown; constraint?: unknown; cause?: unknown };
+    if (value.code === "23505") {
+      return typeof value.constraint === "string" && value.constraint.length > 0 ? value.constraint : null;
+    }
+    current = value.cause;
   }
-  return value.constraint;
+  return null;
 }

@@ -40,7 +40,7 @@ describe("letter share redirect", () => {
     const shareToken = "a".repeat(32);
 
     expect(loader(loaderArgs(shareToken, "Twitterbot/1.0"))).toBeNull();
-    expect(meta({} as Parameters<typeof meta>[0])).toEqual(
+    expect(meta({ location: { pathname: `/letter/${shareToken}` } } as Parameters<typeof meta>[0])).toEqual(
       expect.arrayContaining([
         { property: "og:title", content: "이 편지는 트리니티에서 시작되어..." },
         {
@@ -48,6 +48,8 @@ describe("letter share redirect", () => {
           content: "선생님께 도착한 링크가 있어요.",
         },
         { name: "robots", content: "noindex,nofollow" },
+        { name: "twitter:title", content: "이 편지는 트리니티에서 시작되어..." },
+        { name: "twitter:card", content: "summary" },
       ]),
     );
   });

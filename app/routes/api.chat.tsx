@@ -9,7 +9,7 @@ import {
 } from "~/domain/chat-conversation";
 import { isAdminSensei } from "~/domain/sensei-role";
 import { getLogger } from "~/lib/observability.server";
-import { renderQuestionAnswer, type QuestionServiceCall, runQuestion } from "~/models/al1s-question.server";
+import { type QuestionServiceCall, renderQuestionAnswer, runQuestion } from "~/models/al1s-question.server";
 import {
   type Answer,
   type QuestionRequest,
@@ -22,12 +22,12 @@ import {
   type StartChatMessageResult,
   startChatMessage,
 } from "~/models/chat-conversation";
-import { buildQuestionMemberSnapshot } from "~/models/question-member-snapshot.server";
 import {
   consentToQuestionMemberData,
   getQuestionMemberDataConsentAt,
   revokeQuestionMemberDataConsent,
 } from "~/models/sensei";
+import { getQuestionMemberSnapshot } from "~/views/question-member-snapshot";
 
 type ChatSensei = { id: number; username: string };
 
@@ -312,7 +312,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     readConsent: (senseiId) => getQuestionMemberDataConsentAt(env, senseiId, { ctx }),
     consent: (senseiId) => consentToQuestionMemberData(env, senseiId, { ctx }),
     revokeConsent: (senseiId) => revokeQuestionMemberDataConsent(env, senseiId, { ctx }),
-    buildSnapshot: (senseiId) => buildQuestionMemberSnapshot(env, senseiId),
+    buildSnapshot: (senseiId) => getQuestionMemberSnapshot(env, senseiId, new Date(), ctx),
     runQuestion: (question, onEvent) => runQuestion(env, question, onEvent),
     renderAnswer: renderQuestionAnswer,
     startMessage: (input) => startChatMessage(env, input, { ctx }),

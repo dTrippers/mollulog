@@ -46,7 +46,7 @@ export function SectionTabs({
                 "@min-[48rem]:justify-start @min-[48rem]:border-r-2 @min-[48rem]:border-b-0 @min-[48rem]:py-1.5 @min-[48rem]:text-left @min-[48rem]:break-keep @min-[48rem]:whitespace-normal",
               selected
                 ? "border-v2-link font-semibold text-v2-fg"
-                : "border-transparent text-v2-fg-secondary hover:text-v2-fg",
+                : "border-transparent text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
               v2FocusRing,
             )}
           >

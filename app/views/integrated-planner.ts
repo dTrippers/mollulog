@@ -5,7 +5,12 @@ import { getJankenStudentGrowthUid, type JankenDefaultProgress } from "~/domain/
 import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
-import { EMPTY_RECRUITMENT_STACKS, type RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
+import {
+  buildRecruitmentOwnedSnapshot,
+  EMPTY_RECRUITMENT_STACKS,
+  type RecruitmentOwnedSnapshot,
+  type RecruitmentStacks,
+} from "~/domain/pyroxene-recruitment-goal";
 import type { ShopAvailableEvent } from "~/models/event-content";
 import {
   getEventContentSchedule,
@@ -48,6 +53,8 @@ export type IntegratedPlannerAccountState = {
   favoritedStudents: { contentUid: string; studentUid: string }[];
   recruitedStudentUids: string[] | null;
   recruitedStudentTiers: Record<string, number> | null;
+  // Owned tiers and held eleph of the favorited pickup students; null when either source is unavailable.
+  recruitmentOwnedSnapshot: RecruitmentOwnedSnapshot | null;
   jankenProgress: PlannerStateDocumentV1["jankenProgress"];
   recruitmentCompletions: { eventUid: string; recruitmentGroupUid: string }[];
   apPlanner: ApPlannerState | null;
@@ -215,13 +222,22 @@ async function loadAccountState(
     const groupUids = schedules.flatMap((content) =>
       content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
     );
-    const [pyroxeneState, plannerState, favorites, recruitmentResults, recruitedStudents] = await Promise.all([
-      getPyroxeneUserState(env, userId, { ctx }),
-      getPlannerState(env, userId, { ctx }),
-      getUserFavoritedStudents(env, userId, undefined, { ctx }),
-      getRecruitmentResultsByRecruitmentGroupUids(env, userId, groupUids),
-      getRecruitedStudents(env, userId).catch(() => null),
-    ]);
+    const readAt = new Date().toISOString();
+    const favoritesPromise = getUserFavoritedStudents(env, userId, undefined, { ctx });
+    const [pyroxeneState, plannerState, favorites, recruitmentResults, recruitedStudents, favoriteHeldEleph] =
+      await Promise.all([
+        getPyroxeneUserState(env, userId, { ctx }),
+        getPlannerState(env, userId, { ctx }),
+        favoritesPromise,
+        getRecruitmentResultsByRecruitmentGroupUids(env, userId, groupUids),
+        getRecruitedStudents(env, userId).catch(() => null),
+        favoritesPromise
+          .then((items) => getUserResourceInventoryMapByItemUids(env, userId, items.map(({ studentId }) => studentId)))
+          .catch(() => null),
+      ]);
+    const recruitedStudentTiers = recruitedStudents
+      ? Object.fromEntries(recruitedStudents.map(({ studentUid, tier }) => [studentUid, tier]))
+      : null;
     const recruitmentCompletions = recruitmentResults.flatMap((result) => {
       if (!result.completedAt) return [];
       const content = schedules.find(
@@ -251,9 +267,13 @@ async function loadAccountState(
           studentUid: studentId,
         })),
         recruitedStudentUids: recruitedStudents?.map(({ studentUid }) => studentUid) ?? null,
-        recruitedStudentTiers: recruitedStudents
-          ? Object.fromEntries(recruitedStudents.map(({ studentUid, tier }) => [studentUid, tier]))
-          : null,
+        recruitedStudentTiers,
+        recruitmentOwnedSnapshot: buildRecruitmentOwnedSnapshot(
+          readAt,
+          favorites.map(({ studentId }) => studentId),
+          recruitedStudentTiers,
+          favoriteHeldEleph,
+        ),
         jankenProgress: plannerState.jankenProgress,
         recruitmentCompletions,
         apPlanner: plannerState.ap,

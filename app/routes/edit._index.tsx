@@ -262,7 +262,7 @@ function GrowthVisibilityField({ initialState, disabled }: { initialState: boole
   return (
     <div className="space-y-2">
       <p className="text-sm font-semibold">학생 성장도 공개</p>
-      <p className="text-sm text-muted-foreground">내 모집한 학생의 성장도를 다른 사람에게 공개해요</p>
+      <p className="text-sm text-muted-foreground">모집한 학생의 성장도를 다른 사람에게 공개해요.</p>
       <div className="flex min-h-10 items-center">
         <Toggle
           name="growthVisibility"

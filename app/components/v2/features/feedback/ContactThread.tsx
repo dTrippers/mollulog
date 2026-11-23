@@ -18,20 +18,13 @@ export function ContactThread({ ticket, replies }: { ticket: FeedbackTicket; rep
           <h2 id="contact-thread-heading" className="text-sm font-semibold text-v2-fg">
             대화 내역
           </h2>
-          <p className="shrink-0 text-xs tabular-nums text-v2-fg-tertiary">{replies.length}개의 답글</p>
+          {replies.length > 0 ? (
+            <p className="shrink-0 text-xs tabular-nums text-v2-fg-tertiary">{replies.length}개의 답글</p>
+          ) : null}
         </div>
 
         {replies.length === 0 ? (
-          <StatusNotice tone="neutral">
-            <div className="flex flex-col gap-1">
-              <p className="font-medium">아직 등록된 답글이 없어요.</p>
-              <p className="text-sm text-v2-fg-secondary">
-                {ticket.status === "in_progress"
-                  ? "문의를 확인 후 처리중이에요. 조금만 기다려주세요."
-                  : "열심히 검토하고 있으니 조금만 기다려주세요."}
-              </p>
-            </div>
-          </StatusNotice>
+          <StatusNotice tone="neutral">아직 등록된 답글이 없어요.</StatusNotice>
         ) : (
           <ol className="flex flex-col gap-v2-group-gap">
             {replies.map((reply) => (

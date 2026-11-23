@@ -25,9 +25,6 @@ export function ContactReplyForm() {
   return (
     <section className="rounded-lg bg-v2-surface p-v2-block-p">
       <h2 className="text-sm font-semibold text-v2-fg">답글/추가 문의 남기기</h2>
-      <p className="mt-1 text-xs text-v2-fg-tertiary">
-        같은 문의에 이어서 내용을 남기면 스레드로 계속 확인할 수 있어요.
-      </p>
 
       <fetcher.Form method="post" ref={formRef} className="mt-v2-block-gap flex flex-col gap-v2-block-gap">
         <div className="flex flex-col gap-1.5">

@@ -7,7 +7,7 @@ import { Page } from "~/components/features/layout";
 import { EmptyView, PanelBody, PanelIconToggleRow, PanelSearchField } from "~/components/primitives";
 import { formatInstant, nowUtcIso } from "~/lib/date-time";
 import { getGoogleAnalyticsResultBucket, trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { uploadedImageProps } from "~/models/assets";
 import type { RunType } from "~/models/timeline-content";
 import { type EventFilterState, filterEventList } from "~/views/event-list-filter";
@@ -33,10 +33,7 @@ export const meta: MetaFunction = ({ location }) => {
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };

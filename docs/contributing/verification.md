@@ -80,6 +80,7 @@ followed by checks appropriate to the affected code.
 | AOI dataset behavior | Only when the adjacent AOI project is explicitly in scope: verify the valid development/calibration/test split, dataset/model provenance, and applicable no-regression conditions with AOI evaluation evidence. MolluLog `main` does not require dataset checks by default. |
 | Identity, labels, or calculations | Verify canonical identity and source semantics, including UID scope, type, or category where relevant, before mapping labels or calculations. A display filter must not implicitly change calculation input, and current-only save must not mutate goals or planner membership. |
 | Bug regression | A test or interaction that reproduces the real failure and has assertions that execute; an empty artifact or progress message is not completion. |
+| Build or deploy tooling change leaves production unchanged | Build both the base and the change, then compare the generated Worker configs (`build/server/wrangler.json`, `dist/cron/wrangler.json`) and the `wrangler deploy --dry-run --outdir` output for each Worker. A successful build or dry run shows only that it runs, not that its output is unchanged: tooling upgrades can change defaults such as source-map uploads. |
 
 For cross-repository work, identify the relevant repositories, worktrees,
 branches, and current changes. When recovering unfinished work, also check the

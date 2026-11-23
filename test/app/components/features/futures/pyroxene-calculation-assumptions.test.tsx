@@ -112,7 +112,7 @@ describe("PyroxeneCalculationAssumptions", () => {
     expect(html).toContain('aria-label="계산 가정"');
     expect(items).toHaveLength(2);
     expect(items[0]).toContain(">모집 개편 반영</li>");
-    expect(items[1]).toContain(">계산 기준: 평균 (천장 반영)</li>");
+    expect(items[1]).toContain(">계산 기준: 평균</li>");
     for (const item of items) {
       expect(item).not.toContain("<svg");
       expect(item).not.toMatch(/(?:^|[\s"'])(?:px-|py-|rounded|bg-|border|shadow)/);

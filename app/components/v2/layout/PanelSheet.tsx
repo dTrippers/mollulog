@@ -38,6 +38,15 @@ export function PanelSheet({
 }: PanelSheetProps) {
   const { stacked, sheetPanelId, closeSheet, onSheetExited, revealRequest } = useV2Page();
   const [phase, setPhase] = useState<PanelPhase>(disabled || (collapsible && !defaultExpanded) ? "collapsed" : "open");
+  // A panel without a toggle cannot be opened by hand, so it opens when it stops being disabled, such as after a
+  // failed list loads on retry.
+  const [wasDisabled, setWasDisabled] = useState(disabled);
+  if (wasDisabled !== disabled) {
+    setWasDisabled(disabled);
+    if (!disabled && !collapsible) {
+      setPhase("open");
+    }
+  }
   const [highlightKey, setHighlightKey] = useState(0);
   const [pendingReveal, setPendingReveal] = useState<number | null>(null);
   // The enter and exit animations run only after a user or program change, so the first paint does not animate.
@@ -128,7 +137,7 @@ export function PanelSheet({
               aria-controls={bodyId}
               onClick={toggle}
               className={cn(
-                "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-v2-row-x text-left hover:bg-v2-hover active:bg-v2-filled-hover",
+                "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-v2-row-x text-left hover:bg-v2-hover active:bg-v2-filled-hover v2-interaction-transition",
                 v2FocusRing,
               )}
             >

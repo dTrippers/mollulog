@@ -17,7 +17,7 @@ import { WALKTHROUGH_TIMELINE_DIFFICULTIES } from "~/domain/walkthrough-timeline
 import type { Defense } from "~/graphql/graphql";
 import { routeError } from "~/lib/http-errors";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale } from "~/locales/ko";
 import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey, type RaidDefenseTypeSet } from "~/models/raid";
 import { buildRaidYoutubeSearchUrl, getVideoDateRange } from "~/models/raid-videos";
@@ -85,10 +85,7 @@ export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };

@@ -144,6 +144,20 @@ export default function NotificationPreferencesCard({
                     onChange={markDirty}
                   />
                 </div>
+                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
+                  <div className="min-w-0">
+                    <p className="text-sm">쿠폰 만료</p>
+                    <p className="text-xs text-muted-foreground">사용 완료로 기록하지 않은 쿠폰의 만료 시점 알림</p>
+                  </div>
+                  <Toggle
+                    name="couponExpiryEnabled"
+                    initialState={settings.couponExpiryEnabled}
+                    disabled={isSaving}
+                    aria-label="쿠폰 만료"
+                    className="my-0 shrink-0"
+                    onChange={markDirty}
+                  />
+                </div>
               </div>
               <Field
                 label="알림 시점"

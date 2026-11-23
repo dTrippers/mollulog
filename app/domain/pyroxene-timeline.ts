@@ -9,11 +9,20 @@ import {
   DEFAULT_RECRUITMENT_TARGET_TIER,
   EMPTY_RECRUITMENT_STACKS,
   getRecruitmentTargetCopies,
+  type RecruitmentOwnedSnapshot,
+  type RecruitmentOwnedStates,
   type RecruitmentStacks,
+  type RecruitmentTargetTier,
   type RecruitmentTargetTiers,
 } from "~/domain/pyroxene-recruitment-goal";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
-import { calculateDailyApChargePyroxene, collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
+import {
+  calculateDailyApChargePyroxene,
+  collectedSourceKeyForEventReward,
+  getPyroxeneGameDayStartAt,
+  isBeforePyroxeneGameDayReset,
+  isPyroxeneOneOffGainSource,
+} from "~/domain/pyroxene-sources";
 import {
   applyRecruitmentFunding,
   convolvePullCostDistributions,
@@ -46,6 +55,8 @@ export type TimelineSource = {
 
 export type TimelineDelta = {
   date: Dayjs;
+  // When set, this instant (not `date`) decides whether the delta comes after the inventory input.
+  recordedAt?: Dayjs;
   source: TimelineSource;
 
   pickupTrial?: number;
@@ -153,6 +164,14 @@ function zeroResources(): PickupResources {
 
 function getNextMonthlyFirstDate(date: Dayjs): Dayjs {
   return date.add(1, "month").startOf("month");
+}
+
+// A purchase or direct gain recorded on its own game day keeps the time it was recorded, and that time only decides
+// whether it comes after the inventory input. It applies from the start of its game day, where every such gain sat
+// before, so a recruitment opening later that day and the planner's dates see it as before.
+function oneOffGainTiming(source: string, recordedAt: Dayjs): Pick<TimelineDelta, "date" | "recordedAt"> {
+  if (!isPyroxeneOneOffGainSource(source)) return { date: recordedAt };
+  return { date: dayjs(getPyroxeneGameDayStartAt(recordedAt.toDate())), recordedAt };
 }
 
 function getNextRepeatedGainDate(repeatedGain: NonNullable<PyroxeneScheduleItem["repeatedGain"]>, date: Dayjs) {
@@ -917,17 +936,57 @@ function getScheduleItemEventStartTime(item: PyroxeneScheduleItem): number {
   return item.event ? dayjs(item.event.since).valueOf() : Number.NEGATIVE_INFINITY;
 }
 
-/** Repeats each pickup recruitment once per copy its target tier needs; ★2 students always need one copy. */
+/** The pickup students an event's plan targets: favorited, pickup, and not given by the event. */
+export function getEventPickupTargets(event: PickupEvent): PickupRecruitment[] {
+  return event.recruitments.filter(
+    ({ pickup, favorited, recruitmentType }) => pickup && favorited && recruitmentType !== "given",
+  );
+}
+
+/** Owned states that apply to an event: an event that started before they were read keeps the unowned start. */
+export function getEventOwnedStates(
+  event: Pick<PickupEvent, "since">,
+  ownedSnapshot: RecruitmentOwnedSnapshot | undefined,
+): RecruitmentOwnedStates | undefined {
+  if (!ownedSnapshot) return undefined;
+  return dayjs(event.since).isBefore(dayjs(ownedSnapshot.readAt)) ? undefined : ownedSnapshot.states;
+}
+
+/** The target tier the plan aims for with a pickup student. */
+export function getPickupTargetTier(
+  recruitment: PickupRecruitment,
+  targetTiers: RecruitmentTargetTiers | undefined,
+): RecruitmentTargetTier {
+  const studentUid = recruitment.student?.uid;
+  return (studentUid && targetTiers?.[studentUid]) || DEFAULT_RECRUITMENT_TARGET_TIER;
+}
+
+/**
+ * Copies of a pickup student the plan recruits. ★2 students always need one copy. With owned states, a ★3
+ * student starts from its owned tier and held eleph, and a student that already reaches its target needs none.
+ */
+export function getPickupTargetCopyCount(
+  recruitment: PickupRecruitment,
+  targetTiers: RecruitmentTargetTiers | undefined,
+  ownedStates?: RecruitmentOwnedStates,
+): number {
+  if (getRecruitmentStudentTier(recruitment) !== 3) return 1;
+  const studentUid = recruitment.student?.uid;
+  return getRecruitmentTargetCopies(
+    getPickupTargetTier(recruitment, targetTiers),
+    studentUid ? ownedStates?.[studentUid] : undefined,
+  );
+}
+
+/** Repeats each pickup recruitment once per copy its target tier needs. */
 export function expandPickupTargetCopies(
   pickupRecruitments: PickupRecruitment[],
   targetTiers: RecruitmentTargetTiers | undefined,
+  ownedStates?: RecruitmentOwnedStates,
 ): PickupRecruitment[] {
-  return pickupRecruitments.flatMap((recruitment) => {
-    const studentUid = recruitment.student?.uid;
-    const targetTier = (studentUid && targetTiers?.[studentUid]) || DEFAULT_RECRUITMENT_TARGET_TIER;
-    const copies = getRecruitmentStudentTier(recruitment) === 3 ? getRecruitmentTargetCopies(targetTier) : 1;
-    return Array.from({ length: copies }, () => recruitment);
-  });
+  return pickupRecruitments.flatMap((recruitment) =>
+    Array.from({ length: getPickupTargetCopyCount(recruitment, targetTiers, ownedStates) }, () => recruitment),
+  );
 }
 
 export type TimelinePickupBasis = PyroxenePickupChance | "manual";
@@ -1082,6 +1141,28 @@ export function getFreeRecruitmentPulls(event: NonNullable<PyroxeneScheduleItem[
   return open ? freePulls : 0;
 }
 
+/**
+ * The last date a pyroxene plan covers: the end of the last event, or a later one-off gain the user entered. Raid
+ * rewards and ten-time ticket expiries after it are left out, so they do not stretch the plan months past the events
+ * it is for. Undefined when no event ends after the start, which keeps every delta.
+ */
+export function getPyroxenePlanEndDate(scheduleItems: PyroxeneScheduleItem[], initialDate: Date): Date | undefined {
+  const start = dayjs(initialDate);
+  let end: Dayjs | null = null;
+  for (const item of scheduleItems) {
+    if (!item.event) continue;
+    const until = dayjs(item.event.until);
+    if (until.isAfter(start) && (!end || until.isAfter(end))) end = until;
+  }
+  if (!end) return undefined;
+  for (const item of scheduleItems) {
+    if (!item.onetimeGain) continue;
+    const { date } = oneOffGainTiming(item.onetimeGain.source, dayjs(item.onetimeGain.date));
+    if (date.isAfter(end)) end = date;
+  }
+  return end.toDate();
+}
+
 export function buildTimeline(
   initialResources: PickupResources,
   initialDate: Date,
@@ -1092,6 +1173,8 @@ export function buildTimeline(
   collectedSourceKeys: string[] = [],
   endDate?: Date,
   initialRecruitmentStacks: RecruitmentStacks = EMPTY_RECRUITMENT_STACKS,
+  // Signed-in accounts pass their owned tiers and eleph; without them every target starts unowned.
+  ownedSnapshot?: RecruitmentOwnedSnapshot,
 ): Timeline {
   const collectedSources = new Set(collectedSourceKeys);
   // Call charge stacks carried between events of the same scope, in event start order.
@@ -1129,9 +1212,7 @@ export function buildTimeline(
         });
       }
 
-      const pickupRecruitments = event.recruitments.filter(
-        ({ pickup, favorited, recruitmentType }) => pickup && favorited && recruitmentType !== "given",
-      );
+      const pickupRecruitments = getEventPickupTargets(event);
       if (pickupRecruitments.length === 0) {
         continue;
       }
@@ -1147,9 +1228,31 @@ export function buildTimeline(
         continue;
       }
 
+      const ownedStates = getEventOwnedStates(event, ownedSnapshot);
+      const targetCopies = expandPickupTargetCopies(pickupRecruitments, eventData?.targetTiers, ownedStates);
+      if (targetCopies.length === 0 && (eventData?.expectedTrials ?? null) === null) {
+        // Every target already reaches its goal: the event stays a target event but plans no pulls and
+        // leaves the stacks as they are.
+        const basis = eventData?.pickupChance ?? options.event.pickupChance;
+        timelineDeltas.push({
+          date: dayjs(event.since),
+          source: { type: "event", event },
+          pickupTrial: 0,
+          pickupPlan: {
+            basis,
+            basisOverridden: basis !== options.event.pickupChance,
+            pulls: 0,
+            freePulls: 0,
+            stacks: [],
+          },
+        });
+        continue;
+      }
+
       const pickup = resolveEventPickupTrial(
         event,
-        expandPickupTargetCopies(pickupRecruitments, eventData?.targetTiers),
+        // A manual pull count still needs the targets to split the pulls across stack scopes.
+        targetCopies.length > 0 ? targetCopies : pickupRecruitments,
         eventData,
         options.event.pickupChance,
         // Events that already ended before the start date neither consume nor move the stacks.
@@ -1204,7 +1307,7 @@ export function buildTimeline(
     } else if (scheduleItem.onetimeGain) {
       const { onetimeGain } = scheduleItem;
       timelineDeltas.push({
-        date: dayjs(onetimeGain.date),
+        ...oneOffGainTiming(onetimeGain.source, dayjs(onetimeGain.date)),
         source: { type: onetimeGain.source, uid: onetimeGain.uid, description: onetimeGain.description },
         resourceDelta: {
           pyroxene: onetimeGain.pyroxeneDelta ?? 0,
@@ -1221,14 +1324,21 @@ export function buildTimeline(
         continue;
       }
 
+      const recordedAt = dayjs(repeatedGain.date);
+      // Later entries follow the schedule from the recorded date. A purchase or direct gain recorded before the 04:00
+      // reset belongs to the previous game day, so its schedule starts from that day.
+      let scheduleDate =
+        isPyroxeneOneOffGainSource(repeatedGain.source) && isBeforePyroxeneGameDayReset(repeatedGain.date)
+          ? dayjs(getPyroxeneGameDayStartAt(repeatedGain.date))
+          : recordedAt;
       let repeatedGainCount = 0;
-      for (
-        let date = dayjs(repeatedGain.date);
-        date.isBefore(maxDate) && repeatedGainCount < (repeatedGain.repeatCount ?? MAX_REPEATED_ENTRIES);
-        date = getNextRepeatedGainDate(repeatedGain, date)
-      ) {
+      while (repeatedGainCount < (repeatedGain.repeatCount ?? MAX_REPEATED_ENTRIES)) {
+        // The first entry carries the recorded instant (see oneOffGainTiming); later ones fall on the schedule.
+        const timing =
+          repeatedGainCount === 0 ? oneOffGainTiming(repeatedGain.source, recordedAt) : { date: scheduleDate };
+        if (!timing.date.isBefore(maxDate)) break;
         timelineDeltas.push({
-          date,
+          ...timing,
           source: { type: repeatedGain.source, uid: repeatedGain.uid, description: repeatedGain.description },
           resourceDelta: {
             pyroxene: repeatedGain.pyroxeneDelta ?? 0,
@@ -1237,6 +1347,7 @@ export function buildTimeline(
           },
         });
         repeatedGainCount++;
+        scheduleDate = getNextRepeatedGainDate(repeatedGain, scheduleDate);
       }
     }
   }
@@ -1288,7 +1399,7 @@ export function buildTimeline(
     if (endDateDayjs && delta.date.isAfter(endDateDayjs)) {
       return false;
     }
-    if (delta.date.isAfter(initialDateDayjs)) {
+    if ((delta.recordedAt ?? delta.date).isAfter(initialDateDayjs)) {
       return true;
     }
     if (delta.source.event) {

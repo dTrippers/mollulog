@@ -3,10 +3,7 @@ import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { StudentProfileFacts } from "~/components/v2/features/students/StudentProfileFacts";
-import {
-  clickPopoverButtonProgrammatically,
-  shouldOpenPopoverFromFocus,
-} from "~/components/features/furniture/FurnitureInteractionStudentsPopover";
+import { shouldOpenPopoverFromFocus } from "~/components/v2/features/furniture/FurnitureInteractionStudentsPopover";
 
 type StudentProfileStudent = ComponentProps<typeof StudentProfileFacts>["student"];
 
@@ -44,71 +41,31 @@ function renderProfileFacts(interactionFurnitures: StudentProfileStudent["intera
 }
 
 describe("Furniture interaction students popover input modality", () => {
-  it("does not treat the programmatic click's focus as keyboard focus after its click handler consumes the marker", () => {
-    const syntheticClickRef = { current: false };
-    const activatingRef = { current: false };
-    let shouldOpenFromFocus = true;
-
-    clickPopoverButtonProgrammatically(
-      {
-        click() {
-          expect(activatingRef.current).toBe(true);
-          expect(syntheticClickRef.current).toBe(true);
-          // Headless UI composes the user's click handler before focusing the button.
-          syntheticClickRef.current = false;
-          shouldOpenFromFocus = shouldOpenPopoverFromFocus({
-            activating: activatingRef.current,
-            syntheticClick: syntheticClickRef.current,
-            pointerOrClickInteraction: false,
-            focusVisible: true,
-          });
-        },
-      },
-      syntheticClickRef,
-      activatingRef,
-    );
-
-    expect(shouldOpenFromFocus).toBe(false);
-    expect(syntheticClickRef.current).toBe(false);
-    expect(activatingRef.current).toBe(false);
+  it("does not treat Escape focus return as a fresh keyboard focus open", () => {
+    expect(
+      shouldOpenPopoverFromFocus({
+        closing: true,
+        pointerOrClickInteraction: false,
+        focusVisible: true,
+      }),
+    ).toBe(false);
   });
 
   it("ignores pointer and click focus while keeping keyboard focus eligible", () => {
     expect(
       shouldOpenPopoverFromFocus({
-        activating: false,
-        syntheticClick: false,
+        closing: false,
         pointerOrClickInteraction: true,
         focusVisible: true,
       }),
     ).toBe(false);
     expect(
       shouldOpenPopoverFromFocus({
-        activating: false,
-        syntheticClick: false,
+        closing: false,
         pointerOrClickInteraction: false,
         focusVisible: true,
       }),
     ).toBe(true);
-  });
-
-  it("clears activation flags even when programmatic click throws", () => {
-    const syntheticClickRef = { current: false };
-    const activatingRef = { current: false };
-
-    expect(() =>
-      clickPopoverButtonProgrammatically(
-        {
-          click() {
-            throw new Error("click failed");
-          },
-        },
-        syntheticClickRef,
-        activatingRef,
-      ),
-    ).toThrow("click failed");
-    expect(syntheticClickRef.current).toBe(false);
-    expect(activatingRef.current).toBe(false);
   });
 });
 
@@ -127,6 +84,21 @@ describe("Student profile interaction furniture section", () => {
     expect(markup).toContain('alt="해변 의자 세트"');
     expect(markup).not.toMatch(/>해변 의자 세트</);
     expect(markup).toContain("/furnitures/beach-chair.webp");
+  });
+
+  it("makes each furniture a name button without a title", () => {
+    const markup = renderProfileFacts([
+      {
+        uid: "beach-chair",
+        name: "해변 의자 세트",
+        imageUrl: "https://assets.test/furniture.webp",
+        rarity: 3,
+      },
+    ]);
+
+    expect(markup).toContain('aria-label="해변 의자 세트 이름 표시"');
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).not.toContain('title="해변 의자 세트"');
   });
 
   it("omits the section when the student has no interaction furniture", () => {

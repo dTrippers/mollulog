@@ -42,8 +42,6 @@ export type StudentThumbProps = {
   large?: boolean;
   // One step above the default on wider screens for a browsing grid: the default 56px on mobile and 80px from the sm breakpoint.
   relaxed?: boolean;
-  // Scales the linked or clickable thumbnail to 105% on hover with a fine pointer, as the 1.x student cards did.
-  hoverScale?: boolean;
   // False hides the name and variant below the image, for layouts that show the name beside the portrait.
   showCaption?: boolean;
   showRecruitmentLabel?: boolean;
@@ -57,13 +55,16 @@ export type StudentThumbProps = {
   scrimAriaLabel?: string;
   fluid?: boolean;
   captionPlacement?: "below" | "overlay";
-  // Shows an overlay caption on compact layouts when the image itself carries the student name.
-  overlayOnMobile?: boolean;
+  // Hides an overlay caption below the md breakpoint, for dense mobile grids where portraits stay clean.
+  hideOverlayCaptionOnMobile?: boolean;
 };
 
+// A linked or clickable thumbnail fades on hover, as every 2.0 pressable element does. It never scales. The fade needs a
+// fine pointer: a touch leaves :hover on the tapped thumbnail, and in a selection grid a dimmed thumbnail reads as not
+// chosen.
+const pressableClassName = "[@media(hover:hover)_and_(pointer:fine)]:hover:opacity-80 v2-interaction-transition";
+
 // Student thumbnail: a 5:6 image with a label band at the bottom, a favorite label on the top edge, and the name below.
-const hoverScaleClassName =
-  "motion-safe:transition-transform motion-safe:duration-v2-fast motion-safe:ease-v2-standard [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105";
 
 export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(function StudentThumb(
   {
@@ -88,7 +89,6 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     small = false,
     large = false,
     relaxed = false,
-    hoverScale = false,
     showCaption = true,
     showRecruitmentLabel = true,
     headerPortrait = false,
@@ -97,7 +97,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     scrimAriaLabel,
     fluid = false,
     captionPlacement = "below",
-    overlayOnMobile = false,
+    hideOverlayCaptionOnMobile = false,
   },
   ref,
 ) {
@@ -118,9 +118,12 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
         uid={studentUid ?? "unlisted"}
         className={cn(
           // The placeholder icon fills the width of the area above the label band (18px tall), centered vertically.
+          // The portrait is pinned to the frame's edges rather than sized by percentage alone: inside a table cell,
+          // WebKit resolves an image's 100% height to its natural height instead of the frame's aspect-ratio height,
+          // and object-cover then shows a magnified top-center crop.
           studentUid === null && showBand
             ? "absolute inset-x-0 top-0 h-[calc(100%-1.125rem)] w-full object-cover"
-            : "size-full object-cover",
+            : "absolute inset-0 size-full object-cover",
           grayscaleWhenUnselected && onSelect && !selected && "grayscale",
         )}
         haloAboveBand={showBand || overlayCaption}
@@ -132,7 +135,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
         <span
           className={cn(
             "absolute inset-0 flex-col justify-end bg-linear-15 from-v2-scrim from-10% via-transparent via-50% to-transparent px-0.5 pb-px text-left text-v2-on-media text-shadow-sm text-shadow-v2-scrim md:px-1 md:pb-0.5",
-            overlayOnMobile ? "flex" : "hidden md:flex",
+            hideOverlayCaptionOnMobile ? "hidden md:flex" : "flex",
           )}
         >
           {variant ? (
@@ -222,7 +225,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
           {...getV2LinkTransitionProps("forward")}
           className={cn(
             "block w-full rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
-            hoverScale && hoverScaleClassName,
+            pressableClassName,
           )}
         >
           <span className={frameClassName}>{frame}</span>
@@ -241,7 +244,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
             frameClassName,
             mutedWhenUnselected && onSelect && !selected && "opacity-50",
             "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
-            hoverScale && hoverScaleClassName,
+            pressableClassName,
           )}
         >
           {frame}

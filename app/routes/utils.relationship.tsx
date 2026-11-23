@@ -35,11 +35,8 @@ import {
 } from "~/domain/student-state-errors";
 import { ActionValidationError } from "~/lib/action-errors";
 import { getLogger } from "~/lib/observability.server";
-import {
-  trackGoogleAnalyticsEvent,
-  trackGoogleAnalyticsEventOncePerPage,
-} from "~/lib/google-analytics-events.client";
-import { canonicalLink } from "~/lib/seo";
+import { trackGoogleAnalyticsEvent, trackGoogleAnalyticsEventOncePerPage } from "~/lib/google-analytics-events.client";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import {
   getRelationshipLevels,
   getStudentStateWriteMode,
@@ -61,10 +58,7 @@ export const meta: MetaFunction = ({ location }) => {
   return [
     { title },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };

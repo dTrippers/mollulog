@@ -205,6 +205,85 @@ async function loadJankenContent(janken: unknown) {
   return getEventShopContent(env, "main-story-timeline");
 }
 
+function createBoxGachaSource(boxGacha: unknown) {
+  const ticket = { type: "item", uid: "85420", name: "파르페 교환권" };
+  return queryResult({
+    eventContent: {
+      stages: [],
+      shopResources: [
+        {
+          uid: "offer",
+          resourceAmount: 1,
+          shopAmount: 1,
+          resource: { type: "item", uid: "10", name: "초급 활동 보고서", rarity: 1 },
+          paymentResource: ticket,
+          purchaseTiers: [],
+        },
+      ],
+      bonuses: [],
+      minigameConfigs: [
+        {
+          minigameType: "box_gacha",
+          payment: { quantity: 1800, resource: ticket },
+          payments: [{ quantity: 1800, resource: ticket }],
+          rewardGroups: [],
+          boxGacha,
+        },
+      ],
+    },
+  }) as never;
+}
+
+function createBoxGachaFixture() {
+  const ticket = { type: "item", uid: "85420", name: "파르페 교환권" };
+  return {
+    loopRound: 2,
+    rounds: [
+      {
+        round: 1,
+        drawCost: { quantity: 6, resource: ticket },
+        drawCount: 300,
+        items: [
+          {
+            groupId: 1,
+            displayOrder: 1,
+            count: 1,
+            isPrize: true,
+            rewards: [{ quantity: 150, resource: { type: "currency", uid: "3", name: "청휘석", rarity: 1 } }],
+          },
+          {
+            groupId: 2,
+            displayOrder: 2,
+            count: 299,
+            isPrize: false,
+            rewards: [{ quantity: 3, resource: { type: "item", uid: "10", name: "초급 활동 보고서", rarity: 1 } }],
+          },
+        ],
+      },
+      {
+        round: 2,
+        drawCost: { quantity: 6, resource: ticket },
+        drawCount: 300,
+        items: [
+          {
+            groupId: 1,
+            displayOrder: 1,
+            count: 300,
+            isPrize: false,
+            rewards: [{ quantity: 2, resource: { type: "item", uid: "10", name: "초급 활동 보고서", rarity: 1 } }],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+async function loadBoxGachaContent(boxGacha: unknown) {
+  mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+  mockedRunQuery.mockResolvedValue(createBoxGachaSource(boxGacha));
+  return getEventShopContent(env, "main-story-timeline");
+}
+
 function createRoadPuzzleSource(roadPuzzle: unknown) {
   return queryResult({
     eventContent: {
@@ -657,6 +736,52 @@ describe("getEventShopContent", () => {
     expect(janken.challengeMultipleUnlockScore).toBe(2_000_000);
   });
 
+  it("converts box gacha rounds, draw costs, and prize groups", async () => {
+    const shopContent = await loadBoxGachaContent(createBoxGachaFixture());
+    const boxGacha = shopContent?.minigameConfig?.boxGacha;
+
+    expect(boxGacha?.status).toBe("available");
+    if (boxGacha?.status !== "available") throw new Error("Expected the box gacha config to be available");
+    expect(boxGacha.loopRound).toBe(2);
+    expect(boxGacha.rounds[0]).toMatchObject({
+      round: 1,
+      drawCost: { resourceUid: "85420", quantity: 6 },
+      drawCount: 300,
+      items: [
+        { groupId: 1, count: 1, isPrize: true, rewards: [{ resourceUid: "3", quantity: 150, rarity: 1 }] },
+        { groupId: 2, count: 299, isPrize: false, rewards: [{ resourceUid: "10", quantity: 3 }] },
+      ],
+    });
+  });
+
+  it("marks box gacha details that BAQL has not filled yet unavailable and rechecks them soon", async () => {
+    const shopContent = await loadBoxGachaContent(null);
+
+    expect(shopContent?.minigameConfig?.boxGacha).toEqual({ status: "unavailable" });
+    const ttl = mockedFetchLazySourceCached.mock.calls.at(-1)?.[3] as (data: unknown) => number;
+    expect(ttl(shopContent)).toBe(10 * 60);
+    const filled = await loadBoxGachaContent(createBoxGachaFixture());
+    expect(ttl(filled)).toBe(7 * 24 * 60 * 60);
+  });
+
+  it.each([
+    ["a draw count that differs from the item counts", { drawCount: 299 }],
+    ["a draw cost without a resource", { drawCost: { quantity: 6, resource: null } }],
+    ["an empty item list", { items: [], drawCount: 0 }],
+  ])("marks box gacha details with %s invalid", async (_label, override) => {
+    const fixture = createBoxGachaFixture();
+    fixture.rounds[0] = { ...fixture.rounds[0], ...override } as (typeof fixture.rounds)[number];
+    const shopContent = await loadBoxGachaContent(fixture);
+
+    expect(shopContent?.minigameConfig?.boxGacha).toEqual({ status: "invalid" });
+  });
+
+  it("marks box gacha details whose loop round is not configured invalid", async () => {
+    const shopContent = await loadBoxGachaContent({ ...createBoxGachaFixture(), loopRound: 9 });
+
+    expect(shopContent?.minigameConfig?.boxGacha).toEqual({ status: "invalid" });
+  });
+
   it("marks a missing janken payload unavailable", async () => {
     const shopContent = await loadJankenContent(null);
 
@@ -792,7 +917,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v7::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       expect.any(Function),
       false,
@@ -825,7 +950,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v7::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       expect.any(Function),
       true,
@@ -840,7 +965,7 @@ describe("getEventShopContent", () => {
     await expect(getEventShopContent(env, "main-story-timeline")).rejects.toThrow("shop query failed");
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v7::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       expect.any(Function),
       false,
@@ -1428,7 +1553,7 @@ describe("getEventMinigameType", () => {
     });
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v7::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       expect.any(Function),
       false,

@@ -1026,7 +1026,7 @@ export default function StudentScanner() {
     <div
       className={cn(
         "flex flex-col gap-v2-block-gap",
-        hasFixedBar ? "pb-[calc(var(--mobile-nav-height)+5.5rem)]" : "pb-v2-block-p",
+        hasFixedBar ? "pb-[calc(var(--mobile-nav-height)+6.25rem)]" : "pb-v2-block-p",
       )}
     >
       {error && stepBody !== "unavailable" && phase !== "review" && phase !== "applying" ? (
@@ -1102,7 +1102,7 @@ function StudentCompletionCard({ student }: { student: { uid: string; name?: str
           <Link
             to={`/students/${student.uid}`}
             prefetch="intent"
-            className="flex min-h-v2-row-min items-center rounded-md px-2 text-sm text-v2-fg hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+            className="flex min-h-v2-row-min items-center rounded-md px-2 text-sm text-v2-fg hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
           >
             학생부 보기 (평가·통계)
           </Link>
@@ -1389,7 +1389,8 @@ function ReviewPanel({
             {rowsEmpty}
           </div>
         ) : (
-          <div className="max-w-full overflow-x-auto rounded-lg bg-v2-surface">
+          // isolate keeps the sticky header cells' z-index inside the table, below the pinned page toolbar.
+          <div className="isolate max-w-full overflow-x-auto rounded-lg bg-v2-surface">
             <table className="w-full min-w-[50rem] table-fixed border-separate border-spacing-0 text-sm">
               <colgroup>
                 <col className="w-[12rem]" />
@@ -1531,7 +1532,6 @@ function ReviewPanel({
         ref={actionBarRef}
         placement="sticky"
         expandActions
-        className="bottom-0 px-0 py-v2-block-gap"
         summary={phase === "applying" ? "반영 중이에요" : null}
       >
         <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={onCancel}>
@@ -1594,7 +1594,7 @@ function StudentIdentity({
   const registerAction = (wrapper: HTMLSpanElement | null) =>
     excludeRef(wrapper?.querySelector<HTMLButtonElement>("button") ?? null);
   const actionClassName = cn(
-    "border border-v2-control-border bg-v2-surface px-1.5 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg",
+    "border border-v2-control-border bg-v2-surface px-1.5 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
     stacked ? "min-h-8 text-sm" : "min-h-6 text-[0.6875rem]",
   );
   const nameLine = (

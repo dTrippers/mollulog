@@ -16,7 +16,7 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof NavigationMenu
             OutlineIcon={FireIcon}
             SolidIcon={FireIcon}
             badgeLabel="진행중"
-            showRedDot
+            dot="attention"
             favoriteId="raids"
             onFavoriteToggle={() => undefined}
             {...overrides}
@@ -69,10 +69,10 @@ describe("navigation menu row favorite affordance", () => {
     const html = renderRow();
 
     expect(html).toContain('aria-label="총력전 / 대결전, 진행중, 새 항목 있음"');
-    expect(html).toContain("min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs transition-colors");
+    expect(html).toContain("min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs v2-interaction-transition");
     expect(html).toContain('class="min-w-0 flex-1 truncate">총력전 / 대결전</span>');
     expect(html).toContain(
-      "transition-opacity duration-v2-fast ease-v2-standard group-hover:opacity-0 group-has-[button:focus-visible]:opacity-0",
+      "group-hover:opacity-0 group-has-[button:focus-visible]:opacity-0 v2-interaction-transition",
     );
 
     const starButton = html.match(/<button[^>]*aria-label="총력전 \/ 대결전 즐겨찾기에 추가"[^>]*>/)?.[0];
@@ -110,5 +110,15 @@ describe("navigation menu row favorite affordance", () => {
     expect(html).toContain("bg-v2-nav-active font-semibold text-v2-fg");
     expect(badge).toContain("text-v2-fg-secondary");
     expect(badge).not.toContain("text-v2-fg-tertiary");
+  });
+});
+
+describe("NavigationMenuRow account dot", () => {
+  it("renders the account dot color and announces it as the user's own information", () => {
+    const html = renderRow({ dot: "account", badgeLabel: undefined });
+
+    expect(html).toContain('data-navigation-dot="account"');
+    expect(html).toContain("bg-v2-account-dot");
+    expect(html).toContain('aria-label="총력전 / 대결전, 확인할 내 정보 있음"');
   });
 });

@@ -187,7 +187,7 @@ function TimelineItem({
       to={content.link}
       state={content.navigationState}
       prefetch="intent"
-      className={cn("group block text-base font-semibold whitespace-pre-line text-v2-fg hover:underline", v2FocusRing)}
+      className={cn("group block text-base font-semibold whitespace-pre-line text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition", v2FocusRing)}
       {...getV2LinkTransitionProps("forward", () => onOpenContent(content.uid))}
     >
       <TrailingIconText text={content.name}>
@@ -297,7 +297,7 @@ function TimelineItem({
               >
                 <InformationCircleIcon className="size-4 shrink-0 text-v2-accent" aria-hidden="true" />
                 <span className="min-w-0 font-medium break-keep">무료 모집 횟수와 특별 스택에 대해 확인해 보세요</span>
-                <span className="inline-flex shrink-0 items-center font-semibold whitespace-nowrap text-v2-accent group-hover:underline">
+                <span className="inline-flex shrink-0 items-center font-semibold whitespace-nowrap text-v2-accent underline decoration-transparent group-hover:decoration-current v2-interaction-transition">
                   안내 보기
                   <ChevronRightIcon className="size-3.5" aria-hidden="true" />
                 </span>
@@ -328,7 +328,7 @@ function TimelineItem({
                 to={content.resultEditLink}
                 prefetch="intent"
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg",
+                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition",
                   v2FocusRing,
                 )}
                 {...getV2LinkTransitionProps("forward")}

@@ -61,7 +61,7 @@ function NextRecruitmentPreview({ groups, timeZone }: { groups: HomeRecruitmentG
   return (
     <Link
       to="/futures"
-      className="flex min-w-0 items-center gap-3 rounded-lg bg-v2-surface px-v2-block-p py-2.5 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+      className="flex min-w-0 items-center gap-3 rounded-lg bg-v2-surface px-v2-block-p py-2.5 hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
     >
       <div className="min-w-0 flex-1">
         <p className="text-xs text-v2-fg-tertiary">
@@ -154,7 +154,7 @@ export function HomeRecruitmentSection({
                       {group.eventUid ? (
                         <Link
                           to={`/events/${group.eventUid}`}
-                          className="-mx-1 rounded-md px-1 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+                          className="-mx-1 rounded-md px-1 hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
                         >
                           <TrailingIconText text={group.eventName}>
                             <ChevronRightIcon

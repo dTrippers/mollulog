@@ -259,7 +259,7 @@ export default function StudentBasicInfo({
 
   return (
     <>
-    <section id="student-basic-info" className="scroll-mt-4">
+    <section id="student-basic-info" className="scroll-mt-[calc(var(--v2-toolbar-sticky-height,0px)+1rem)]">
         <SectionHeading title="능력치">
           <Switch
             id="student-skill-effects"
@@ -345,7 +345,7 @@ export default function StudentBasicInfo({
       {gradingSummary ? (
         <section className="mt-6">
           <SectionHeading title="학생 평가 요약">
-            <Link to={`/students/${student.uid}/gradings`} className="inline-flex min-h-7 items-center rounded-md px-2 text-xs leading-[1.43] font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg">
+            <Link to={`/students/${student.uid}/gradings`} className="inline-flex min-h-7 items-center rounded-md px-2 text-xs leading-[1.43] font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition">
               전체 평가 보기
             </Link>
           </SectionHeading>

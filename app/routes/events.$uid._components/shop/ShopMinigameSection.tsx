@@ -1,9 +1,11 @@
-import { ArrowRightIcon } from "@heroicons/react/16/solid";
-import { type ReactNode, useId } from "react";
+import { ArrowRightIcon, ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
+import { type ReactNode, useId, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
+import { v2FocusRing } from "~/components/v2/layout/styles";
 import { Button } from "~/components/v2/primitives/Button";
 import { NumberInput } from "~/components/v2/primitives/NumberInput";
+import { SectionTabs } from "~/components/v2/primitives/SectionTabs";
 import { Select } from "~/components/v2/primitives/Select";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import {
@@ -12,13 +14,21 @@ import {
   type MinigamePaymentQuantityMode,
   type RewardItem,
 } from "~/domain/event-shop";
+import { type BoxGachaBox, groupBoxGachaBoxes } from "~/domain/event-shop/box-gacha";
 import { getJankenResourceRoles } from "~/domain/event-shop/janken";
 import { calculateTreasureHuntRoundEstimates } from "~/domain/event-shop/treasure-hunt";
 import { calculateMinigameRewards, hasVariableMinigamePayment } from "~/domain/event-shop/utils";
 import { getRoadPuzzleRoundRows, getRoadPuzzleTotalCost } from "~/domain/road-puzzle/calculator";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
 import { cn } from "~/lib/utils";
-import { cardFlipLocale, jankenLocale, minigameDescription, roadPuzzleLocale, treasureHuntLocale } from "~/locales/ko";
+import {
+  boxGachaLocale,
+  cardFlipLocale,
+  jankenLocale,
+  minigameDescription,
+  roadPuzzleLocale,
+  treasureHuntLocale,
+} from "~/locales/ko";
 import { minigameTitle } from "./shop-model";
 import { CurrencyIcon, formatCount, LabeledRow, Pill, Segmented, ShopSection, ShopSectionHeader } from "./shop-ui";
 
@@ -53,7 +63,7 @@ export function ShopMinigameSection({ plan }: { plan: EventShopPlanContext }) {
           tabLink ? (
             <Link
               to={tabLink.to}
-              className="inline-flex items-center gap-1 text-xs font-medium text-v2-link hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-v2-link underline decoration-transparent hover:decoration-current v2-interaction-transition"
             >
               {tabLink.label}
               <ArrowRightIcon className="size-3.5" aria-hidden="true" />
@@ -69,6 +79,8 @@ export function ShopMinigameSection({ plan }: { plan: EventShopPlanContext }) {
         <TreasureHuntCard plan={plan} config={config} />
       ) : type === "road_puzzle" ? (
         <RoadPuzzleCard plan={plan} config={config} />
+      ) : type === "box_gacha" ? (
+        <BoxGachaCard plan={plan} config={config} />
       ) : (
         <GenericMinigameCard plan={plan} config={config} />
       )}
@@ -664,6 +676,149 @@ function RoadPuzzleCard({ plan, config }: { plan: EventShopPlanContext; config: 
         <p className="text-xs text-v2-fg-tertiary">완성 보상 3회분만 “최종 획득 재화”에 더해요. 경로 보상은 빠져요.</p>
       )}
     </MinigameCard>
+  );
+}
+
+function BoxGachaCard({ plan, config }: { plan: EventShopPlanContext; config: MinigameConfig }) {
+  const id = useId();
+  const boxGacha = config.boxGacha ?? { status: "unavailable" as const };
+  const playCount = plan.state.minigamePlayCount;
+  const costs = plan.minigamePaymentCosts ?? [];
+  // The shop ledger adds box gacha rewards from the same calculation, so this row matches the shop result.
+  const startRound = plan.state.minigameStartRound;
+  const rewards = useMemo(
+    () => calculateMinigameRewards(config, playCount, startRound),
+    [config, playCount, startRound],
+  );
+  const description = minigameDescription(config.minigameType);
+  const boxes = useMemo(() => (boxGacha.status === "available" ? groupBoxGachaBoxes(boxGacha) : null), [boxGacha]);
+  return (
+    <MinigameCard>
+      <LabeledRow label="플레이 횟수" htmlFor={`${id}-count`}>
+        <Stepper id={`${id}-count`} value={playCount} onChange={plan.actions.setMinigamePlayCount} />
+      </LabeledRow>
+      {description ? <p className="text-xs text-v2-fg-tertiary">{description}</p> : null}
+      {playCount > 0 && costs.length > 0 ? (
+        <BoxGachaRewardRow title={boxGachaLocale.costLabel} rewards={costs} />
+      ) : null}
+      {playCount > 0 && rewards.length > 0 ? (
+        <BoxGachaRewardRow title={boxGachaLocale.rewardLabel} rewards={rewards} />
+      ) : null}
+      {boxGacha.status === "unavailable" ? null : <BoxGachaComposition boxes={boxes} />}
+    </MinigameCard>
+  );
+}
+
+function BoxGachaRewardRow({ title, rewards }: { title: string; rewards: RewardItem[] }) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-v2-fg">{title}</h3>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {rewards.map((reward) => (
+          <ResourceThumb
+            key={`${reward.resourceType}:${reward.resourceUid}`}
+            itemUid={reward.resourceUid}
+            resourceType={reward.resourceType}
+            name={reward.resourceName ?? cardFlipLocale.resourceNameUnavailable}
+            imageUrl={reward.imageUrl ?? undefined}
+            rarity={reward.rarity}
+            size="tile"
+            quantity={reward.quantity}
+            tooltip
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function boxTabLabel(box: BoxGachaBox): string {
+  return box.repeatsFrom === null
+    ? boxGachaLocale.roundsLabel(box.rounds)
+    : boxGachaLocale.repeatsFromLabel(box.repeatsFrom);
+}
+
+// One box's composition per distinct box. Collapsed by default; `boxes` is null when the source data is invalid.
+function BoxGachaComposition({ boxes }: { boxes: BoxGachaBox[] | null }) {
+  const bodyId = useId();
+  const [expanded, setExpanded] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const tabs = useMemo(
+    () => (boxes ?? []).map((box, index) => ({ id: String(index), label: boxTabLabel(box) })),
+    [boxes],
+  );
+  const box = boxes?.[selectedIndex] ?? boxes?.[0] ?? null;
+  const ChevronIcon = expanded ? ChevronUpIcon : ChevronDownIcon;
+  return (
+    <section>
+      <h3 className="m-0 flex">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={bodyId}
+          onClick={() => setExpanded((value) => !value)}
+          className={cn(
+            "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-md px-v2-row-x text-left hover:bg-v2-hover v2-interaction-transition",
+            v2FocusRing,
+          )}
+        >
+          <span className="text-sm font-semibold text-v2-fg">{boxGachaLocale.compositionTitle}</span>
+          <ChevronIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+        </button>
+      </h3>
+      {expanded ? (
+        <div id={bodyId} className="mt-1 flex flex-col gap-3">
+          {box ? (
+            <>
+              {tabs.length > 1 ? (
+                <SectionTabs
+                  label={boxGachaLocale.roundTabsLabel}
+                  items={tabs}
+                  selectedId={String(boxes?.indexOf(box) ?? 0)}
+                  onChange={(tabId) => setSelectedIndex(Number(tabId))}
+                />
+              ) : null}
+              <dl className="flex flex-wrap gap-x-5 gap-y-1 text-[0.8125rem]">
+                <div className="flex gap-1.5">
+                  <dt className="text-v2-fg-secondary">{boxGachaLocale.drawCostLabel}</dt>
+                  <dd className="font-semibold tabular-nums text-v2-fg">{formatCount(box.drawCost.quantity)}</dd>
+                </div>
+                <div className="flex gap-1.5">
+                  <dt className="text-v2-fg-secondary">{boxGachaLocale.drawCountLabel}</dt>
+                  <dd className="font-semibold tabular-nums text-v2-fg">
+                    {boxGachaLocale.drawCountValue(box.drawCount)}
+                  </dd>
+                </div>
+                <div className="flex gap-1.5">
+                  <dt className="text-v2-fg-secondary">{boxGachaLocale.boxCostLabel}</dt>
+                  <dd className="font-semibold tabular-nums text-v2-fg">
+                    {formatCount(box.drawCost.quantity * box.drawCount)}
+                  </dd>
+                </div>
+              </dl>
+              <div className="flex flex-wrap gap-1">
+                {box.rewards.map((reward) => (
+                  <ResourceThumb
+                    key={`${reward.resourceType}:${reward.resourceUid}:${reward.isPrize ? "prize" : "regular"}`}
+                    itemUid={reward.resourceUid}
+                    resourceType={reward.resourceType}
+                    name={reward.resourceName ?? cardFlipLocale.resourceNameUnavailable}
+                    imageUrl={reward.imageUrl ?? undefined}
+                    rarity={reward.rarity}
+                    size="tile"
+                    quantity={reward.quantity}
+                    tag={reward.isPrize ? boxGachaLocale.prizeTag : undefined}
+                    tooltip
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <StatusNotice tone="danger">{boxGachaLocale.compositionInvalid}</StatusNotice>
+          )}
+        </div>
+      ) : null}
+    </section>
   );
 }
 

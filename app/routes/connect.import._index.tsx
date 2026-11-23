@@ -139,12 +139,9 @@ export default function ConnectImportIndexPage() {
       <div className="flex flex-col gap-8">
         <ImportForm />
         <section aria-labelledby="pending-drafts-heading" className="flex flex-col gap-3">
-          <div>
-            <h2 id="pending-drafts-heading" className="text-base font-semibold text-v2-fg">
-              검토 대상 데이터 목록
-            </h2>
-            <p className="mt-1 text-sm text-v2-fg-secondary">가져온 데이터를 검토한 후 내 프로필에 반영할 수 있어요.</p>
-          </div>
+          <h2 id="pending-drafts-heading" className="text-base font-semibold text-v2-fg">
+            검토 대상 데이터 목록
+          </h2>
           <PendingSyncDraftList drafts={drafts} />
         </section>
       </div>

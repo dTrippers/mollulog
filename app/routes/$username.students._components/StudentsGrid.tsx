@@ -29,7 +29,7 @@ type QuickPanelActions = {
 };
 
 const rowClassName = cn(
-  "flex min-h-v2-row-min w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm text-v2-fg hover:bg-v2-hover disabled:cursor-not-allowed disabled:text-v2-fg-disabled",
+  "flex min-h-v2-row-min w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm text-v2-fg hover:bg-v2-hover disabled:cursor-not-allowed disabled:text-v2-fg-disabled v2-interaction-transition",
   v2FocusRing,
 );
 

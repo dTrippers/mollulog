@@ -41,13 +41,19 @@ export type CacheRefreshTaskResult = {
 
 export type CacheRefreshTaskResults = Record<CacheRefreshTaskName, CacheRefreshTaskResult>;
 
+/**
+ * Task results as stored on a job row. A job created before a task was added to the refresh has no result
+ * for that task, so stored results may lack any task name.
+ */
+export type StoredCacheRefreshTaskResults = Partial<CacheRefreshTaskResults>;
+
 export type CacheRefreshJob = {
   uid: string;
   requestedBy: number;
   status: CacheRefreshJobStatus;
   completedCount: number;
   totalCount: number;
-  taskResults: CacheRefreshTaskResults;
+  taskResults: StoredCacheRefreshTaskResults;
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;

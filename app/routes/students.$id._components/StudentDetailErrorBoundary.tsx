@@ -14,7 +14,7 @@ export function StudentDetailErrorBoundary() {
   return (
     <V2Page width="reading">
       <div className="v2-header max-md:-mt-1.5 md:-translate-y-6 md:-mb-[21px] min-w-0 pb-v2-group-gap">
-        <Link to="/students" className={`mb-2 inline-flex min-h-v2-row-min cursor-pointer items-center gap-1 rounded-md text-sm leading-[1.43] text-v2-fg-secondary hover:text-v2-fg ${v2FocusRing}`} {...getV2LinkTransitionProps("reverse")}>
+        <Link to="/students" className={`mb-2 inline-flex min-h-v2-row-min cursor-pointer items-center gap-1 rounded-md text-sm leading-[1.43] text-v2-fg-secondary hover:text-v2-fg ${v2FocusRing} v2-interaction-transition`} {...getV2LinkTransitionProps("reverse")}>
           <ArrowLeftIcon className="size-4" aria-hidden="true" />
           <span>학생 목록</span>
         </Link>

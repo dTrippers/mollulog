@@ -3,9 +3,9 @@ import { planTimelineAutoSync, type TimelineAutoSyncCandidate } from "~/domain/t
 import type { TimelineContentType } from "~/domain/timeline-content";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { toUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { isInstantAfter, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { getLogger } from "~/lib/observability.server";
-import { campaignCategoryLocale } from "~/locales/ko";
+import { campaignCategoryLocale, drillTypeLocale } from "~/locales/ko";
 
 const AUTO_SYNC_REGION = "gl";
 
@@ -78,7 +78,62 @@ const campaignSource: TimelineAutoSyncSource = {
   },
 };
 
-const TIMELINE_AUTO_SYNC_SOURCES: readonly TimelineAutoSyncSource[] = [campaignSource];
+const timelineAutoSyncJointFiringDrillsQuery = graphql(`
+  query TimelineAutoSyncJointFiringDrills($endAfter: ISO8601DateTime) {
+    jointFiringDrills(endAfter: $endAfter) {
+      uid
+      season
+      drillType
+      schedules {
+        region
+        startAt
+        endAt
+      }
+    }
+  }
+`);
+
+const jointFiringDrillSource: TimelineAutoSyncSource = {
+  contentType: "joint_firing_drill",
+  async fetchCandidates(now) {
+    const { data, error } = await runQuery(timelineAutoSyncJointFiringDrillsQuery, { endAfter: new Date(now) });
+    if (error || !data) {
+      throw error ?? new Error("failed to fetch joint firing drills for timeline auto sync");
+    }
+
+    const result: TimelineAutoSyncFetchResult = { candidates: [], rejected: [] };
+    for (const drill of data.jointFiringDrills) {
+      // `endAfter` matches a schedule in any region, so a drill can come back for another region only.
+      const schedule = drill.schedules.find((item) => item.region === AUTO_SYNC_REGION);
+      if (!schedule) continue;
+      const contentEndAt = schedule.endAt ? toUtcIso(schedule.endAt) : null;
+      if (contentEndAt !== null && !isInstantAfter(contentEndAt, now)) continue;
+
+      const drillTypeName = drillTypeLocale[drill.drillType];
+      if (!drillTypeName) {
+        result.rejected.push({ contentUid: drill.uid, reason: `unknown drill type: ${drill.drillType}` });
+        continue;
+      }
+
+      result.candidates.push({
+        uid: `jfd-${drill.uid}`,
+        contentType: "joint_firing_drill",
+        contentUid: drill.uid,
+        runType: "first",
+        occurrence: null,
+        nameI18n: { ko: `${drill.season}차: ${drillTypeName}시험` },
+        startAt: toUtcIso(schedule.startAt),
+        contentEndAt,
+        // BAQL lists drills before they are announced, and its `confirmed` is deprecated as not authoritative.
+        // A new row stays unconfirmed until an admin confirms it; updates never change `confirmed`.
+        confirmed: false,
+      });
+    }
+    return result;
+  },
+};
+
+const TIMELINE_AUTO_SYNC_SOURCES: readonly TimelineAutoSyncSource[] = [campaignSource, jointFiringDrillSource];
 
 export async function syncTimelineContentsFromSources(
   env: Env,

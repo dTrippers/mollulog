@@ -4,6 +4,8 @@ import { cn } from "~/lib/utils";
 import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { RoundStudentImage } from "./RoundStudentImage";
 import { ResourceThumb } from "../resources/ResourceThumb";
+import { TooltipButton } from "../../primitives/TooltipButton";
+import { v2FocusRing } from "../../layout/styles";
 import { StudentStandingBackdrop } from "./StudentStandingBackdrop";
 
 type Student = Pick<NonNullable<StudentHeaderQuery["student"]>, "club" | "catalog" | "character" | "studentVariant" | "interactionFurnitures">;
@@ -39,17 +41,21 @@ export function StudentProfileFacts({ student, compact = false, standingUid }: {
       {outfits.length > 0 ? (
         <div>
           <h2 className={cn("text-xs leading-[1.43] font-semibold text-v2-fg-tertiary", compact ? "mb-1.5" : "mb-2")}>다른 의상</h2>
-          <ul className="flex flex-wrap gap-3">
+          <ul className="flex flex-wrap gap-2">
             {outfits.map((variant) => (
               <li key={variant.uid}>
                 <Link
                   to={`/students/${variant.primaryStudent.uid}`}
                   aria-label={variant.primaryStudent.name}
                   title={variant.primaryStudent.name}
-                  className="block rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+                  className={cn("block rounded-md", v2FocusRing)}
                   {...getV2LinkTransitionProps("crossfade")}
                 >
-                  <RoundStudentImage studentUid={variant.primaryStudent.uid} size={8} />
+                  {/* The student card's 5:6 portrait, as tall as the furniture tile beside it. */}
+                  <RoundStudentImage
+                    studentUid={variant.primaryStudent.uid}
+                    className={cn("!block !w-auto !aspect-[5/6] !rounded-md", compact ? "!h-10" : "!h-11")}
+                  />
                 </Link>
               </li>
             ))}
@@ -60,10 +66,17 @@ export function StudentProfileFacts({ student, compact = false, standingUid }: {
       {student.interactionFurnitures.length > 0 ? (
         <div>
           <h2 className={cn("text-xs leading-[1.43] font-semibold text-v2-fg-tertiary", compact ? "mb-1.5" : "mb-2")}>상호작용 가구</h2>
-          <ul className="flex flex-wrap gap-3">
+          <ul className="flex flex-wrap gap-2">
             {student.interactionFurnitures.map((furniture) => (
-              <li key={furniture.uid} aria-label={furniture.name} title={furniture.name} className={cn("[&>span]:!size-13", compact && "size-11 [&>span]:!size-11")}>
-                <ResourceThumb itemUid={furniture.uid} resourceType={ResourceTypeEnum.Furniture} name={furniture.name} size="sm" />
+              <li key={furniture.uid}>
+                {/* Furniture icons carry wide transparent margins, so the icon is drawn at 110% of the tile. */}
+                <TooltipButton
+                  label={`${furniture.name} 이름 표시`}
+                  tooltip={furniture.name}
+                  className={cn("block rounded-md [&_img]:size-[110%] [&_img]:max-w-none [&_img]:shrink-0", compact ? "[&>span]:!size-10" : "[&>span]:!size-11", v2FocusRing)}
+                >
+                  <ResourceThumb itemUid={furniture.uid} resourceType={ResourceTypeEnum.Furniture} name={furniture.name} size="sm" />
+                </TooltipButton>
               </li>
             ))}
           </ul>

@@ -230,7 +230,7 @@ export default function ConnectDraftDetailPage() {
     <ConnectScreenLayout
       current="import"
       title="가져온 데이터 검토"
-      description="가져온 데이터를 확인하고 잘못된 값을 수정하여 반영할 수 있어요"
+      description={draft.status === "pending" ? "잘못된 값이 있는지 확인하고 수정하여 반영해요" : undefined}
       back={{ title: "데이터 가져오기", to: "/connect/import" }}
       meta={<DraftMeta draft={draft} />}
     >

@@ -85,6 +85,21 @@ describe("cache refresh service", () => {
     expect(result?.tasks[1]).toMatchObject({ name: "syncRawStudents", status: "running" });
   });
 
+  it("marks tasks without a stored result as unrecorded", async () => {
+    const { getRecruitTicketSource: _added, ...legacy } = createPendingCacheRefreshTaskResults();
+    mockedGetCacheRefreshStatus.mockResolvedValue({ ...makeJob(), taskResults: legacy });
+
+    const result = await getAdminCacheRefreshStatus(env, ctx, null);
+
+    expect(result?.tasks.map((task) => task.name)).toEqual([...CACHE_REFRESH_TASK_NAMES]);
+    expect(result?.tasks.find((task) => task.name === "getRecruitTicketSource")).toEqual({
+      name: "getRecruitTicketSource",
+      label: CACHE_REFRESH_TASK_LABELS.getRecruitTicketSource,
+      status: "unrecorded",
+      durationMs: null,
+    });
+  });
+
   it("returns null when no job exists", async () => {
     mockedGetCacheRefreshStatus.mockResolvedValue(null);
 

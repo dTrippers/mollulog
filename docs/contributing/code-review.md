@@ -30,6 +30,10 @@ single owner for commands and claim-to-evidence mapping.
 - Does the sort or condition used on screen match the actual data query?
 - Are real failures distinct from absent data, with no fake successful state or
   raw internal error exposed to users?
+- Does a student search match `altNames` as well as the name, through
+  `filterStudentByName` in `app/filters/student.ts`, and does its loader or
+  view pass `altNames` to the screen? Sensei search students by their common
+  nicknames.
 
 ### Data and state
 
@@ -38,6 +42,50 @@ single owner for commands and claim-to-evidence mapping.
 - Are sort/display fields such as `createdAt` and `updatedAt` present where the
   behavior requires them?
 - Are retry, draft, and save states preserved according to the changed flow?
+- Can a save overwrite a newer value? A screen that saves values it read earlier
+  checks that the record has not changed since, not only that it still exists.
+  An autosave compares a new value with the newest one already sent or waiting,
+  not with the last saved one, and keeps a waiting save, its status, and its
+  retry per target, so no input is dropped and one target's success does not
+  hide another's failure. Its state lives in a component that a loading state
+  does not unmount. Saves that share one fetcher, such as an order and a
+  sort choice, are sent one at a time, with the latest waiting change of each
+  kind: a new submit cancels the request in flight only in the browser, so the
+  server can still apply the earlier one after the later one, and the earlier
+  one's failure is never seen. A save sent later than the input, such as after a delay,
+  names its route action explicitly. Without one, React Router posts it to
+  whichever page is current when it is sent, so a Sensei who leaves the page
+  first loses the edit.
+- Does a component that copies loader data into state still show revalidated
+  data? Copy only what the screen edits locally, and refresh the copy whenever
+  the loader data changes, not only when its list of keys does.
+- When a screen changes a selection locally before the server answers, such as
+  adding a planner target, does the loader data its calculation joins with that
+  selection cover the new item too? A loader that reads only what the saved
+  selection names, such as account data for current favorites only, makes the
+  screen calculate the new item from missing data until revalidation.
+- Does data the site sends to another service about a screen's state, such as
+  the chat member snapshot, come from the same merged sources as the screen, and
+  keep "not entered" apart from a calculation's default? A planner plan read
+  from stored event data alone misses targets set by favoriting and completions
+  stored as recruitment results, and eleph the calculation counts as 0 is not
+  0 held.
+- Does a migration drop a table or column? Unused tables are renamed with the
+  `zzz_` prefix instead, unless a preceding step kept all of the data
+  ([database](../data/database.md)).
+- Does code that handles a PostgreSQL error, such as a unique violation, read it
+  through `postgresUniqueConstraintName` (`app/lib/db.ts`)? Drizzle wraps driver
+  errors in `DrizzleQueryError`, so the code and constraint are on its `cause`,
+  and a check on the thrown error itself never matches.
+- Does a screen's own validation use the same rules as the save, through the
+  domain parse functions rather than restated bounds? A value the screen accepts
+  but the save rejects fails with an error the screen may not show, such as on
+  a field that is hidden.
+- Does one user action that saves several parts write them in one update or
+  transaction, so a failure cannot keep some parts and drop the others?
+- Does a save write only what the user changed? A combined save, such as a
+  dialog that edits two things, must not refresh a timestamp or baseline (an
+  input time, for example) of the part the user left untouched.
 
 ### Auth and security
 
@@ -48,14 +96,50 @@ single owner for commands and claim-to-evidence mapping.
 
 ### React, accessibility, and rendering
 
-- Are `useEffect` dependencies complete, and is `meta` present when the screen
-  needs it?
+- Are `useEffect` dependencies complete and stable, and is `meta` present when
+  the screen needs it? An effect that sets state must not depend on a value
+  created anew on each render, such as a default `[]` or `{}` prop or an inline
+  object, or it re-renders without end. A page anonymous visitors can open
+  needs `socialMeta` card tags in every `meta` branch that renders with 200,
+  including empty and fallback states. A child route's `meta` replaces its
+  parent's, so a fallback branch cannot rely on the parent's tags.
 - Is intent-based action branching verified on the server?
-- Is the boundary between route-local and shared UI intact?
+- Is the boundary between route-local and shared UI intact? A shared component
+  that takes a `className` sets what a caller may override through classes, not
+  an inline `style`: an inline value beats every class, so a caller's own size
+  or cap stops working.
+- Does a shared component look the same whether it renders an item as a link or
+  as a button? A `<button>` centers its text and keeps other browser defaults
+  that an `<a>` does not have, so a screen that is the first to pass
+  state-only items sees a different layout.
+- Does state seeded from a prop (`useState(prop)`) follow the prop when it can
+  change after mount? A panel that started disabled stayed collapsed after a
+  failed list loaded on retry, because its open state was read only once.
+- Is an option that every caller must turn on for correct behavior the default
+  instead, with an opt-out for the exception? A caller that forgets an opt-in
+  silently gets the wrong result, such as a name hidden on mobile.
+- Is an image that fills a frame sized only by `aspect-ratio` pinned to the
+  frame (`absolute inset-0`) instead of relying on `height: 100%`? Inside a
+  table cell, WebKit resolves that percentage to the image's natural height, and
+  `object-cover` then shows a magnified crop.
 - For changed user-visible flows, are the relevant loading, empty, failure,
   retry/control adjacency, keyboard, and mobile fixed-bar states handled? Check
   the relevant render and interaction evidence; a concrete changed-UX deviation
   is a must-fix finding.
+- Does a text field's Enter or arrow-key handler return early while
+  `event.nativeEvent.isComposing` is true, without calling `preventDefault`? A
+  Korean IME takes that key to commit the syllable and the browser sends the
+  key again after the commit; preventing the composing key left Enter
+  unanswered on macOS.
+- Does arrow-key movement follow the layout of the options: a grid moves with
+  all four arrow keys, not only up and down? Do modified arrows (Shift, Alt,
+  Ctrl, Meta) keep their text editing meaning? Does the active option scroll
+  into view clear of fixed bars, and does only a pointer that moves take it
+  over? Content scrolled under a resting pointer fires `mouseenter`.
+- Does each grid column fit its content at the narrowest content width that
+  uses that column count? `sm:` and other breakpoints follow the viewport, not
+  the content area beside the sidebar, and `min-w-0` lets fixed-size content
+  overflow instead of shrinking it.
 - Accessibility must-fix findings are a control that cannot be operated with the
   keyboard, an interactive control without an accessible name, information
   conveyed only by an image or color, and body text too low in contrast to read.

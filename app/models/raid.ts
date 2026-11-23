@@ -177,24 +177,27 @@ const allRaidSchedulesQuery = graphql(`
   }
 `);
 
-function allRaidSchedulesCacheKey(raidType: string | null) {
-  if (!raidType) {
+// BAQL names the Korean server's schedules "gl". A "jp" schedule carries no jpSchedule of its own.
+export type RaidScheduleRegion = "gl" | "jp";
+
+function allRaidSchedulesCacheKey(raidType: string | null, region: RaidScheduleRegion) {
+  if (!raidType && region === "gl") {
     return ALL_RAID_SCHEDULES_CACHE_KEY;
   }
 
-  return cacheKey("source", "raid-schedule", 1, cacheQuery({ region: "gl", raidType }));
+  return cacheKey("source", "raid-schedule", 1, cacheQuery(raidType ? { region, raidType } : { region }));
 }
 
 export function getAllRaidSchedules(
   env: Env,
   forceRefresh = false,
-  { raidType = null }: { raidType?: string | null } = {},
+  { raidType = null, region = "gl" }: { raidType?: string | null; region?: RaidScheduleRegion } = {},
 ) {
   return fetchSourceCached(
     env,
-    allRaidSchedulesCacheKey(raidType),
+    allRaidSchedulesCacheKey(raidType, region),
     async () => {
-      const { data, error } = await runQuery(allRaidSchedulesQuery, { region: "gl", endAfter: null, raidType });
+      const { data, error } = await runQuery(allRaidSchedulesQuery, { region, endAfter: null, raidType });
       if (error || !data) {
         throw error ?? "failed to fetch raid schedules";
       }
@@ -262,7 +265,11 @@ export async function findRaidScheduleSummaryByTypeAndJpSeason(
 
 export async function warmRaidCache(env: Env, forceRefresh = true) {
   const now = nowUtcIso();
-  const schedules = await getAllRaidSchedules(env, forceRefresh);
+  const [schedules] = await Promise.all([
+    getAllRaidSchedules(env, forceRefresh),
+    // Raid records of the Japanese server list its own seasons.
+    getAllRaidSchedules(env, forceRefresh, { region: "jp" }),
+  ]);
 
   await Promise.all(
     schedules

@@ -71,7 +71,7 @@ import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/li
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { captureClientError } from "~/lib/observability.client";
 import { captureServerError, getLogger } from "~/lib/observability.server";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { recruitmentLabelLocale } from "~/locales/ko";
 import type { ContentCommentSummary, NestedComment } from "~/models/content";
 import type { EventType, RaidType } from "~/models/content.d";
@@ -119,10 +119,7 @@ export const meta: MetaFunction = ({ location }) => {
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };
@@ -570,7 +567,7 @@ export function ErrorBoundary() {
 
   return (
     <V2Page width="wide">
-      <PageHeader title="미래시" description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요" />
+      <PageHeader title="미래시" description="일본 서버를 기준으로 추정한 일정이라 추후 변경될 수 있어요" />
       <LoadFailureState onRetry={() => navigate(pathWithSearch, { replace: true })} />
     </V2Page>
   );
@@ -606,7 +603,7 @@ function FutureContentsResolved({
 function FutureSkeletonPage({ viewState }: { viewState: FutureViewState }) {
   return (
     <V2Page width="wide" onStackedChange={viewState.onStackedChange}>
-      <PageHeader title="미래시" description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요" />
+      <PageHeader title="미래시" description="일본 서버를 기준으로 추정한 일정이라 추후 변경될 수 있어요" />
       <PageToolbar>
         <ScreenTabs items={buildFutureTabs(viewState.view, viewState.setView)} />
       </PageToolbar>
@@ -1314,7 +1311,7 @@ function FutureContentsScreen({
 
   const groups = groupFutureContents(viewContents, timeZone, now);
   const featuredViewContent = featuredContent
-    ? viewContents.find((content) => content.uid === featuredContent.uid) ?? null
+    ? (viewContents.find((content) => content.uid === featuredContent.uid) ?? null)
     : null;
 
   // The DOM target can change while the selected featured content object stays the same.
@@ -1331,9 +1328,7 @@ function FutureContentsScreen({
       return;
     }
     setFeaturedTarget((current) =>
-      current?.uid === featuredContent.uid && current.view === view
-        ? current
-        : { uid: featuredContent.uid, view },
+      current?.uid === featuredContent.uid && current.view === view ? current : { uid: featuredContent.uid, view },
     );
   }, [
     contentsStatus,
@@ -1465,7 +1460,7 @@ function FutureContentsScreen({
       onPanelCloseRequestHandled={showSignIn}
       onStackedChange={viewState.onStackedChange}
     >
-      <PageHeader title="미래시" description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요" />
+      <PageHeader title="미래시" description="일본 서버를 기준으로 추정한 일정이라 추후 변경될 수 있어요" />
       <PageToolbar>
         <ScreenTabs items={tabs} />
       </PageToolbar>

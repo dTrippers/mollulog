@@ -3,7 +3,7 @@ import { useOutletContext } from "react-router";
 import type { MobileActionBarProps, ScreenTabItem } from "~/components/v2/layout";
 import type { ProfileVisibility } from "~/models/sensei";
 
-export type UserScreen = "profile" | "students" | "pickups" | "futures";
+export type UserScreen = "profile" | "students" | "pickups" | "futures" | "raids";
 
 // What a child of the `/@username` layout can read. The layout loader owns it, so a child never has to reload it.
 export type UserLayoutContext = {
@@ -17,6 +17,7 @@ export type UserLayoutContext = {
   // `null` means the count could not be loaded, which is not the same as zero.
   recruitedStudentCount: number | null;
   pickupCount: number | null;
+  raidRecordCount: number | null;
   // Collapse the Aside (desktop) while a screen edits a wide table. The layout restores it when the child unmounts
   // or calls this with `false`.
   setAsideCollapsed: (collapsed: boolean) => void;
@@ -45,6 +46,7 @@ export function getUserScreen(pathname: string, username: string): UserScreen | 
   if (normalized === `${root}/students` || normalized.startsWith(`${root}/students/`)) return "students";
   if (normalized === `${root}/pickups` || normalized.startsWith(`${root}/pickups/`)) return "pickups";
   if (normalized === `${root}/futures`) return "futures";
+  if (normalized === `${root}/raids` || normalized.startsWith(`${root}/raids/`)) return "raids";
   return null;
 }
 
@@ -57,6 +59,7 @@ export type UserScreenIcons = {
   students: ElementType;
   pickups: ElementType;
   futures: ElementType;
+  raids: ElementType;
 };
 
 // One list feeds the Aside menu on desktop and the tabs under the header on mobile.
@@ -65,12 +68,14 @@ export function buildUserScreenItems({
   pathname,
   recruitedStudentCount,
   pickupCount,
+  raidRecordCount,
   icons,
 }: {
   username: string;
   pathname: string;
   recruitedStudentCount: number | null;
   pickupCount: number | null;
+  raidRecordCount: number | null;
   icons: UserScreenIcons;
 }): ScreenTabItem[] {
   const screen = getUserScreen(pathname, username);
@@ -99,8 +104,16 @@ export function buildUserScreenItems({
       link: `/@${username}/futures`,
       active: screen === "futures",
     },
+    {
+      key: "raids",
+      text: "총력전·대결전 기록",
+      label: formatUserCount(raidRecordCount),
+      Icon: icons.raids,
+      link: `/@${username}/raids`,
+      active: screen === "raids",
+    },
   ];
 }
 
-export const FOLLOW_FAILURE_MESSAGE = "팔로우하지 못했어요. 다시 시도해주세요.";
-export const UNFOLLOW_FAILURE_MESSAGE = "팔로우를 해제하지 못했어요. 다시 시도해주세요.";
+export const FOLLOW_FAILURE_MESSAGE = "팔로우하지 못했어요.";
+export const UNFOLLOW_FAILURE_MESSAGE = "팔로우를 해제하지 못했어요.";

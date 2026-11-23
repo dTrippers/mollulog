@@ -156,7 +156,7 @@ export function DraftApplyBar({
                 </Button>
               }
             >
-              프로필에 반영하지 못했어요. 입력한 값은 그대로 있어요. 잠시 후 다시 시도해주세요.
+              프로필에 반영하지 못했어요.
             </StatusNotice>
           </div>
         ) : null}
@@ -177,12 +177,8 @@ export function DraftApplyBar({
         <PageActionBar
           placement={stacked ? "fixed" : "sticky"}
           expandActions
-          summary={
-            <div className="flex flex-col gap-0.5">
-              <span>{summary}</span>
-              <span className="text-xs font-normal text-v2-fg-tertiary">{discardNote}</span>
-            </div>
-          }
+          summary={summary}
+          note={discardNote}
         >
           <Button
             type="submit"
@@ -207,7 +203,7 @@ export function DraftApplyBar({
           </Button>
         </PageActionBar>
         {/* The stacked bar is fixed above the navigation, so the screen keeps room for it at the end. */}
-        {stacked ? <div aria-hidden="true" className="h-[calc(var(--mobile-nav-height)+5.5rem)]" /> : null}
+        {stacked ? <div aria-hidden="true" className="h-[calc(var(--mobile-nav-height)+6.25rem)]" /> : null}
       </div>
     </>
   );

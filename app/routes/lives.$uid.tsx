@@ -15,7 +15,7 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import { captureServerError, getLogger } from "~/lib/observability.server";
-import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL } from "~/lib/seo";
+import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL, socialMeta } from "~/lib/seo";
 import { uploadedImageProps } from "~/models/assets";
 import { getNestedContentComments } from "~/models/content.server";
 import { getPostByTimelineContentUid } from "~/models/post";
@@ -85,12 +85,8 @@ export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
-    { property: "og:title", content: title },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     { property: "og:image", content: data.content.imageUrl ?? DEFAULT_OPEN_GRAPH_IMAGE_URL },
-    { property: "og:description", content: description },
-    { property: "og:url", content: `https://mollulog.net/lives/${data.uid}` },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
     { name: "twitter:card", content: "summary_large_image" },
     canonicalLink(location.pathname),
   ];

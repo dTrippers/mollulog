@@ -16,7 +16,9 @@ import {
 import type { RecruitmentStacks, RecruitmentTargetTiers } from "~/domain/pyroxene-recruitment-goal";
 import {
   extractPyroxeneTimelineBaseUid,
+  normalizePyroxeneOneOffGainEditAt,
   normalizePyroxeneTimelineEventAt,
+  normalizePyroxeneTimelineRecordAt,
   PYROXENE_AP_PACKAGE_CONFIG,
   PYROXENE_ATTENDANCE_CONFIG,
   PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS,
@@ -95,14 +97,14 @@ type TimelineRecordInput = Pick<PlannerStateTimelineRecord, "uid" | "source" | "
     eventAt: Date | string;
   };
 
-function timelineEventAt(date: Date | string): string {
-  return normalizeInstant(normalizePyroxeneTimelineEventAt(date));
+function timelineEventAt(date: Date | string, source: PlannerStateTimelineRecord["source"]): string {
+  return normalizeInstant(normalizePyroxeneTimelineRecordAt(date, source));
 }
 
 function timelineRecord(input: TimelineRecordInput): PlannerStateTimelineRecord {
   return {
     uid: input.uid,
-    eventAt: timelineEventAt(input.eventAt),
+    eventAt: timelineEventAt(input.eventAt, input.source),
     source: input.source,
     repeatType: input.repeatType ?? "fixed_days",
     repeatIntervalDays: input.repeatIntervalDays ?? null,
@@ -158,6 +160,18 @@ function withCollectedSourceKeys(
     ...document,
     pyroxene: { ...document.pyroxene, collectedSourceKeys: [...keys].sort() },
   };
+}
+
+export type CollectedSourceChanges = { add?: readonly string[]; remove?: readonly string[] };
+
+function withCollectedSourceChanges(
+  document: PlannerStateDocumentV1,
+  changes: CollectedSourceChanges,
+): PlannerStateDocumentV1 {
+  return withCollectedSourceKeys(document, (keys) => {
+    for (const sourceKey of changes.add ?? []) if (sourceKey) keys.add(sourceKey);
+    for (const sourceKey of changes.remove ?? []) keys.delete(sourceKey);
+  });
 }
 
 function withPlannerOptions(document: PlannerStateDocumentV1, options: PyroxenePlannerOptions): PlannerStateDocumentV1 {
@@ -240,13 +254,33 @@ export function createPostgresPyroxeneOwnedResource(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
   resources: OwnedResourceInput,
-  options: { inputAt?: string } & PostgresPyroxeneOptions = {},
+  // Received-reward changes saved with the resources, so both land in one update or neither does.
+  options: { inputAt?: string; collectedSources?: CollectedSourceChanges } & PostgresPyroxeneOptions = {},
 ): Promise<void> {
   return updatePyroxenePlannerDocument(
     env,
     userId,
     "owned_resources.create",
-    (document) => withPyroxeneOwnedResource(document, resources, options.inputAt),
+    (document) => {
+      const next = withPyroxeneOwnedResource(document, resources, options.inputAt);
+      return options.collectedSources ? withCollectedSourceChanges(next, options.collectedSources) : next;
+    },
+    options,
+  );
+}
+
+/** Adds and removes received rewards in one update, without touching the owned resources. */
+export function updatePostgresCollectedSources(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  changes: CollectedSourceChanges,
+  options: PostgresPyroxeneOptions = {},
+): Promise<void> {
+  return updatePyroxenePlannerDocument(
+    env,
+    userId,
+    "collected_sources.update",
+    (document) => withCollectedSourceChanges(document, changes),
     options,
   );
 }
@@ -398,7 +432,7 @@ export function updatePostgresPyroxeneOneOffTimelineItem(
         isEditable(record)
           ? {
               ...record,
-              eventAt: timelineEventAt(input.date),
+              eventAt: normalizeInstant(normalizePyroxeneOneOffGainEditAt(input.date, record.eventAt)),
               description: input.description,
               pyroxeneDelta: input.pyroxeneDelta,
               oneTimeTicketDelta: input.oneTimeTicketDelta,

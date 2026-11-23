@@ -20,14 +20,22 @@ type NumberInputBaseProps = InputHTMLAttributes<HTMLInputElement> & {
 
 export type NumberInputProps = NumberInputBaseProps &
   (
-    | { grouped?: false; onValueChange?: never; showMin?: never; showMax?: never }
-    | { grouped: true; onValueChange: (value: number) => void; showMin?: boolean; showMax?: boolean }
+    | { grouped?: false; onValueChange?: never; onEmpty?: never; showMin?: never; showMax?: never }
+    | {
+        grouped: true;
+        onValueChange: (value: number) => void;
+        // Called instead of setting the minimum when the field is left empty, for a value the user must enter.
+        onEmpty?: () => void;
+        showMin?: boolean;
+        showMax?: boolean;
+      }
   );
 
 type GroupedNumberInputProps = NumberInputBaseProps & {
   showMin: boolean;
   showMax?: boolean;
   onValueChange: (value: number) => void;
+  onEmpty?: () => void;
 };
 
 // Height follows the input token: 1.75rem on every layout, the same as ToggleChip.
@@ -40,6 +48,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
     showMax,
     formatThousands = false,
     onValueChange,
+    onEmpty,
     className,
     ...props
   },
@@ -53,6 +62,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
         showMax={showMax}
         formatThousands={formatThousands}
         onValueChange={onValueChange}
+        onEmpty={onEmpty}
         className={className}
         ref={ref}
         {...props}
@@ -66,7 +76,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
       type="number"
       inputMode="numeric"
       className={cn(
-        "block w-full min-w-0 [appearance:textfield] rounded-md border border-v2-control-border bg-v2-surface px-2 text-center text-sm font-medium text-v2-fg tabular-nums focus:border-v2-control-border-strong disabled:text-v2-fg-disabled [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+        "block w-full min-w-0 [appearance:textfield] rounded-md border border-v2-control-border bg-v2-surface px-2 text-center text-sm font-normal text-v2-fg-secondary tabular-nums focus:border-v2-control-border-strong disabled:text-v2-fg-disabled [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
         compact ? "min-h-7" : "min-h-v2-input-min",
         warning && "bg-v2-warning-subtle",
         v2FocusRing,
@@ -78,7 +88,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
 });
 
 const GroupedNumberInput = forwardRef<HTMLInputElement, GroupedNumberInputProps>(function GroupedNumberInput(
-  { warning = false, showMin, showMax, formatThousands = false, onValueChange, className, ...props },
+  { warning = false, showMin, showMax, formatThousands = false, onValueChange, onEmpty, className, ...props },
   ref,
 ) {
   const [draftValue, setDraftValue] = useState<string | null>(null);
@@ -114,12 +124,16 @@ const GroupedNumberInput = forwardRef<HTMLInputElement, GroupedNumberInputProps>
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextValue = parseInputValue(event);
     if (formatThousands) setDraftValue(event.currentTarget.value.replace(/\D/g, ""));
-    update(Number.isFinite(nextValue) ? nextValue : min);
+    if (Number.isFinite(nextValue)) update(nextValue);
+    else if (onEmpty) onEmpty();
+    else update(min);
     onChange?.(event);
   };
   const handleBlur = (event: FocusEvent<HTMLInputElement>) => {
     const nextValue = parseInputValue(event);
-    update(Number.isFinite(nextValue) ? nextValue : min);
+    if (Number.isFinite(nextValue)) update(nextValue);
+    else if (onEmpty) onEmpty();
+    else update(min);
     if (formatThousands) setDraftValue(null);
     onBlur?.(event);
   };
@@ -192,7 +206,7 @@ const GroupedNumberInput = forwardRef<HTMLInputElement, GroupedNumberInputProps>
         onBlur={handleBlur}
         onFocus={handleFocus}
         className={cn(
-          "block h-full min-h-0 min-w-0 flex-1 [appearance:textfield] border-0 bg-transparent px-0 text-center text-sm leading-5 font-medium tabular-nums focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+          "block h-full min-h-0 min-w-0 flex-1 [appearance:textfield] border-0 bg-transparent px-0 text-center text-sm leading-5 font-normal text-v2-fg-secondary tabular-nums focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
         )}
       />
       <StepButton
@@ -237,7 +251,7 @@ function StepButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "relative inline-flex h-full min-w-5 shrink-0 items-center justify-center px-0 whitespace-nowrap text-xs leading-4 text-v2-fg-tertiary before:absolute before:inset-x-0 before:inset-y-[min(0px,calc(50%-var(--spacing-v2-control-min)/2))] before:content-[''] hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled",
+        "relative inline-flex h-full min-w-5 shrink-0 items-center justify-center px-0 whitespace-nowrap text-xs leading-4 text-v2-fg-tertiary before:absolute before:inset-x-0 before:inset-y-[min(0px,calc(50%-var(--spacing-v2-control-min)/2))] before:content-[''] hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled v2-interaction-transition",
         className,
         v2FocusRing,
       )}
