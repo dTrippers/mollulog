@@ -27,9 +27,12 @@ export function formatRaidClearResult(difficulty: string | null, clearTimeMs: nu
   return `${formatRaidDifficulty(difficulty)} · ${formatRaidClearTime(clearTimeMs)}`;
 }
 
+// "2023/08/29 ~ 09/05": the end carries its year only when it differs, as in "2023/12/26 ~ 2024/01/02".
 export function formatRaidSeasonPeriod(startAt: string, endAt: string | null, timeZone: string): string {
-  const start = formatInstant(startAt, { timeZone, format: "MM/DD" });
-  return endAt ? `${start} ~ ${formatInstant(endAt, { timeZone, format: "MM/DD" })}` : start;
+  const start = formatInstant(startAt, { timeZone, format: "YYYY/MM/DD" });
+  if (!endAt) return start;
+  const sameYear = formatInstant(startAt, { timeZone, format: "YYYY" }) === formatInstant(endAt, { timeZone, format: "YYYY" });
+  return `${start} ~ ${formatInstant(endAt, { timeZone, format: sameYear ? "MM/DD" : "YYYY/MM/DD" })}`;
 }
 
 // "11/25 0시"
