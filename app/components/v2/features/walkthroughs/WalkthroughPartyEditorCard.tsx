@@ -10,19 +10,20 @@ import {
 import { walkthroughPartyLabel } from "~/domain/walkthrough-mentions";
 import { Button } from "../../primitives/Button";
 import { IconButton } from "../../primitives/IconButton";
-import { PartyGrowthTable, PartySlots, type RaidPartyEditorContext } from "../raid-records/RaidPartyEditor";
+import { PartySlots, type RaidPartyEditorContext } from "../raid-records/RaidPartyEditor";
 import {
   type WalkthroughPartyBaselines,
   walkthroughPartySlots,
   walkthroughUnitsFromSlots,
 } from "./walkthrough-editor-state";
+import { WalkthroughGrowthTable } from "./WalkthroughGrowthTable";
 import { StartingSkillBadge, TierBandLabel, tierMeaning, WalkthroughPartyThumbs } from "./walkthrough-parts";
 
 const noop = () => {};
 
 // One party on the write page. The slots pick students the way 기록 추가 does. "시작 스킬 설정" turns the portraits
-// into toggles that number the starting skills in the order they are tapped, until "완료". "성장도 입력" opens the
-// growth table under the slots, filled from 모집한 학생. The timeline opens in its own sheet.
+// into toggles that number the starting skills in the order they are tapped, until "완료". The growth table under the
+// slots is filled from 모집한 학생. The timeline opens in its own sheet.
 export function WalkthroughPartyEditorCard({
   party,
   partyIndex,
@@ -30,6 +31,8 @@ export function WalkthroughPartyEditorCard({
   context,
   baselines,
   focusSearch,
+  stacked,
+  missingTier,
   onSearchFocused,
   onChange,
   onRemove,
@@ -41,6 +44,10 @@ export function WalkthroughPartyEditorCard({
   context: RaidPartyEditorContext;
   baselines: WalkthroughPartyBaselines;
   focusSearch: boolean;
+  // The page shows one growth group at a time.
+  stacked: boolean;
+  // A save was refused because a student of this party has no 성급.
+  missingTier: boolean;
   onSearchFocused: () => void;
   // The baselines are the 모집한 학생 values of the students the slots were filled with in this visit.
   onChange: (party: WalkthroughParty, baselines?: WalkthroughPartyBaselines) => void;
@@ -48,7 +55,6 @@ export function WalkthroughPartyEditorCard({
   onEditTimeline: () => void;
 }) {
   const [startingSkillMode, setStartingSkillMode] = useState(false);
-  const [growthOpen, setGrowthOpen] = useState(false);
   const title = walkthroughPartyLabel(partyIndex);
   const slots = walkthroughPartySlots(party, partySize, baselines);
   const hasStudent = slots.some((unit) => unit !== null);
@@ -95,14 +101,6 @@ export function WalkthroughPartyEditorCard({
           <>
             <Button size="sm" disabled={!hasStudent} onClick={() => setStartingSkillMode(true)}>
               시작 스킬 설정
-            </Button>
-            <Button
-              size="sm"
-              disabled={!hasStudent}
-              aria-pressed={growthOpen && hasStudent}
-              onClick={() => setGrowthOpen((open) => !open)}
-            >
-              성장도 입력
             </Button>
             <IconButton icon={TrashIcon} label={`${title} 삭제`} danger onClick={onRemove} />
           </>
@@ -152,11 +150,13 @@ export function WalkthroughPartyEditorCard({
         />
       )}
 
-      {growthOpen && hasStudent && !startingSkillMode ? (
-        <PartyGrowthTable
-          party={{ slots }}
+      {hasStudent ? (
+        <WalkthroughGrowthTable
+          slots={slots}
           title={title}
           studentsByUid={context.studentsByUid}
+          stacked={stacked}
+          missingTier={missingTier}
           onChange={(slot, unit) => changeSlots(slots.map((current, index) => (index === slot ? unit : current)))}
         />
       ) : null}

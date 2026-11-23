@@ -16,6 +16,7 @@ export function GrowthValueInput({
   onChange,
   leading,
   maxText,
+  describedBy,
 }: {
   // The accessible name, such as "니코 목표 EX 스킬".
   label: string;
@@ -30,6 +31,8 @@ export function GrowthValueInput({
   // Shown instead of the number while the value is at the maximum and the field is not focused, such as "MAX" for a
   // skill. A focused field shows the number for editing.
   maxText?: string;
+  // The id of text that says more about the value, such as a legend for a highlighted value.
+  describedBy?: string;
 }) {
   const [text, setText] = useState(value == null ? "" : String(value));
   const [focused, setFocused] = useState(false);
@@ -50,6 +53,7 @@ export function GrowthValueInput({
       inputMode="numeric"
       pattern="[0-9]*"
       aria-label={label}
+      aria-describedby={describedBy}
       // With the step buttons, an empty value stays blank as in 1.x, so a dash is not read as the − button beside it.
       placeholder={showSteps ? undefined : "–"}
       value={showsMaxText ? maxText : text}

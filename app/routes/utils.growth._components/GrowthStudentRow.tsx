@@ -17,7 +17,7 @@ import {
   useGrowthResourceDisclosure,
 } from "./GrowthResourceRequirements";
 import { GrowthRowMenu, type GrowthRowMenuItem } from "./GrowthRowMenu";
-import { GrowthValueInput } from "./GrowthValueInput";
+import { GrowthValueInput } from "~/components/v2/features/students/GrowthValueInput";
 import {
   cellKey,
   cellLabel,

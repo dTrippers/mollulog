@@ -36,7 +36,7 @@ const savableDocument: WalkthroughTimelineDocument = {
       uid: "party-1",
       order: 0,
       startingSkillStudentUids: [],
-      units: [{ slot: 0, studentUid: "student-1" }],
+      units: [{ slot: 0, studentUid: "student-1", snapshot: { tier: 3 } }],
       steps: [],
     },
   ],

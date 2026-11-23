@@ -376,7 +376,7 @@ export type WalkthroughSaveProblem =
   | { field: "title" }
   | { field: "boss" }
   | { field: "parties" }
-  | { field: "party"; partyIndex: number; reason: "empty" | "no_striker" }
+  | { field: "party"; partyIndex: number; reason: "empty" | "no_striker" | "no_tier" }
   | { field: "step"; partyIndex: number; stepIndex: number; reason: "no_action" | "empty_text" };
 
 // What keeps a guide from being saved: a title, a boss, and at least one party, where every party has a striker. The
@@ -396,6 +396,10 @@ export function walkthroughSaveProblems(input: {
       problems.push({ field: "party", partyIndex, reason: "empty" });
     } else if (!filled.some((unit) => isWalkthroughStrikerSlot(unit.slot, input.document.partySize))) {
       problems.push({ field: "party", partyIndex, reason: "no_striker" });
+    }
+    // 성급 is the one growth value a guide requires.
+    if (filled.some((unit) => unit.snapshot?.tier === undefined)) {
+      problems.push({ field: "party", partyIndex, reason: "no_tier" });
     }
     party.steps.forEach((step, stepIndex) => {
       if (step.kind !== "actions") return;
@@ -418,9 +422,10 @@ export function walkthroughSaveProblemMessage(problem: WalkthroughSaveProblem): 
     case "parties":
       return "파티를 추가해 주세요.";
     case "party":
-      return problem.reason === "empty"
-        ? `파티 ${problem.partyIndex + 1}에 학생을 편성해 주세요.`
-        : `파티 ${problem.partyIndex + 1}에 스트라이커를 1명 이상 편성해 주세요.`;
+      if (problem.reason === "empty") return `파티 ${problem.partyIndex + 1}에 학생을 편성해 주세요.`;
+      if (problem.reason === "no_striker")
+        return `파티 ${problem.partyIndex + 1}에 스트라이커를 1명 이상 편성해 주세요.`;
+      return `파티 ${problem.partyIndex + 1} 학생의 성급을 모두 입력해 주세요.`;
     case "step":
       return problem.reason === "no_action"
         ? `파티 ${problem.partyIndex + 1} 타임라인 ${problem.stepIndex + 1}단계에 스킬을 추가해 주세요.`

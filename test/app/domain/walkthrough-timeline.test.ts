@@ -192,14 +192,15 @@ describe("parseWalkthroughTimelineDocument", () => {
 
 describe("walkthroughSaveProblems", () => {
   const context = { bossUid: "binah", terrain: "street", defenseType: "heavy", maxDifficulty: "torment" } as const;
+  // A student has 성급 unless the unit says otherwise.
   const party = (
-    units: { slot: number; studentUid: string | null }[],
+    units: { slot: number; studentUid: string | null; snapshot?: { tier?: number } }[],
     steps: WalkthroughTimelineDocument["parties"][number]["steps"] = [],
   ) => ({
     uid: `party-${units.length}`,
     order: 0,
     startingSkillStudentUids: [],
-    units,
+    units: units.map((unit) => ({ snapshot: { tier: 3 }, ...unit })),
     steps,
   });
   const messages = (title: string, document: Pick<WalkthroughTimelineDocument, "partySize" | "context" | "parties">) =>
@@ -225,6 +226,21 @@ describe("walkthroughSaveProblems", () => {
         parties: [party([]), party([{ slot: 4, studentUid: "special" }]), party([{ slot: 3, studentUid: "striker" }])],
       }),
     ).toEqual(["파티 1에 학생을 편성해 주세요.", "파티 2에 스트라이커를 1명 이상 편성해 주세요."]);
+  });
+
+  it("asks for the 성급 of every student", () => {
+    expect(
+      messages("공략", {
+        partySize: 6,
+        context,
+        parties: [
+          party([
+            { slot: 0, studentUid: "a" },
+            { slot: 1, studentUid: "b", snapshot: {} },
+          ]),
+        ],
+      }),
+    ).toEqual(["파티 1 학생의 성급을 모두 입력해 주세요."]);
   });
 
   it("counts strikers by the party size of the boss", () => {

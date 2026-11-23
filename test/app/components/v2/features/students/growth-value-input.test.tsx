@@ -1,9 +1,9 @@
 /** @jest-environment jsdom */
 
-import "../../components/v2/layout/layout-test-polyfills";
+import "../../layout/layout-test-polyfills";
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { GrowthValueInput } from "~/routes/utils.growth._components/GrowthValueInput";
+import { GrowthValueInput } from "~/components/v2/features/students/GrowthValueInput";
 
 const flowProps = { "data-number-input-flow": "test", onFocus: jest.fn(), onKeyDown: jest.fn() };
 

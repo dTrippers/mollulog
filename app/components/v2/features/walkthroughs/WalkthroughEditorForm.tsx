@@ -211,6 +211,7 @@ export function WalkthroughEditorForm({
   const [focusPartyUid, setFocusPartyUid] = useState<string | null>(null);
   const [draftReady, setDraftReady] = useState(false);
   const [problems, setProblems] = useState<WalkthroughSaveProblem[]>([]);
+  const [stacked, setStacked] = useState(true);
   const [bodyError, setBodyError] = useState<string | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const savingRef = useRef(false);
@@ -420,7 +421,7 @@ export function WalkthroughEditorForm({
   );
 
   return (
-    <V2Page width="reading">
+    <V2Page width="wide" onStackedChange={setStacked}>
       <PageHeader back={{ title: "공략/타임라인", to: "/timelines" }} title={pageTitle} trailing={headerActions} />
       <PageMain>
         <div className="flex flex-col gap-v2-section-gap">
@@ -545,6 +546,11 @@ export function WalkthroughEditorForm({
                 context={partyContext}
                 baselines={baselines[party.uid] ?? {}}
                 focusSearch={focusPartyUid === party.uid}
+                stacked={stacked}
+                missingTier={problems.some(
+                  (problem) =>
+                    problem.field === "party" && problem.partyIndex === partyIndex && problem.reason === "no_tier",
+                )}
                 onSearchFocused={() => setFocusPartyUid(null)}
                 onChange={(next, nextBaselines) => {
                   updateParty(party.uid, () => next);
