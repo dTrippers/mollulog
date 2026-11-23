@@ -135,8 +135,8 @@ describe("parseGuideBody", () => {
   });
 
   it("accepts the shape the description backfill writes", () => {
-    // db/operations/20261123120100_backfill_raid_walkthrough_body.sql: one paragraph per line, an empty line as an
-    // empty paragraph, and each http(s) URL as a link on its own text node.
+    // The one-off description copy writes one paragraph per line, an empty line as an empty paragraph, and each
+    // http(s) URL as a link on its own text node.
     const migrated = doc(
       {
         type: "paragraph",

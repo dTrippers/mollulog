@@ -583,7 +583,7 @@ export const pgWalkthroughTimelinesTable = pgTable(
     uid: text().primaryKey(),
     userId: integer("user_id").notNull(),
     title: text().notNull(),
-    // Copied into body by db/operations/20261123120100_backfill_raid_walkthrough_body.sql; no longer read or written. Kept per docs/data/database.md.
+    // Copied into body when body was added; no longer read or written. Kept per docs/data/database.md.
     description: text().notNull().default(""),
     body: jsonb().$type<GuideBody>(),
     visibility: text().$type<WalkthroughTimelineVisibility>().notNull(),
