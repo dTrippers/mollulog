@@ -122,7 +122,7 @@ export default function StudentRaidUsageBarChart({ chartData, tierKeys, yAxisMax
             content={({ active, payload }) => {
               const row = active ? getTooltipPayload(payload) : null;
               return row ? (
-                <Link to={getRaidDetailPath(row)} className="block w-[min(15rem,calc(100vw-2rem))] break-words rounded-lg bg-v2-popover-surface p-3 text-v2-fg shadow-md ring-1 ring-v2-popover-divider backdrop-blur-[4px] hover:bg-v2-surface">
+                <Link to={getRaidDetailPath(row)} className="block w-[min(15rem,calc(100vw-2rem))] break-words rounded-lg bg-v2-popover-surface p-3 text-v2-fg shadow-v2-popover backdrop-blur-md hover:bg-v2-surface">
                   <p className="text-xs leading-[1.43] text-v2-fg-tertiary tabular-nums">{formatInstant(row.startAt, { timeZone, format: "YYYY/MM/DD" })}</p>
                   <p className="mt-0.5 text-[13px] leading-[1.43] font-semibold">{raidTypeLocale[row.raidType]} #{row.seasonIndex} · {row.bossName} · {defenseTypeLocale[row.defenseType]}</p>
                   <div className="mt-2 grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 text-xs leading-[1.43] text-v2-fg-secondary">

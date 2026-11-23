@@ -53,10 +53,7 @@ import { getEventMetadata } from "~/models/event-content";
 import { isPlannerStateRevisionConflictError, updateApPlannerState } from "~/models/planner-state";
 import { updatePyroxenePlannerOptions } from "~/models/pyroxene-planner";
 import { getTimelineContent } from "~/models/timeline-content.server";
-import {
-  trackGoogleAnalyticsEvent,
-  trackGoogleAnalyticsEventOncePerPage,
-} from "~/lib/google-analytics-events.client";
+import { trackGoogleAnalyticsEvent, trackGoogleAnalyticsEventOncePerPage } from "~/lib/google-analytics-events.client";
 import { ApPlannerConditionsPanelContent } from "~/routes/utils.ap._components/ApPlannerConditionsPanel";
 import ApCalculationMethodSheet from "~/routes/utils.ap._components/ApCalculationMethodSheet";
 import ApPlannerConditionsSheet, {
@@ -66,6 +63,7 @@ import ApPlannerListSkeleton from "~/routes/utils.ap._components/ApPlannerListSk
 import ApTimelineEvent from "~/routes/utils.ap._components/ApTimelineEvent";
 import type { IntegratedPlannerShopEvent, IntegratedPlannerTimelineEvent } from "~/views/integrated-planner";
 import { getIntegratedPlannerData } from "~/views/integrated-planner";
+import { socialMeta } from "~/lib/seo";
 
 const KST = "Asia/Seoul";
 const EMPTY_JANKEN_STAGE_PLAYS: Record<string, number> = {};
@@ -102,10 +100,15 @@ type CalculatedApEvent = {
   actionError: string | null;
 };
 
-export const meta: MetaFunction = () => [
-  { title: "AP 플래너 | 몰루로그" },
-  { name: "description", content: "이벤트 상점 목표에 필요한 AP와 AP 모으기 순서를 확인해보세요" },
-];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "AP 플래너";
+  const description = "이벤트 상점 목표에 필요한 AP와 AP 모으기 순서를 확인해보세요";
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+  ];
+};
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -557,9 +560,7 @@ function calculateShopRequiredAp(
       overriddenRequiredQuantities: state.overriddenRequiredQuantities,
     });
     const plan = deriveJankenPlan(minigameConfig.janken, jankenEntry, shop.jankenDefaultProgress, {
-      shopCurrencyRequired: resourceRoles.shopUid
-        ? (linkedShopLedger.remainingToFarm[resourceRoles.shopUid] ?? 0)
-        : 0,
+      shopCurrencyRequired: resourceRoles.shopUid ? (linkedShopLedger.remainingToFarm[resourceRoles.shopUid] ?? 0) : 0,
       shopCurrencyResourceUid: resourceRoles.shopUid ?? undefined,
       studentGrowthResourceUid: shop.jankenStudentGrowthUid,
     });
@@ -672,11 +673,7 @@ function updateCondition(state: ApPlannerState, field: ApConditionField, value: 
 function isAccessAtWithinEvent(event: ApDisplayEvent, accessAt: string) {
   const timestamp = Date.parse(accessAt);
   if (!event.endAt) return false;
-  return (
-    Number.isFinite(timestamp) &&
-    timestamp >= Date.parse(event.startAt) &&
-    timestamp < Date.parse(event.endAt)
-  );
+  return Number.isFinite(timestamp) && timestamp >= Date.parse(event.startAt) && timestamp < Date.parse(event.endAt);
 }
 
 function ApMonthDivider({ month }: { month: string }) {
@@ -1042,12 +1039,16 @@ export default function ApPlannerRoute() {
       submitAction({ intent: operation, eventUid });
       return;
     }
-    void updateGuestAp((current) => {
-      const eventPlans = { ...current.eventPlans };
-      if (operation === "add-plan") eventPlans[eventUid] ??= { accessAt: null };
-      else delete eventPlans[eventUid];
-      return { ...current, eventPlans };
-    }, eventUid, operation);
+    void updateGuestAp(
+      (current) => {
+        const eventPlans = { ...current.eventPlans };
+        if (operation === "add-plan") eventPlans[eventUid] ??= { accessAt: null };
+        else delete eventPlans[eventUid];
+        return { ...current, eventPlans };
+      },
+      eventUid,
+      operation,
+    );
   };
 
   const saveAccessAt = async (event: ApDisplayEvent, accessAt: string): Promise<boolean> => {
@@ -1056,17 +1057,21 @@ export default function ApPlannerRoute() {
       const result = await submitActionForResult({ intent: "save-access-time", eventUid: event.timelineUid, accessAt });
       return result.success;
     }
-    return updateGuestAp((current) => {
-      const plan = current.eventPlans[event.timelineUid];
-      if (!plan) throw new Error("먼저 AP 모으기 계산을 등록해주세요.");
-      return {
-        ...current,
-        eventPlans: {
-          ...current.eventPlans,
-          [event.timelineUid]: { ...plan, accessAt: new Date(accessAt).toISOString() },
-        },
-      };
-    }, event.timelineUid, "save-access-time");
+    return updateGuestAp(
+      (current) => {
+        const plan = current.eventPlans[event.timelineUid];
+        if (!plan) throw new Error("먼저 AP 모으기 계산을 등록해주세요.");
+        return {
+          ...current,
+          eventPlans: {
+            ...current.eventPlans,
+            [event.timelineUid]: { ...plan, accessAt: new Date(accessAt).toISOString() },
+          },
+        };
+      },
+      event.timelineUid,
+      "save-access-time",
+    );
   };
 
   const addPlanWithAccessAt = async (event: ApDisplayEvent, accessAt: string): Promise<boolean> => {
@@ -1079,17 +1084,21 @@ export default function ApPlannerRoute() {
       });
       return result.success;
     }
-    return updateGuestAp((current) => {
-      const eventPlans = { ...current.eventPlans };
-      if (!Object.hasOwn(eventPlans, event.timelineUid) && Object.keys(eventPlans).length >= 500) {
-        throw new Error("AP 모으기 계산이 너무 많아요.");
-      }
-      eventPlans[event.timelineUid] = {
-        ...eventPlans[event.timelineUid],
-        accessAt: new Date(accessAt).toISOString(),
-      };
-      return { ...current, eventPlans };
-    }, event.timelineUid, "add-plan-with-access");
+    return updateGuestAp(
+      (current) => {
+        const eventPlans = { ...current.eventPlans };
+        if (!Object.hasOwn(eventPlans, event.timelineUid) && Object.keys(eventPlans).length >= 500) {
+          throw new Error("AP 모으기 계산이 너무 많아요.");
+        }
+        eventPlans[event.timelineUid] = {
+          ...eventPlans[event.timelineUid],
+          accessAt: new Date(accessAt).toISOString(),
+        };
+        return { ...current, eventPlans };
+      },
+      event.timelineUid,
+      "add-plan-with-access",
+    );
   };
 
   const applyException = (eventUid: string, suggestion: ApRefillSuggestion) => {

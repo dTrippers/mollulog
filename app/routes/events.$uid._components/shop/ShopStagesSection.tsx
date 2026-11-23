@@ -37,11 +37,6 @@ export function ShopStagesSection({ plan }: { plan: EventShopPlanContext }) {
       <ShopSectionHeader
         id="stage-plan-title"
         title="스테이지 소탕"
-        description={
-          stacked
-            ? undefined
-            : "대상 스테이지에서 AP 소모를 최소화하는 소탕 횟수를 계산해요. 추가로 재화를 획득하려면 추가 소탕 횟수를 입력해주세요."
-        }
         actions={
           <Switch
             id="event-shop-first-clear"
@@ -52,12 +47,6 @@ export function ShopStagesSection({ plan }: { plan: EventShopPlanContext }) {
           />
         }
       />
-      {stacked ? (
-        <p className="text-[0.8125rem] text-v2-fg-tertiary">
-          대상 스테이지에서 AP 소모를 최소화하는 소탕 횟수를 계산해요. 추가로 재화를 획득하려면 추가 소탕 횟수를
-          입력해주세요.
-        </p>
-      ) : null}
       <RoadPuzzlePlannerStatus plan={plan} />
       {stacked ? (
         <div className="flex flex-col gap-3">

@@ -1,4 +1,4 @@
-import { lazy, type MouseEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, type MouseEvent, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { SectionCard } from "~/components/primitives";
 import Input from "~/components/primitives/Input";
 import type { Attack, Defense } from "~/graphql/graphql";
@@ -9,8 +9,11 @@ import {
 } from "~/lib/ranks/clear-time-distribution";
 import { fetchRangeStats, type RangeStats } from "~/lib/ranks/range-stats";
 import type { RaidType, Role } from "~/models/content.d";
+import type { RaidChartRecordContextView } from "~/views/raid-records";
 import { CHART_MARGIN_RIGHT, formatDifficulty, formatTimeLabel } from "./raid-score-histogram-format";
+import { RaidChartRecordLine, RaidChartSaveToast, RaidChartServerChoice } from "./RaidChartMyRecord";
 import RaidScoreRangeDetail from "./RaidScoreRangeDetail";
+import { parseChartScoreInput, type RaidChartMyScore } from "./use-raid-chart-my-score";
 
 // recharts is large, so the bars load separately and the distribution fetch is not held behind that download.
 const RaidScoreHistogramBars = lazy(() => import("./RaidScoreHistogramBars"));
@@ -30,6 +33,10 @@ type RaidScoreHistogramProps = {
   allStudents: Record<string, StudentInfo>;
   recruitedStudentTiers: Record<string, number>;
   hasRecruitedStudentData: boolean;
+  // The signed-in Sensei's record of the season, which "내 점수" reads and saves. Null for guests.
+  myRecordContext: RaidChartRecordContextView | null;
+  // "내 점수", kept by the season page so a save on its way survives this chart unmounting for another defense type.
+  myScore: RaidChartMyScore;
 };
 
 export type ScoreRange = {
@@ -78,7 +85,6 @@ export type ScoreMarker = {
 const rangeStatsCache = new Map<string, RangeStats>();
 const reportedDifficultyBandStatsMismatches = new Set<string>();
 const RANGE_STATS_CACHE_MAX_SIZE = 50;
-const MY_SCORE_STORAGE_PREFIX = "raid-clear-time-distribution:my-score";
 const CHART_PADDING_PX = 12;
 const Y_AXIS_WIDTH = 42;
 const CHART_SKELETON_BARS = [
@@ -104,6 +110,8 @@ export default function RaidScoreHistogram({
   allStudents,
   recruitedStudentTiers,
   hasRecruitedStudentData,
+  myRecordContext,
+  myScore,
 }: RaidScoreHistogramProps) {
   const [overviewDistribution, setOverviewDistribution] = useState<ClearTimeDistribution | null>(null);
   const [chartDistribution, setChartDistribution] = useState<ClearTimeDistribution | null>(null);
@@ -113,33 +121,6 @@ export default function RaidScoreHistogram({
   const [rangeStats, setRangeStats] = useState<RangeStats | null>(null);
   const [rangeStatsLoading, setRangeStatsLoading] = useState(false);
   const [rangeStatsLoadedKey, setRangeStatsLoadedKey] = useState<string | null>(null);
-  const myScoreStorageKey = `${MY_SCORE_STORAGE_PREFIX}:${raidType}:${season}:${defenseType}`;
-  const [myScoreInput, setMyScoreInput] = useState("");
-  const [myScoreStorageLoadedKey, setMyScoreStorageLoadedKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      setMyScoreInput(formatScoreInput(window.localStorage.getItem(myScoreStorageKey) ?? ""));
-    } catch {
-      setMyScoreInput("");
-    }
-    setMyScoreStorageLoadedKey(myScoreStorageKey);
-  }, [myScoreStorageKey]);
-
-  useEffect(() => {
-    if (myScoreStorageLoadedKey !== myScoreStorageKey) {
-      return;
-    }
-    try {
-      if (myScoreInput) {
-        window.localStorage.setItem(myScoreStorageKey, myScoreInput);
-      } else {
-        window.localStorage.removeItem(myScoreStorageKey);
-      }
-    } catch {
-      // Ignore localStorage errors.
-    }
-  }, [myScoreInput, myScoreStorageKey, myScoreStorageLoadedKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -356,7 +337,6 @@ export default function RaidScoreHistogram({
     rangeStatsCache.has(currentRangeStatsCacheKey);
   const waitingForSelectedRange = selectedBandKey !== "all" && !selectedRange && distributionLoading;
   const detailLoading = rangeStatsLoading || !rangeStatsReady || waitingForSelectedRange;
-  const displayedMyScoreInput = myScoreStorageLoadedKey === myScoreStorageKey ? myScoreInput : "";
 
   return (
     <div className="space-y-4">
@@ -372,8 +352,29 @@ export default function RaidScoreHistogram({
             clearLevels={clearLevels}
             selectedRange={selectedRange}
             selectedBandKey={selectedBandKey}
-            myScoreInput={displayedMyScoreInput}
-            onMyScoreInputChange={(value) => setMyScoreInput(formatScoreInput(value))}
+            myScoreInput={myScore.value}
+            onMyScoreInputChange={myScore.onChange}
+            myScoreExtras={
+              myScore.serverOptions ? (
+                <RaidChartServerChoice value={myScore.server} onChange={myScore.selectServer} />
+              ) : null
+            }
+            myRecordLine={
+              <RaidChartRecordLine
+                mode={myScore.mode}
+                server={myScore.server}
+                seasonIndex={myScore.serverOptions?.[myScore.server] ?? myRecordContext?.kr.seasonIndex ?? null}
+                showSeasonIndex={myScore.serverOptions !== null}
+                raidType={myRecordContext?.raidType ?? null}
+                defenseType={defenseType}
+                record={myScore.record}
+                savedScore={myScore.savedScore}
+                inputEmpty={parseChartScoreInput(myScore.value) === null}
+                status={myScore.status}
+                onRetry={myScore.retry}
+                username={myRecordContext?.username ?? null}
+              />
+            }
             onSelectRange={selectRange}
             onSelectBand={selectBand}
           />
@@ -388,6 +389,8 @@ export default function RaidScoreHistogram({
         recruitedStudentTiers={recruitedStudentTiers}
         hasRecruitedStudentData={hasRecruitedStudentData}
       />
+
+      <RaidChartSaveToast visible={myScore.toastVisible} />
     </div>
   );
 }
@@ -447,6 +450,8 @@ function HistogramChart({
   selectedBandKey,
   myScoreInput,
   onMyScoreInputChange,
+  myScoreExtras,
+  myRecordLine,
   onSelectRange,
   onSelectBand,
 }: {
@@ -458,6 +463,8 @@ function HistogramChart({
   selectedBandKey: string;
   myScoreInput: string;
   onMyScoreInputChange: (value: string) => void;
+  myScoreExtras: ReactNode;
+  myRecordLine: ReactNode;
   onSelectRange: (range: SelectedRange) => void;
   onSelectBand: (bandKey: string) => void;
 }) {
@@ -486,7 +493,7 @@ function HistogramChart({
     () => (selectedBandKey === "all" ? buildDifficultyBoundaryLines(rows) : []),
     [rows, selectedBandKey],
   );
-  const myScore = parseScoreInput(myScoreInput);
+  const myScore = parseChartScoreInput(myScoreInput);
   const myScoreMarker = useMemo(
     () =>
       myScore === null
@@ -576,6 +583,8 @@ function HistogramChart({
         marker={myScoreMarker}
         selectedBandKey={selectedBandKey}
         onChange={onMyScoreInputChange}
+        before={myScoreExtras}
+        recordLine={myRecordLine}
       />
     </div>
   );
@@ -586,13 +595,17 @@ function MyScoreInput({
   marker,
   selectedBandKey,
   onChange,
+  before,
+  recordLine,
 }: {
   value: string;
   marker: ScoreMarker | null;
   selectedBandKey: string;
   onChange: (value: string) => void;
+  before: ReactNode;
+  recordLine: ReactNode;
 }) {
-  const parsedScore = parseScoreInput(value);
+  const parsedScore = parseChartScoreInput(value);
   const helperText =
     parsedScore === null
       ? "내 점수 위치를 표시해요"
@@ -606,6 +619,7 @@ function MyScoreInput({
   return (
     <div className="flex flex-col items-end gap-1 pt-1">
       <div className="flex items-center gap-1.5">
+        {before}
         <label
           htmlFor="raid-clear-time-my-score"
           className="text-sm font-medium text-neutral-600 dark:text-neutral-300"
@@ -636,6 +650,7 @@ function MyScoreInput({
       >
         {parsedScore === null ? "." : helperText}
       </p>
+      {recordLine}
     </div>
   );
 }
@@ -1294,20 +1309,6 @@ function formatTimeLabelWithMilliseconds(totalSeconds: number): string {
   const second = Math.floor((totalMilliseconds % 60_000) / 1_000);
   const millisecond = totalMilliseconds % 1_000;
   return `${minute.toString().padStart(2, "0")}:${second.toString().padStart(2, "0")}.${millisecond.toString().padStart(3, "0")}`;
-}
-
-function parseScoreInput(value: string): number | null {
-  const digits = value.replace(/\D/g, "");
-  if (!digits) {
-    return null;
-  }
-  const score = Number.parseInt(digits, 10);
-  return Number.isFinite(score) && score > 0 ? score : null;
-}
-
-function formatScoreInput(value: string): string {
-  const score = parseScoreInput(value);
-  return score === null ? "" : score.toLocaleString();
 }
 
 function formatRatio(ratio: number): string {

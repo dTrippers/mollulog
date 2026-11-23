@@ -149,11 +149,7 @@ export default function SyncDraftReview({ draft, metadataByKey, currentValues, a
             {rows.length === 0 ? (
               <ConnectStateMessage Icon={ArchiveBoxIcon} title="검토할 항목이 없어요" />
             ) : (
-              <ConnectStateMessage
-                Icon={ArchiveBoxIcon}
-                title="바뀌는 값이 없어요"
-                description={`가져온 값이 모두 지금 값과 같아요. 전체를 눌러 모든 ${subject}을 볼 수 있어요.`}
-              />
+              <ConnectStateMessage Icon={ArchiveBoxIcon} title="바뀌는 값이 없어요" />
             )}
           </div>
         ) : (

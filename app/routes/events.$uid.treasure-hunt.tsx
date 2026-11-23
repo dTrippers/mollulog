@@ -3,6 +3,7 @@ import { useLoaderData } from "react-router";
 import { TreasureHuntScreen } from "./events.$uid._components/TreasureHuntScreen";
 import { treasureHuntLocale } from "~/locales/ko";
 import { getEventMetadata, getEventShopContentForMetadata } from "~/models/event-content";
+import { socialMeta } from "~/lib/seo";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
   const timelineUid = params.uid;
@@ -25,9 +26,14 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   };
 };
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
+export const meta: MetaFunction<typeof loader> = ({ loaderData, location }) => {
   const title = `${loaderData?.eventName ?? "이벤트"} - ${treasureHuntLocale.simulatorTitle}`;
-  return [{ title: `${title} | 몰루로그` }, { name: "description", content: treasureHuntLocale.simulatorDescription }];
+  const description = treasureHuntLocale.simulatorDescription;
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+  ];
 };
 
 export default function EventTreasureHuntSimulatorRoute() {

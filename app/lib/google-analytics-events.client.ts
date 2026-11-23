@@ -75,7 +75,7 @@ const eventRules = {
   notification_preference_saved: {},
   account_deleted: {},
   student_state_saved: { source: ["manual", "ocr", "connect_import"], scope: ["single", "bulk"] },
-  growth_plan_changed: { action: ["add", "remove", "enroll", "tier", "relationship", "growth"] },
+  growth_plan_changed: { action: ["add", "remove", "enroll", "tier", "relationship", "growth", "reorder"] },
   relationship_saved: { action: ["save", "delete"] },
   resource_inventory_saved: { source: ["manual", "draft"] },
   furniture_inventory_saved: {},

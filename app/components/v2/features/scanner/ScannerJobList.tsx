@@ -60,7 +60,7 @@ export function ScannerJobList({ items }: { items: ScannerJobListItem[] }) {
               to={item.href}
               aria-current={item.selected ? "page" : undefined}
               className={cn(
-                "-mx-v2-row-x flex min-h-v2-row-min items-center justify-between gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y hover:bg-v2-hover",
+                "-mx-v2-row-x flex min-h-v2-row-min items-center justify-between gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y hover:bg-v2-hover v2-interaction-transition",
                 item.selected && "bg-v2-hover",
                 v2FocusRing,
               )}

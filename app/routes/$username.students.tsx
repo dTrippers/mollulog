@@ -47,6 +47,7 @@ import { useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-hooks";
 import { withDirectionParticle, withObjectParticle } from "~/lib/korean";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import { normalizeRouteError } from "~/lib/route-error";
+import { socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import {
   addRecruitedStudents,
@@ -143,12 +144,13 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   };
 };
 
-export const meta: MetaFunction = ({ params }) => {
+export const meta: MetaFunction = ({ params, location }) => {
+  const title = `${params.username || ""} - 학생부 | 몰루로그`.trim();
+  const description = `${params.username} 선생님이 모집한 학생 목록을 확인해보세요`;
   return [
-    { title: `${params.username || ""} - 학생부 | 몰루로그`.trim() },
-    { name: "description", content: `${params.username} 선생님이 모집한 학생 목록을 확인해보세요` },
-    { name: "og:title", content: `${params.username || ""} - 학생부 | 몰루로그`.trim() },
-    { name: "og:description", content: `${params.username} 선생님이 모집한 학생 목록을 확인해보세요` },
+    { title },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
   ];
 };
 
@@ -438,13 +440,13 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
 const SCANNER_LINK = {
   title: "게임 화면 인식기",
-  description: "게임 내 학생 리스트 화면을 녹화하여 학생 정보를 가져올 수 있어요",
+  description: "게임 내 학생 목록 녹화로 정보 가져오기",
   to: "/scanner/student",
 } as const;
 
 const DIRECTORY_LINK = {
   title: "학생부",
-  description: "모든 학생의 프로필과 통계를 확인해요",
+  description: "모든 학생의 프로필과 통계 확인",
   to: "/students",
 } as const;
 
@@ -719,7 +721,7 @@ export default function UserPage() {
     savingRef.current = false;
     const result = saveFetcher.data;
     if (!result) {
-      setSaveFailure("저장하지 못했어요. 입력한 값은 그대로 있어요. 다시 시도해주세요.");
+      setSaveFailure("저장하지 못했어요.");
       return;
     }
     if ("ok" in result && result.ok) {
@@ -751,11 +753,7 @@ export default function UserPage() {
       revealGrowthRow(Object.keys(next)[0]);
       return;
     }
-    setSaveFailure(
-      "code" in result && result.code === STUDENT_STATE_STALE_CODE
-        ? result.error
-        : "저장하지 못했어요. 입력한 값은 그대로 있어요. 다시 시도해주세요.",
-    );
+    setSaveFailure("code" in result && result.code === STUDENT_STATE_STALE_CODE ? result.error : "저장하지 못했어요.");
   }, [saveFetcher.data, saveFetcher.state, exitEditing, showToast]);
 
   // Desktop edits the table at the full content width, so the Aside folds away while editing.
@@ -785,7 +783,10 @@ export default function UserPage() {
 
   // ---- Aside and mobile bar ----
   const resetFilters = useCallback(() => setFilter((current) => clearStudentsFilters(current)), [setFilter]);
-  const hideMobileBar = stacked && (editing || (batchMode && batchUids.size > 0));
+  // The batch bar shows in the summary view as soon as batch mode is on, before any selection. The mobile bar steps
+  // aside only while it shows: batch mode stays on when the view switches to 자세히, where the batch bar is gone.
+  const batchBarShown = me && batchMode && !growthView;
+  const hideMobileBar = stacked && (editing || batchBarShown);
   useEffect(() => {
     setAsideContent(
       <>
@@ -882,10 +883,12 @@ export default function UserPage() {
     <div
       className={cn(
         "min-w-0 space-y-v2-group-gap",
-        (editing || (batchMode && batchUids.size > 0)) && stacked && "pb-24",
+        (editing || batchBarShown) && stacked && "pb-24",
       )}
     >
-      <ResultToast toast={toast} onClose={closeToast} aboveActionBar={stacked && (editing || batchMode)} />
+      {/* Stacked layouts always show a bottom bar, the edit or batch bar or else the mobile action bar, so the toast sits
+          above it either way. */}
+      <ResultToast toast={toast} onClose={closeToast} aboveActionBar={stacked} />
 
       {editing ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -910,7 +913,7 @@ export default function UserPage() {
                 label="필터 및 정렬"
                 onClose={() => setFilterPopoverOpen(false)}
                 returnFocusRef={filterTriggerRef}
-                className="max-h-[70dvh] w-80 overflow-y-auto"
+                className="max-h-[min(70dvh,var(--v2-popover-room,100dvh))] w-80 overflow-y-auto"
               >
                 <StudentsFilterBody state={filter} onChange={setFilter} />
               </Popover>
@@ -977,11 +980,6 @@ export default function UserPage() {
               onValueChange={handleValueChange}
               getDetailHref={(uid) => (me ? `/students/${uid}#student-basic-info` : `/students/${uid}`)}
             />
-            {editing && !stacked ? (
-              <p className="text-xs text-v2-fg-tertiary">
-                표를 가로로 스크롤하면 나머지 열을 볼 수 있어요. 학생 열은 고정돼요.
-              </p>
-            ) : null}
           </>
         )
       ) : (
@@ -992,9 +990,6 @@ export default function UserPage() {
                 모집한 학생{" "}
                 <span className="font-normal text-v2-fg-tertiary tabular-nums">{recruitedStudents.length}</span>
               </h2>
-              {me && !noRecruited ? (
-                <p className="mt-0.5 text-sm text-v2-fg-secondary">학생을 선택해 현재 성급을 수정할 수 있어요.</p>
-              ) : null}
             </div>
             {noRecruited ? (
               <EmptySection
@@ -1067,26 +1062,20 @@ export default function UserPage() {
                 placement={editBarFixed ? "fixed" : "sticky"}
                 expandActions={editBarFixed}
                 className={barClass}
-                summary={
-                  <span className="block">
-                    {batchUids.size}명 선택됨
-                    <span className="block text-xs font-normal text-v2-fg-tertiary">
-                      {batchOverLimit
-                        ? `한 번에 최대 ${MAX_RECRUITED_STUDENT_BATCH_SIZE}명까지 등록할 수 있어요.`
-                        : "학생마다 초기 성급으로 등록돼요."}
-                    </span>
-                  </span>
+                summary={`${batchUids.size}명 선택됨`}
+                note={
+                  batchOverLimit
+                    ? `한 번에 최대 ${MAX_RECRUITED_STUDENT_BATCH_SIZE}명까지 등록할 수 있어요.`
+                    : "학생마다 초기 성급으로 등록돼요."
                 }
               >
                 <Button
-                  variant="text"
                   disabled={batchSubmitting || unrecruitedStudents.length === 0}
                   onClick={() => setBatchUids(new Set(unrecruitedStudents.map((student) => student.uid)))}
                 >
                   모두 선택
                 </Button>
                 <Button
-                  variant="text"
                   disabled={batchSubmitting || batchUids.size === 0}
                   onClick={() => setBatchUids(new Set())}
                 >
@@ -1117,27 +1106,25 @@ export default function UserPage() {
           placement={editBarFixed ? "fixed" : "sticky"}
           expandActions={editBarFixed}
           className={barClass}
-          summary={
-            <span className="block">
-              학생 {changes.students}명 · 바꾼 값 {changes.values}개
-              {saving ? (
-                <StatusNotice tone="neutral" Icon={ArrowPathIcon} className="mt-0.5 text-xs font-normal">
-                  저장하는 중이에요…
-                </StatusNotice>
-              ) : conflictCount > 0 ? (
-                <StatusNotice tone="warning" className="mt-0.5 text-xs font-normal">
-                  편집하는 사이 다른 곳에서 바뀐 값이 {conflictCount}개 있어요.
-                </StatusNotice>
-              ) : errorCount > 0 ? (
-                <StatusNotice tone="danger" className="mt-0.5 text-xs font-normal">
-                  확인할 입력값이 {errorCount}개 있어요.
-                </StatusNotice>
-              ) : saveFailure ? (
-                <StatusNotice tone="danger" className="mt-0.5 text-xs font-normal">
-                  {saveFailure}
-                </StatusNotice>
-              ) : null}
-            </span>
+          summary={`학생 ${changes.students}명 · 바꾼 값 ${changes.values}개`}
+          note={
+            saving ? (
+              <StatusNotice tone="neutral" Icon={ArrowPathIcon} className="text-xs font-medium">
+                저장하는 중이에요…
+              </StatusNotice>
+            ) : conflictCount > 0 ? (
+              <StatusNotice tone="warning" className="text-xs font-medium">
+                편집하는 사이 다른 곳에서 바뀐 값이 {conflictCount}개 있어요.
+              </StatusNotice>
+            ) : errorCount > 0 ? (
+              <StatusNotice tone="danger" className="text-xs font-medium">
+                확인할 입력값이 {errorCount}개 있어요.
+              </StatusNotice>
+            ) : saveFailure ? (
+              <StatusNotice tone="danger" className="text-xs font-medium">
+                {saveFailure}
+              </StatusNotice>
+            ) : null
           }
         >
           <Button
@@ -1233,8 +1220,8 @@ function ViewSwitch({
           onClick={() => onChange(key)}
           className={cn(
             "inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-md px-3 text-xs font-medium",
-            view === key ? "bg-v2-surface text-v2-fg shadow-sm" : "text-v2-fg-secondary hover:bg-v2-hover",
-            "disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-transparent",
+            view === key ? "bg-v2-surface text-v2-fg shadow-sm" : "text-v2-fg-secondary hover:bg-v2-hover v2-interaction-transition",
+            "disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-transparent v2-interaction-transition",
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
           )}
         >
@@ -1259,7 +1246,6 @@ function NoMatchesState({ onReset }: { onReset: () => void }) {
   return (
     <div className="rounded-lg bg-v2-surface px-4 py-10 text-center">
       <p className="text-sm font-semibold text-v2-fg">조건에 맞는 학생이 없어요</p>
-      <p className="mt-1 text-xs text-v2-fg-tertiary">필터를 바꾸거나 초기화해주세요.</p>
       <Button variant="danger-subtle" size="sm" className="mt-3" onClick={onReset}>
         필터 초기화
       </Button>

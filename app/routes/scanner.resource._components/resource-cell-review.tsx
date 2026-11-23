@@ -678,7 +678,7 @@ function CellCandidatePopover({
         }
         onMouseEnter={() => onHighlightChange(true)}
         onClick={() => setOpen(true)}
-        className="block cursor-pointer rounded-lg leading-none outline-none hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus disabled:cursor-default"
+        className="block cursor-pointer rounded-lg leading-none outline-none hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus disabled:cursor-default v2-interaction-transition"
       >
         {children}
       </button>
@@ -737,7 +737,7 @@ function CandidateChoiceButton({
       aria-pressed={selected}
       onClick={onSelect}
       className={cn(
-        "flex w-full cursor-pointer items-center gap-2 rounded-md p-1.5 text-left outline-none hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
+        "flex w-full cursor-pointer items-center gap-2 rounded-md p-1.5 text-left outline-none hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition",
         selected && "bg-v2-highlight",
       )}
     >

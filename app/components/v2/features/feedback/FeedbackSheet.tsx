@@ -81,7 +81,7 @@ export function FeedbackSheet({ open, onClose, featureName, feedbackType }: Feed
     <Sheet
       open={open}
       title="의견/오류 제보"
-      description={`${featureName}를 사용하면서 불편했던 점이나 발견한 오류를 알려주세요. 현재 페이지와 브라우저 정보가 진단 정보로 함께 전송됩니다.`}
+      description="현재 페이지와 브라우저 정보가 진단용으로 함께 전송돼요."
       onClose={onClose}
     >
       {submitted ? (

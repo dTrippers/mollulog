@@ -11,6 +11,7 @@ import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { parseFeedbackAdditional } from "~/domain/feedback";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
+import { socialMeta } from "~/lib/seo";
 import { createFeedbackTicket, getFeedbackTicketsByUserId } from "~/models/feedback";
 
 type ContactActionData = {
@@ -85,13 +86,15 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 };
 
-export const meta: MetaFunction = () => [
-  { title: "제안/문의 | 몰루로그" },
-  {
-    name: "description",
-    content: "컨텐츠 및 기능 제안, 오류 신고, 기타 문의 사항과 답변 내역을 확인해보세요.",
-  },
-];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "제안/문의";
+  const description = "컨텐츠 및 기능 제안, 오류 신고, 기타 문의 사항과 답변 내역을 확인해보세요.";
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+  ];
+};
 
 export const ErrorBoundary = ContactRouteError;
 
@@ -117,7 +120,7 @@ export default function Contact() {
                 <p className="font-medium">문의 등록에는 로그인이 필요해요.</p>
                 <p className="text-sm text-v2-fg-secondary">계정이 없으신 경우 메일로도 문의를 남기실 수 있어요.</p>
                 <a
-                  className="inline-flex min-h-v2-control-min items-center gap-2 rounded-md underline underline-offset-4 hover:text-v2-fg"
+                  className="inline-flex min-h-v2-control-min items-center gap-2 rounded-md underline underline-offset-4 hover:text-v2-fg v2-interaction-transition"
                   href="mailto:contact@mollulog.net"
                 >
                   <EnvelopeIcon className="size-4" aria-hidden="true" />

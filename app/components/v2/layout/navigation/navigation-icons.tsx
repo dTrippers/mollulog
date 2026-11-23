@@ -68,6 +68,13 @@ export const NAVIGATION_ICONS = {
     </>,
     <rect x="3" y="5.5" width="18" height="13" rx="1.5" />,
   ),
+  "raid-records": createNavigationIcon(
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="1.5" />
+      <path d="m7 15 3.5-3.5 3 2 3.5-4.5" />
+    </>,
+    <rect x="3" y="4" width="18" height="16" rx="1.5" />,
+  ),
   "pyroxene-planner": createNavigationIcon(
     <>
       <path d="m12 2 7.5 5.25v9.5L12 22l-7.5-5.25v-9.5Z" />

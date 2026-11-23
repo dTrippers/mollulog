@@ -15,7 +15,7 @@ import {
   scoreToDifficultyAndTime,
   timeToScore,
 } from "~/domain/raid-score";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { trackGoogleAnalyticsEventOncePerPage } from "~/lib/google-analytics-events.client";
 import { difficultyLocale } from "~/locales/ko";
 import { getAllRaidSchedules } from "~/models/raid";
@@ -42,9 +42,14 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 };
 
 export const meta: MetaFunction = ({ location }) => {
-  const title = "총력전/대결전 점수 계산기 | 몰루로그";
+  const title = "총력전/대결전 점수 계산기";
   const description = "블루 아카이브 총력전/대결전 시간과 점수를 변환할 수 있어요";
-  return [{ title }, { name: "description", content: description }, canonicalLink(location.pathname)];
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+    canonicalLink(location.pathname),
+  ];
 };
 
 export default function RaidScoreUtil() {

@@ -298,6 +298,11 @@ function canonicalAuditSnapshot(
   const withoutMetadata = (row: StudentStatesRow | StudentTargetsRow | null) => {
     if (!row) return null;
     const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...value } = row;
+    // The growth planner's manual order is a planner layout choice, not a student state, so it is not audited.
+    if ("plannerPosition" in value) {
+      const { plannerPosition: _plannerPosition, ...target } = value;
+      return target;
+    }
     return value;
   };
   return stableValue({
@@ -335,8 +340,12 @@ function hasStateValues(
   return Object.entries(value).some(([key, field]) => (key.endsWith("Uid") ? field != null : field != null));
 }
 
+// The planner position is display order only; it does not keep a target row active.
 function hasTargetValues(
-  value: Omit<StudentTargetsRow, "id" | "uid" | "userId" | "studentUid" | "createdAt" | "updatedAt" | "deletedAt">,
+  value: Omit<
+    StudentTargetsRow,
+    "id" | "uid" | "userId" | "studentUid" | "createdAt" | "updatedAt" | "deletedAt" | "plannerPosition"
+  >,
 ): boolean {
   if (value.studentGrowthUid != null || value.relationshipLevelUid != null) return true;
   if (Object.entries(value).some(([key, field]) => key !== "giftPlan" && field != null)) return true;

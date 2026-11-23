@@ -535,7 +535,7 @@ export default function ResourceScanner() {
     job && !job.reviewError ? (
       <div className="flex flex-col gap-v2-block-gap lg:grid lg:grid-cols-[minmax(0,11fr)_minmax(0,9fr)] lg:items-start">
         {selectedImage ? (
-          <section className="flex min-w-0 flex-col gap-v2-group-gap rounded-lg bg-v2-surface p-v2-block-p lg:sticky lg:top-4">
+          <section className="flex min-w-0 flex-col gap-v2-group-gap rounded-lg bg-v2-surface p-v2-block-p lg:sticky lg:top-[calc(var(--v2-toolbar-sticky-height,0px)+1rem)]">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <p className="min-w-0 truncate text-sm font-semibold text-v2-fg">
                 {job.images.findIndex((image) => image.uid === selectedImage.uid) + 1} / {job.images.length} ·{" "}
@@ -680,7 +680,6 @@ export default function ResourceScanner() {
       <PageActionBar
         placement="sticky"
         expandActions
-        className="bottom-0 px-0 py-v2-block-gap"
         summary={phase === "applying" ? "반영 중이에요" : isCancelling ? "삭제 중이에요" : null}
       >
         <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
@@ -832,7 +831,7 @@ export default function ResourceScanner() {
       onFiles={addFiles}
       targetGuide={<ScannerUploadTargetGuide target="item" />}
       targetPath="[메뉴] > [아이템]"
-      helpText="파일을 끌어다 놓거나 붙여넣기(Ctrl+V), 또는 클릭해서 선택"
+      helpText="붙여넣기(Ctrl+V)도 지원해요"
       descriptionLines={["1회 최대 이미지 30장 · PNG, JPG, WEBP"]}
       consentChecked={allowsTrainingDataUse}
       consentDisabled={isUploadLocked}
@@ -878,20 +877,14 @@ export default function ResourceScanner() {
             </p>
           </>
         ) : isUploadQuotaExhausted && uploadQuota ? (
-          <>
-            <ScannerStepTitle
-              title="이미지 업로드 가능 횟수를 모두 사용했어요"
-              meta={
-                uploadQuota.nextAvailableAt
-                  ? `${formatScannerQuotaAvailability(uploadQuota.nextAvailableAt)}부터 다시 올릴 수 있어요`
-                  : undefined
-              }
-            />
-            <StatusNotice tone="neutral">
-              최근 7일 동안 이미지 {uploadQuota.limit}장을 올렸어요. 가장 오래된 업로드가 7일을 넘기면 다시 올릴 수
-              있어요.
-            </StatusNotice>
-          </>
+          <ScannerStepTitle
+            title="이미지 업로드 가능 횟수를 모두 사용했어요"
+            meta={
+              uploadQuota.nextAvailableAt
+                ? `${formatScannerQuotaAvailability(uploadQuota.nextAvailableAt)}부터 다시 올릴 수 있어요`
+                : undefined
+            }
+          />
         ) : (
           <ScannerStepTitle title="스크린샷을 선택해 주세요" />
         )}
@@ -911,7 +904,7 @@ export default function ResourceScanner() {
     <div
       className={cn(
         "flex flex-col gap-v2-block-gap",
-        hasFixedBar ? "pb-[calc(var(--mobile-nav-height)+5.5rem)]" : "pb-v2-block-p",
+        hasFixedBar ? "pb-[calc(var(--mobile-nav-height)+6.25rem)]" : "pb-v2-block-p",
       )}
     >
       {error && phase !== "review" && phase !== "applying" ? <StatusNotice tone="danger">{error}</StatusNotice> : null}
@@ -1220,7 +1213,7 @@ function SourceImagePreview({
       aria-label={`${number}번 스크린샷 ${image.filename} ${selected ? "선택됨" : "결과 보기"}${selectionRequiredCount > 0 ? `, ${selectionRequiredCount}개 확인 필요` : ""}`}
       className={cn(
         "relative w-24 shrink-0 cursor-pointer overflow-hidden rounded-md border bg-v2-inset text-left",
-        selected || highlighted ? "border-v2-fg" : "border-v2-divider hover:border-v2-control-border-strong",
+        selected || highlighted ? "border-v2-fg" : "border-v2-divider hover:border-v2-control-border-strong v2-interaction-transition",
         v2FocusRing,
       )}
     >

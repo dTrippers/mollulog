@@ -320,7 +320,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
       <Link
         to={`/events/${loaderData.eventUid}/shop`}
         className={cn(
-          "mt-2 inline-flex items-center gap-1 rounded-sm text-xs font-medium text-v2-link hover:underline",
+          "mt-2 inline-flex items-center gap-1 rounded-sm text-xs font-medium text-v2-link underline decoration-transparent hover:decoration-current v2-interaction-transition",
           v2FocusRing,
         )}
       >
@@ -405,7 +405,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                   <p className="text-xs text-v2-fg-tertiary">
                     {plan.recruitedStudentUids.includes(studentUid) ? (
                       <>
-                        <Link className="text-v2-link hover:underline" to={`/students/${studentUid}`}>
+                        <Link className="text-v2-link underline decoration-transparent hover:decoration-current v2-interaction-transition" to={`/students/${studentUid}`}>
                           {t.recruitedSourceLabel}
                         </Link>
                         {t.recruitedSourceSuffix}
@@ -416,7 +416,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                     {plan.signedIn ? (
                       <>
                         {" · "}
-                        <Link className="text-v2-link hover:underline" to="/utils/resources/inventory">
+                        <Link className="text-v2-link underline decoration-transparent hover:decoration-current v2-interaction-transition" to="/utils/resources/inventory">
                           {t.inventoryPlanner}
                         </Link>
                         {t.inventorySourceSuffix(loaderData.inventoryDate)}
@@ -506,7 +506,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
               aria-label={t.openSummary}
               onClick={() => openSheet("janken-summary")}
               className={cn(
-                "flex w-full items-center gap-3 rounded-[14px] bg-v2-elevated px-3.5 py-3 text-left shadow-lg",
+                "flex w-full items-center gap-3 rounded-[14px] bg-v2-popover-surface px-3.5 py-3 text-left shadow-lg backdrop-blur-md",
                 v2FocusRing,
               )}
             >
@@ -1240,7 +1240,7 @@ function ClearedStagesSection({
                       "inline-flex h-7 min-w-7 cursor-pointer items-center justify-center gap-1 rounded-full px-2.5 text-xs font-medium whitespace-nowrap",
                       done
                         ? "bg-v2-success-subtle text-v2-success"
-                        : "bg-v2-inset text-v2-fg-secondary hover:text-v2-fg",
+                        : "bg-v2-inset text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
                       v2FocusRing,
                     )}
                   >

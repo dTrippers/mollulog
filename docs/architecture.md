@@ -17,10 +17,9 @@ Cloudflare Workers
 - The web app is a React Router v7 SSR app running on Cloudflare Workers.
 - Game source data is read primarily from the BAQL GraphQL API.
 - PostgreSQL is the canonical persistence store. Workers connect through Hyperdrive, which provides connection pooling without query caching.
-- D1 is not an active runtime store. Historical source tables are retained only through the approved `zzz_` archive operation.
 - KV is used for response caching and for precomputed work driven by cron.
 
-The migration boundary is repository-based. Every persistence domain reads and writes PostgreSQL directly without a D1 fallback, comparison mode, or dual-write path. External BAQL data, KV cache/session state, and queues remain separate infrastructure concerns.
+Every persistence domain reads and writes PostgreSQL directly without a secondary store, fallback, comparison mode, or dual-write path. External BAQL data, KV cache/session state, and queues remain separate infrastructure concerns.
 
 ## Layers
 
@@ -134,6 +133,7 @@ Cron runs on a single schedule:
   - Source cache (`fetchSourceCached`): raw BAQL reference data. Applied in models only.
   - Route cache (`fetchRouteCached`, SWR): composed view-models. Applied in views only.
 - Cache keys are stored under the `cache::` prefix.
+- Bump a cache key's version whenever the shape of its cached value changes. Entries written before a deploy stay readable under the old key until they expire, and the new code would render them wrong.
 - Routes and screens do not invent cache policy; the owning layer (models or views) decides it.
 - Use the `forceRefresh` pattern when a forced refresh is needed, such as in cron and background work.
 

@@ -45,7 +45,6 @@ export default function PickupHistoryImporter({ tier3Students, onClose, onImport
           닫기
         </Button>
       </div>
-      <p className="-mt-2 text-xs text-v2-fg-tertiary">붙여넣은 데이터로 아래 모집 결과 입력값을 채워요.</p>
       <textarea
         id={fieldId}
         value={rawData}

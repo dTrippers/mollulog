@@ -11,6 +11,7 @@ import {
   type CacheRefreshTaskResults,
   countCompletedCacheRefreshTasks,
   createPendingCacheRefreshTaskResults,
+  type StoredCacheRefreshTaskResults,
 } from "~/domain/cache-refresh";
 import { normalizeInstant, type UtcIsoString } from "~/lib/date-time";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
@@ -57,7 +58,11 @@ function parseTaskResult(value: unknown, name: CacheRefreshTaskName): CacheRefre
   };
 }
 
-export function parseCacheRefreshTaskResults(value: unknown): CacheRefreshTaskResults {
+/**
+ * Parses stored task results. A task missing from the row was added after the job was created and is left
+ * out; a task that is present must be a valid result.
+ */
+export function parseCacheRefreshTaskResults(value: unknown): StoredCacheRefreshTaskResults {
   const parsed = typeof value === "string" ? (JSON.parse(value) as unknown) : value;
   if (!parsed || typeof parsed !== "object") {
     throw new Error("Invalid cache refresh task results");
@@ -65,8 +70,11 @@ export function parseCacheRefreshTaskResults(value: unknown): CacheRefreshTaskRe
 
   const candidate = parsed as Record<string, unknown>;
   return Object.fromEntries(
-    CACHE_REFRESH_TASK_NAMES.map((name) => [name, parseTaskResult(candidate[name], name)]),
-  ) as CacheRefreshTaskResults;
+    CACHE_REFRESH_TASK_NAMES.filter((name) => candidate[name] !== undefined).map((name) => [
+      name,
+      parseTaskResult(candidate[name], name),
+    ]),
+  ) as StoredCacheRefreshTaskResults;
 }
 
 function normalizePostgresInstant(value: Date | string | null): UtcIsoString | null {
@@ -242,7 +250,7 @@ async function mergeCacheRefreshTaskResults(
   queryName: string,
   results: Partial<CacheRefreshTaskResults>,
   options: CacheRefreshJobOptions,
-): Promise<CacheRefreshTaskResults> {
+): Promise<StoredCacheRefreshTaskResults> {
   return withCacheRefreshDatabase(
     env,
     queryName,
@@ -292,7 +300,7 @@ export async function recordCacheRefreshTaskResult(
   taskName: CacheRefreshTaskName,
   result: CacheRefreshTaskResult,
   options: CacheRefreshJobOptions = {},
-): Promise<CacheRefreshTaskResults> {
+): Promise<StoredCacheRefreshTaskResults> {
   return mergeCacheRefreshTaskResults(env, uid, "record_task_result", { [taskName]: result }, options);
 }
 
@@ -301,7 +309,7 @@ export async function recordSkippedCacheRefreshTasks(
   uid: string,
   taskNames: readonly CacheRefreshTaskName[],
   options: CacheRefreshJobOptions = {},
-): Promise<CacheRefreshTaskResults> {
+): Promise<StoredCacheRefreshTaskResults> {
   return mergeCacheRefreshTaskResults(
     env,
     uid,

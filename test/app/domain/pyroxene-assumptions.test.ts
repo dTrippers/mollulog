@@ -192,13 +192,13 @@ describe("buildPyroxeneAssumptionItems", () => {
       freeRecruitment: false,
     };
     expect(getPyroxeneRuleLabel(noRule.recruitmentRule)).toBeNull();
-    expect(buildPyroxeneAssumptionItems(noRule)).toEqual([{ id: "goal", label: "계산 기준: 평균 (천장 반영)" }]);
+    expect(buildPyroxeneAssumptionItems(noRule)).toEqual([{ id: "goal", label: "계산 기준: 평균" }]);
   });
 
   it("uses the exact goal text for all three modes without chips or separators", () => {
     const expected = [
       ["average", "계산 기준: 평균 (천장 미반영)"],
-      ["average_pity", "계산 기준: 평균 (천장 반영)"],
+      ["average_pity", "계산 기준: 평균"],
       ["ceil", "계산 기준: 천장"],
     ] as const;
 

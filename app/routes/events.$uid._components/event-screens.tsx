@@ -25,7 +25,7 @@ export type EventDetailTabKey =
 // A screen of the event detail. The other tabs show it as a tab; the overview lists it in its aside with the description.
 export type EventScreen = ScreenTabItem & { key: EventDetailTabKey; description?: string };
 
-const MINIGAME_DESCRIPTION = "미니게임 정보와 결과 시뮬레이션";
+const MINIGAME_DESCRIPTION = "미니게임 정보 확인과 결과 시뮬레이션";
 
 export function getActiveEventDetailTab(pathname: string, uid: string): EventDetailTabKey | null {
   if (pathname === `/events/${uid}`) return "overview";
@@ -68,7 +68,7 @@ export function buildEventScreens({
     {
       key: "shop",
       text: "상점 계산기",
-      description: "상점 재화 구매에 필요한 AP를 계산",
+      description: "아이템 구매에 필요한 AP 계산",
       Icon: ShoppingCartIcon,
       link: `/events/${uid}/shop`,
       disabled: shopDisabled,
@@ -77,7 +77,7 @@ export function buildEventScreens({
     {
       key: "simulator",
       text: "모집 시뮬레이션",
-      description: "픽업/모집 결과 시뮬레이션",
+      description: "픽업 모집 결과 미리 확인",
       Icon: SparklesIcon,
       link: `/events/${uid}/recruitment-simulator`,
       disabled: !recruitmentGroupUid,

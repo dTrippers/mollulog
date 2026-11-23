@@ -5,6 +5,7 @@ import { LoadFailureState } from "~/components/v2/features/students/LoadFailureS
 import { v2FocusRing } from "~/components/v2/layout/styles";
 import { nowUtcIso } from "~/lib/date-time";
 import { getLogger } from "~/lib/observability.server";
+import { socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { type ContentCommentWithSensei, getContentsComments } from "~/models/content.server";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
@@ -16,12 +17,13 @@ import { useUserLayout } from "./$username._components/user-layout";
 import { FavoriteEventCard } from "./$username.futures._components/FavoriteEventCard";
 import { buildFavoriteEvent, selectFavoriteEventContents } from "./$username.futures._components/favorite-events";
 
-export const meta: MetaFunction = ({ params }) => {
+export const meta: MetaFunction = ({ params, location }) => {
+  const title = `${params.username || ""} - 관심 학생 목록 | 몰루로그`.trim();
+  const description = `${params.username} 선생님의 관심 학생 목록을 확인해보세요`;
   return [
-    { title: `${params.username || ""} - 관심 학생 목록 | 몰루로그`.trim() },
-    { name: "description", content: `${params.username} 선생님의 관심 학생 목록을 확인해보세요` },
-    { name: "og:title", content: `${params.username || ""} - 관심 학생 목록 | 몰루로그`.trim() },
-    { name: "og:description", content: `${params.username} 선생님의 관심 학생 목록을 확인해보세요` },
+    { title },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
   ];
 };
 

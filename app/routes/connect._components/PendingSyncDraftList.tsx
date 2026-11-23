@@ -11,11 +11,7 @@ export default function PendingSyncDraftList({ drafts }: { drafts: PendingSyncDr
   if (drafts.length === 0) {
     return (
       <div className="rounded-lg bg-v2-surface">
-        <ConnectStateMessage
-          Icon={ArchiveBoxIcon}
-          title="대기 중인 데이터가 없어요"
-          description="외부 데이터를 가져오면 여기에서 검토할 수 있어요."
-        />
+        <ConnectStateMessage Icon={ArchiveBoxIcon} title="대기 중인 데이터가 없어요" />
       </div>
     );
   }

@@ -76,7 +76,7 @@ export function HintChip({ label, description, variant = "warning", className }:
             ? "inline-flex cursor-help items-center gap-1 rounded-sm text-xs font-semibold whitespace-nowrap text-v2-warning"
             : variant === "chip"
               ? "inline-flex h-5 shrink-0 cursor-help items-center gap-0.5 rounded-sm bg-v2-accent-subtle pr-1 pl-1.5 text-xs font-semibold whitespace-nowrap text-v2-accent"
-              : "inline-flex size-5 shrink-0 cursor-help items-center justify-center rounded-full text-v2-fg-tertiary hover:text-v2-fg-secondary",
+              : "inline-flex size-5 shrink-0 cursor-help items-center justify-center rounded-full text-v2-fg-tertiary hover:text-v2-fg-secondary v2-interaction-transition",
           v2FocusRing,
           className,
         )}

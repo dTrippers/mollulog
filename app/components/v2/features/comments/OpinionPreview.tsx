@@ -82,7 +82,7 @@ export function OpinionPreview({
                 </Link>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-1.5 text-xs leading-4">
-                    <Link to={`/@${comment.sensei.username}`} className="font-semibold text-v2-fg hover:underline">
+                    <Link to={`/@${comment.sensei.username}`} className="font-semibold text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition">
                       {comment.sensei.username}
                     </Link>
                     <time dateTime={comment.createdAt} className="tabular-nums text-v2-fg-tertiary">
@@ -133,7 +133,7 @@ function ReplyPreview({
       </Link>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-1.5 text-xs leading-4">
-          <Link to={`/@${first.sensei.username}`} className="font-semibold text-v2-fg hover:underline">
+          <Link to={`/@${first.sensei.username}`} className="font-semibold text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition">
             {first.sensei.username}
           </Link>
           <time dateTime={first.createdAt} className="tabular-nums text-v2-fg-tertiary">

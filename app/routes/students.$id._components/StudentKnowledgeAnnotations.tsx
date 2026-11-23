@@ -198,15 +198,15 @@ function KnowledgeTermTrigger({ termText, entry }: { termText: string; entry: Pu
         }}
         className={`group inline cursor-help rounded-sm p-0 align-baseline text-v2-fg-secondary ${v2FocusRing} [&[aria-expanded=true]>svg]:opacity-100 [&[aria-expanded=true]>svg]:text-v2-fg`}
       >
-        <span className="underline decoration-dotted decoration-1 decoration-v2-fg-tertiary underline-offset-2 hover:text-v2-fg">{termText}</span>
-        <QuestionMarkCircleIcon aria-hidden="true" className="relative -top-1 ml-px -mr-0.5 inline-block size-3 text-v2-fg-tertiary opacity-[0.65] [stroke-width:2] group-hover:text-v2-fg group-hover:opacity-100 group-focus-visible:text-v2-fg group-focus-visible:opacity-100" />
+        <span className="underline decoration-dotted decoration-1 decoration-v2-fg-tertiary underline-offset-2 hover:text-v2-fg v2-interaction-transition">{termText}</span>
+        <QuestionMarkCircleIcon aria-hidden="true" className="relative -top-1 ml-px -mr-0.5 inline-block size-3 text-v2-fg-tertiary opacity-[0.65] [stroke-width:2] group-hover:text-v2-fg group-hover:opacity-100 group-focus-visible:text-v2-fg group-focus-visible:opacity-100 v2-interaction-transition" />
       </button>
       <Popover
         open={open}
         label={entry.title}
         onClose={() => setOpen(false)}
         returnFocusRef={triggerRef}
-        className="w-[min(18rem,calc(100vw-1.5rem))] backdrop-blur-[4px]"
+        className="w-[min(18rem,calc(100vw-1.5rem))]"
       >
         <div
           id={popoverId}

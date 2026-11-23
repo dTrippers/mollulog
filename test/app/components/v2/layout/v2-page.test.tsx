@@ -73,6 +73,15 @@ describe("V2Page layout parts", () => {
     expect(screen.getByRole("complementary", { name: "보조 도구" })).toBeTruthy();
   });
 
+  it("floats the pinned toolbar on a translucent canvas with a backdrop blur", () => {
+    const { container } = renderLayout(<Layout />);
+    const toolbar = container.querySelector<HTMLElement>(".v2-toolbar");
+
+    expect(toolbar?.className).toContain("bg-v2-canvas");
+    expect(toolbar?.className).toContain("data-[sticky=true]:bg-v2-canvas/94");
+    expect(toolbar?.className).toContain("data-[sticky=true]:backdrop-blur-md");
+  });
+
   it("renders no Aside element when the screen omits PageAside", () => {
     const { container } = renderLayout(<Layout withAside={false} />);
 

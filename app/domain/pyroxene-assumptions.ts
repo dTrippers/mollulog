@@ -11,7 +11,7 @@ export const PYROXENE_PICKUP_CHANCE_OPTIONS = [
     description: "픽업 확률대로 뽑았을 때의 평균 횟수로 계산해요.",
   },
   {
-    label: "평균 (천장 반영)",
+    label: "평균",
     value: "average_pity",
     description: "천장에서 픽업을 확정한다고 보고 평균 횟수를 계산해요.",
   },

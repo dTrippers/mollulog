@@ -86,7 +86,6 @@ function UnavailableRecord() {
   return (
     <div role="alert" className="rounded-lg bg-v2-surface px-v2-block-p py-8 text-center">
       <p className="text-base font-semibold text-v2-fg">이 모집 기록을 불러오지 못했어요</p>
-      <p className="mt-1 text-sm text-v2-fg-tertiary">잠시 후 다시 시도해주세요.</p>
       <Button className="mt-3" onClick={() => revalidator.revalidate()} disabled={revalidator.state !== "idle"}>
         다시 시도
       </Button>

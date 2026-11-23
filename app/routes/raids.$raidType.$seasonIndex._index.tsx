@@ -1,39 +1,71 @@
 import { useEffect, useMemo, useState } from "react";
-import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
+import {
+  type LoaderFunctionArgs,
+  type ShouldRevalidateFunctionArgs,
+  useLoaderData,
+  useOutletContext,
+} from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { buildRaidPartyStudentMap, RaidListItem } from "~/components/features/raids";
 import { EmptyView, HorizontalScroll, LoadingSkeleton, SubTitle } from "~/components/primitives";
-import { raidTypeToParam } from "~/domain/raid";
+import { raidTypeFromParam, raidTypeToParam } from "~/domain/raid";
 import { getSameOccurrenceRaids } from "~/domain/raid-group";
 import { fetchRaidOverview } from "~/lib/ranks/overview";
 import type { RaidType } from "~/models/content.d";
 import { getRaidDefenseTypeSetKey } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudentsMap, getStudentForms } from "~/models/student";
+import { loadRaidChartRecordContext } from "~/views/raid-records";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import RaidScoreHistogram from "./raids.$raidType.$seasonIndex._components/RaidScoreHistogram";
 import RaidUnavailableState from "./raids.$raidType.$seasonIndex._components/RaidUnavailableState";
+import {
+  MY_SCORE_STORAGE_PREFIX,
+  useRaidChartMyScore,
+} from "./raids.$raidType.$seasonIndex._components/use-raid-chart-my-score";
 
-export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const { env } = context.cloudflare;
+export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
+  const { env, ctx } = context.cloudflare;
   const [rawAllStudents, studentForms, sensei] = await Promise.all([
     getAllStudentsMap(env, true),
     getStudentForms(env),
     getActiveSensei(env, request),
   ]);
   const allStudents = buildRaidPartyStudentMap(rawAllStudents, studentForms);
-  const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};
+  const seasonIndex = Number.parseInt(params.seasonIndex ?? "", 10);
+  const [recruitedStudentTiers, myRecordContext] = sensei
+    ? await Promise.all([
+        getRecruitedStudentTiers(env, sensei.id),
+        params.raidType && Number.isInteger(seasonIndex)
+          ? loadRaidChartRecordContext(env, sensei, raidTypeFromParam(params.raidType), seasonIndex, ctx)
+          : null,
+      ])
+    : [{}, null];
 
   return {
     allStudents,
     recruitedStudentTiers,
     hasRecruitedStudentData: sensei !== null,
+    myRecordContext,
   };
 };
 
+// The loader reads nothing from the search params, so switching the defense type does not reload it. A reload then
+// could also read the record before a "내 점수" save sent at the switch lands, and show the older score.
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  formMethod,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  if (!formMethod && currentUrl.pathname === nextUrl.pathname) return false;
+  return defaultShouldRevalidate;
+}
+
 export default function RaidSummary() {
   const { currentRaid, allRaids, defenseType, defenseTypeSet } = useOutletContext<RaidPageContext>();
-  const { allStudents, recruitedStudentTiers, hasRecruitedStudentData } = useLoaderData<typeof loader>();
+  const { allStudents, recruitedStudentTiers, hasRecruitedStudentData, myRecordContext } =
+    useLoaderData<typeof loader>();
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
 
   // Past hostings of the same boss + terrain (excluding current raid)
@@ -44,6 +76,11 @@ export default function RaidSummary() {
   const [error, setError] = useState<string | null>(null);
 
   const jpSeasonIndex = currentRaid.jpSchedule?.seasonIndex ?? null;
+  const myScore = useRaidChartMyScore({
+    storageKey: `${MY_SCORE_STORAGE_PREFIX}:${currentRaid.raidType}:${jpSeasonIndex}:${defenseType}`,
+    context: myRecordContext,
+    defenseType,
+  });
 
   useEffect(() => {
     if (jpSeasonIndex === null) {
@@ -122,6 +159,8 @@ export default function RaidSummary() {
         allStudents={allStudents}
         recruitedStudentTiers={recruitedStudentTiers}
         hasRecruitedStudentData={hasRecruitedStudentData}
+        myRecordContext={myRecordContext}
+        myScore={myScore}
       />
 
       {sameBossRaids.length > 0 && (

@@ -6,6 +6,10 @@ listing files or screens, which change often. The frontend patterns page keeps a
 small set of verified source anchors and an evidence process for reuse; it is not
 an exhaustive screen catalogue or an approval set of screenshots.
 
+Do not add runbooks, one-time rollout or operator procedures, dated data
+snapshots, or task-specific checklists here. Record them in the pull request
+description or the issue instead.
+
 ## Map
 
 ### Architecture

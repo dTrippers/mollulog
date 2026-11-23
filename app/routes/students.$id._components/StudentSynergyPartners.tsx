@@ -56,7 +56,7 @@ export default function StudentSynergyPartners({ partners, loading, failed = fal
                     <span className="text-center text-[13px] leading-[1.43] font-semibold text-v2-fg-tertiary tabular-nums">{index + 1}</span>
                     <RoundStudentImage studentUid={partner.partnerUid} size={10} className="!h-auto !w-9 !aspect-[5/6] !rounded-md" />
                     <span className="min-w-0">
-                      <span className="block truncate text-sm leading-[1.43] font-medium text-v2-fg group-hover:underline">{student.name}</span>
+                      <span className="block truncate text-sm leading-[1.43] font-medium text-v2-fg underline decoration-transparent group-hover:decoration-current v2-interaction-transition">{student.name}</span>
                       <span className="block truncate text-xs leading-[1.43] text-v2-fg-tertiary">
                         함께 출전 {partner.coCount.toLocaleString()}회{signedIn ? <> · 내 학생 {tier === null ? <span>미모집</span> : <span>{formatTierLabel(tier)}</span>}</> : null}
                       </span>

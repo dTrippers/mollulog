@@ -51,7 +51,7 @@ export function OpinionRow({ opinion, onOpen }: { opinion: FutureOpinionState; o
       aria-haspopup="dialog"
       onClick={onOpen}
       className={cn(
-        "flex min-h-v2-row-min w-full max-w-[40rem] cursor-pointer items-center gap-2 rounded-md bg-v2-inset px-3 py-2 text-left text-sm text-v2-fg hover:bg-v2-filled-hover",
+        "flex min-h-v2-row-min w-full max-w-[40rem] cursor-pointer items-center gap-2 rounded-md bg-v2-inset px-3 py-2 text-left text-sm text-v2-fg hover:bg-v2-filled-hover v2-interaction-transition",
         v2FocusRing,
       )}
     >

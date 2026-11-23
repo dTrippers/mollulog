@@ -21,6 +21,8 @@ describe("raid score data", () => {
   it("normalizes legacy raid score boss uids", () => {
     expect(normalizeBossUid("perorozilla")).toBe("perorodzilla");
     expect(normalizeBossUid("kaiten-fx-mk0")).toBe("kaiten");
+    expect(normalizeBossUid("nightmare_train")).toBe("nightmare");
+    expect(normalizeBossUid("nightmare")).toBe("nightmare");
     expect(normalizeBossUid("myouki-kurokage")).toBe("kurokage");
     expect(normalizeBossUid("binah")).toBe("binah");
     expect(normalizeBossUid("unknown")).toBeNull();

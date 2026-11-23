@@ -26,7 +26,7 @@ type YouTubePlayer = {
 type YouTubeEvent = { target: YouTubePlayer };
 
 const mediaButton =
-  "inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-semibold text-v2-on-media hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus";
+  "inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-semibold text-v2-on-media hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition";
 
 export type EventOverviewHeroPeriod = {
   runType: string | null;
@@ -102,7 +102,7 @@ export function EventOverviewHero({
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-v2-scrim/50 pb-16 text-v2-on-media">
             <EyeSlashIcon className="size-6" aria-hidden="true" />
             <p className="text-sm font-semibold">헤일로 모드를 사용 중이에요</p>
-            <Link to="/more" className="text-xs font-medium underline underline-offset-2 hover:opacity-80">
+            <Link to="/more" className="text-xs font-medium underline underline-offset-2 hover:opacity-80 v2-interaction-transition">
               설정에서 바꾸기
             </Link>
           </div>

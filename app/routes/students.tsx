@@ -22,7 +22,7 @@ import {
 } from "~/domain/student-directory";
 import { getLogger, captureServerError } from "~/lib/observability.server";
 import { useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-hooks";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { getStudentDirectoryStudents } from "~/models/student-directory";
 import { loadStudentDirectoryPersonalState } from "~/views/student-directory";
 import type { RootOutletContext } from "~/root";
@@ -113,10 +113,7 @@ export const meta: MetaFunction = ({ location }) => {
   return [
     { title },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };

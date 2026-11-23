@@ -10,18 +10,23 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { nowUtcIso } from "~/lib/date-time";
 import { captureClientError } from "~/lib/observability.client";
 import { getLogger } from "~/lib/observability.server";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { getRecruitTicketsView } from "~/views/recruit-tickets";
 import { RecruitTicketCard } from "./products.recruit-tickets._components/RecruitTicketCard";
 
 const PAGE_TITLE = "상품 / 패키지";
 const RECRUIT_TICKETS_PATH = "/products/recruit-tickets";
 
-export const meta: MetaFunction = ({ location }) => [
-  { title: `모집권 - ${PAGE_TITLE} | 몰루로그` },
-  { name: "description", content: "블루 아카이브 모집권으로 모집할 수 있는 학생 목록" },
-  canonicalLink(location.pathname),
-];
+export const meta: MetaFunction = ({ location }) => {
+  const title = `모집권 - ${PAGE_TITLE}`;
+  const description = "블루 아카이브 모집권으로 모집할 수 있는 학생 목록";
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+    canonicalLink(location.pathname),
+  ];
+};
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { env, ctx } = context.cloudflare;
@@ -94,10 +99,7 @@ export default function RecruitTickets() {
             {cards.length === 0 ? (
               <p className="text-base font-semibold text-v2-fg">지금 볼 수 있는 모집권이 없어요</p>
             ) : (
-              <>
-                <p className="text-base font-semibold text-v2-fg">모집하지 않은 학생이 있는 모집권이 없어요</p>
-                <p className="mt-1 text-sm text-v2-fg-secondary">필터를 끄면 모든 모집권을 볼 수 있어요.</p>
-              </>
+              <p className="text-base font-semibold text-v2-fg">모집하지 않은 학생이 있는 모집권이 없어요</p>
             )}
           </div>
         ) : (

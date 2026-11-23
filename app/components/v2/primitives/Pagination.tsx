@@ -54,9 +54,9 @@ export function parseJumpPage(value: string, totalPages: number): number | null 
 }
 
 const itemClassName =
-  "inline-flex min-h-v2-row-min min-w-v2-row-min items-center justify-center rounded-md px-2 text-sm tabular-nums text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg";
+  "inline-flex min-h-v2-row-min min-w-v2-row-min items-center justify-center rounded-md px-2 text-sm tabular-nums text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg v2-interaction-transition";
 const currentClassName =
-  "bg-v2-selected font-semibold text-v2-on-selected hover:bg-v2-selected hover:text-v2-on-selected";
+  "bg-v2-selected font-semibold text-v2-on-selected hover:bg-v2-selected hover:text-v2-on-selected v2-interaction-transition";
 const disabledClassName =
   "inline-flex min-h-v2-row-min min-w-v2-row-min items-center justify-center rounded-md px-2 text-v2-fg-disabled disabled:cursor-not-allowed";
 

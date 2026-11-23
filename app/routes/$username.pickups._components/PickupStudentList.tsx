@@ -49,7 +49,6 @@ export default function PickupStudentList({ title, students, labelFor, emptyText
                   variant={variant}
                   recruitmentLabel={label}
                   captionPlacement="overlay"
-                  overlayOnMobile
                 />
               </li>
             );
@@ -74,7 +73,7 @@ function MoreTile({ count, className, onClick }: { count: number; className: str
         aria-label={`외 ${count}명 보기`}
         onClick={onClick}
         className={cn(
-          "flex aspect-[5/6] w-14 cursor-pointer items-center justify-center rounded-md bg-v2-inset text-sm font-medium text-v2-fg-secondary tabular-nums hover:bg-v2-filled-hover sm:w-16",
+          "flex aspect-[5/6] w-14 cursor-pointer items-center justify-center rounded-md bg-v2-inset text-sm font-medium text-v2-fg-secondary tabular-nums hover:bg-v2-filled-hover sm:w-16 v2-interaction-transition",
           "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
         )}
       >

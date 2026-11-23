@@ -27,6 +27,7 @@ type SaveOwnedResourcesAction = {
     recruitmentStacks?: RecruitmentStacks;
     eventUid?: string | null;
     collectedSourceKeys?: string[];
+    uncollectedSourceKeys?: string[];
   };
 };
 
@@ -79,6 +80,11 @@ type UpdateEventDataAction = {
 type SaveOptionsAction = { intent: "save-options"; payload: { options: PyroxenePlannerOptions } };
 type RemoveApChargeExceptionAction = { intent: "remove-ap-charge-exception"; payload: { uid: string } };
 type CollectSourceAction = { intent: "collect-source"; payload: { sourceKey: string } };
+// Received-reward changes on their own, so the owned resources keep their input time.
+type SaveCollectedSourcesAction = {
+  intent: "save-collected-sources";
+  payload: { collectedSourceKeys: string[]; uncollectedSourceKeys: string[] };
+};
 type UncollectSourceAction = { intent: "uncollect-source"; payload: { sourceKey: string } };
 
 type DeletePickupCompletionAction = {
@@ -99,6 +105,7 @@ export type ActionData =
   | SaveOptionsAction
   | RemoveApChargeExceptionAction
   | CollectSourceAction
+  | SaveCollectedSourcesAction
   | UncollectSourceAction
   | DeletePickupCompletionAction
   | DeleteTimelineItemAction;
@@ -317,6 +324,7 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
           recruitmentStacks: readOptionalRecruitmentStacks(payload),
           eventUid,
           collectedSourceKeys: readSourceKeys(payload, "collectedSourceKeys"),
+          uncollectedSourceKeys: readSourceKeys(payload, "uncollectedSourceKeys"),
         },
       };
     }
@@ -407,6 +415,16 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
       assertMethod(method, "POST");
       assertRequiredKeys(payload, ["sourceKey"]);
       return { intent, payload: { sourceKey: readString(payload, "sourceKey") } };
+    case "save-collected-sources":
+      assertMethod(method, "POST");
+      assertRequiredKeys(payload, ["collectedSourceKeys", "uncollectedSourceKeys"]);
+      return {
+        intent,
+        payload: {
+          collectedSourceKeys: readSourceKeys(payload, "collectedSourceKeys") ?? [],
+          uncollectedSourceKeys: readSourceKeys(payload, "uncollectedSourceKeys") ?? [],
+        },
+      };
     case "uncollect-source":
       assertMethod(method, "DELETE");
       assertRequiredKeys(payload, ["sourceKey"]);

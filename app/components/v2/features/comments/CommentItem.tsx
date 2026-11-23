@@ -147,7 +147,7 @@ export function CommentItem({
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-4">
-            <Link to={`/@${username}`} className="text-[0.8125rem] font-semibold text-v2-fg hover:underline">
+            <Link to={`/@${username}`} className="text-[0.8125rem] font-semibold text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition">
               {username}
             </Link>
             {own ? <span className="text-v2-fg-tertiary">나</span> : null}

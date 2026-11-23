@@ -51,6 +51,7 @@ type LayoutData = {
   followCounts: { following: number; followers: number } | null;
   recruitedStudentCount: number | null;
   pickupCount: number | null;
+  raidRecordCount: number | null;
 };
 
 const base: LayoutData = {
@@ -67,6 +68,7 @@ const base: LayoutData = {
   followCounts: { following: 3, followers: 1234 },
   recruitedStudentCount: 244,
   pickupCount: 56,
+  raidRecordCount: 7,
 };
 
 function ChildScreen() {
@@ -187,18 +189,25 @@ describe("@username layout header", () => {
 });
 
 describe("@username layout menu", () => {
-  it("lists 프로필, 모집한 학생, 모집 기록, 관심 학생 in the Aside for a visitor, without the moved entries", async () => {
+  it("lists 프로필, 모집한 학생, 모집 기록, 관심 학생, 총력전·대결전 기록 in the Aside for a visitor, without the moved entries", async () => {
     renderLayout();
     const aside = await screen.findByRole("complementary", { name: "보조 도구" });
 
     const nav = within(aside).getByRole("navigation", { name: "화면 탐색" });
     const links = within(nav).getAllByRole("link");
-    expect(links.map((link) => link.textContent)).toEqual(["프로필", "모집한 학생244", "모집 기록56", "관심 학생"]);
+    expect(links.map((link) => link.textContent)).toEqual([
+      "프로필",
+      "모집한 학생244",
+      "모집 기록56",
+      "관심 학생",
+      "총력전·대결전 기록7",
+    ]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/@sensei",
       "/@sensei/students",
       "/@sensei/pickups",
       "/@sensei/futures",
+      "/@sensei/raids",
     ]);
     expect(links[0]?.getAttribute("aria-current")).toBe("page");
     for (const removed of ["공략 작성하기", "공략 타임라인", "편성/공략"]) {
@@ -218,7 +227,7 @@ describe("@username layout menu", () => {
   });
 
   it("omits a count that could not be loaded", async () => {
-    renderLayout({ recruitedStudentCount: null, pickupCount: 0 });
+    renderLayout({ recruitedStudentCount: null, pickupCount: 0, raidRecordCount: null });
     const aside = await screen.findByRole("complementary", { name: "보조 도구" });
 
     expect(within(aside).getAllByRole("link").map((link) => link.textContent)).toEqual([
@@ -226,6 +235,7 @@ describe("@username layout menu", () => {
       "모집한 학생",
       "모집 기록0",
       "관심 학생",
+      "총력전·대결전 기록",
     ]);
   });
 
@@ -235,7 +245,7 @@ describe("@username layout menu", () => {
 
     const asideLink = within(aside).getByRole("link", { name: /화면 인식·데이터 연동/ });
     expect(asideLink.getAttribute("href")).toBe("/scanner");
-    expect(within(asideLink).getByText("게임 스크린샷, 녹화 영상이나 외부 사이트 데이터를 반영할 수 있어요")).toBeTruthy();
+    expect(within(asideLink).getByText("스크린샷·녹화 인식과 외부 데이터 가져오기·내보내기")).toBeTruthy();
     const actionBar = document.querySelector(".v2-action-bar") as HTMLElement;
     expect(within(actionBar).getByRole("link", { name: "데이터 연동" }).getAttribute("href")).toBe("/scanner");
     unmount();
@@ -331,7 +341,7 @@ describe("@username follow button", () => {
     fireEvent.click(button);
 
     expect(await screen.findByRole("alert")).toBeTruthy();
-    expect(screen.getByRole("alert").textContent).toBe("팔로우하지 못했어요. 다시 시도해주세요.");
+    expect(screen.getByRole("alert").textContent).toBe("팔로우하지 못했어요.");
     expect(screen.queryByText("error")).toBeNull();
     expect(methods).toEqual(["POST"]);
   });
@@ -361,7 +371,6 @@ describe("@username follow button", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "팔로우" }));
     const dialog = await screen.findByRole("dialog", { name: "로그인이 필요해요" });
-    expect(within(dialog).getByText("로그인하면 이 선생님을 팔로우할 수 있어요.")).toBeTruthy();
     expect(followAction).not.toHaveBeenCalled();
     expect(screen.getByTestId("sign-in").textContent).toBe("false");
 

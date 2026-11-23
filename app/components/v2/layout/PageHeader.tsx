@@ -21,6 +21,9 @@ export type PageHeaderProps = {
   // Keeps `trailing` beside the heading at every width instead of stacking it below, for a short action such as a
   // primary button. The heading truncates before the action wraps.
   trailingInline?: boolean;
+  // Classes for the block around `trailing`, such as showing it only at the widths where the Aside that holds the same
+  // links is hidden.
+  trailingClassName?: string;
   // Full-width lines under the heading row, below the media too, such as a profile's introduction and counts.
   details?: ReactNode;
   // Hide the header beside an aside, where the page renders `PageAsideHeader` at the top of the aside instead.
@@ -30,7 +33,7 @@ export type PageHeaderProps = {
 function HeaderBack({ back, titleHidden = false }: { back: PageHeaderBack; titleHidden?: boolean }) {
   const backClassName = cn(
     !titleHidden && "mb-2",
-    "inline-flex min-h-v2-row-min cursor-pointer items-center gap-1 rounded-md text-sm text-v2-fg-secondary hover:text-v2-fg",
+    "inline-flex min-h-v2-row-min cursor-pointer items-center gap-1 rounded-md text-sm text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
     v2FocusRing,
   );
   return "to" in back ? (
@@ -77,6 +80,7 @@ export function PageHeader({
   media,
   trailing,
   trailingInline = false,
+  trailingClassName,
   stackedOnly = false,
   details,
 }: PageHeaderProps) {
@@ -115,7 +119,13 @@ export function PageHeader({
           <HeaderText title={title} description={description} back={back} meta={meta} titleHidden={titleHidden} />
         ))}
       {trailing ? (
-        <div className={cn("min-w-0", trailingInline ? "shrink-0" : "@min-[60rem]/page-available:shrink-0")}>
+        <div
+          className={cn(
+            "min-w-0",
+            trailingInline ? "shrink-0" : "@min-[60rem]/page-available:shrink-0",
+            trailingClassName,
+          )}
+        >
           {trailing}
         </div>
       ) : null}
@@ -140,10 +150,11 @@ export function PageHeader({
 // The header of a `stackedOnly` page beside its aside. The page renders it first in `PageAside`.
 export function PageAsideHeader({
   title,
+  description,
   back,
   meta,
   media,
-}: Pick<PageHeaderProps, "title" | "back" | "meta" | "media">) {
+}: Pick<PageHeaderProps, "title" | "description" | "back" | "meta" | "media">) {
   return (
     <div className="min-w-0">
       {back ? <HeaderBack back={back} /> : null}
@@ -151,6 +162,7 @@ export function PageAsideHeader({
         {media ? <div className="w-[3.75rem] shrink-0">{media}</div> : null}
         <div className="min-w-0 flex-1">
           <h1 className="text-xl leading-[1.4] font-bold text-v2-fg">{title}</h1>
+          {description ? <p className="mt-2 text-sm text-v2-fg-secondary">{description}</p> : null}
           {meta ? <div className="mt-1 text-sm text-v2-fg-tertiary">{meta}</div> : null}
         </div>
       </div>

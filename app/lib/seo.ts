@@ -8,7 +8,7 @@ export const HOME_DESCRIPTION =
 
 const SITE_URL = "https://mollulog.net";
 
-export const DEFAULT_OPEN_GRAPH_IMAGE_URL = `${SITE_URL}/mollulog-og.png`;
+export const DEFAULT_OPEN_GRAPH_IMAGE_URL = `${SITE_URL}/mollulog-og-261121.png`;
 
 export function shouldRenderDefaultOpenGraphImage(pathname: string, hasRouteSpecificOpenGraphImage: boolean): boolean {
   const isImageExcludedPath = pathname === "/security-campaign" || pathname.startsWith("/letter/");
@@ -25,6 +25,41 @@ export function shouldRenderDefaultOpenGraphImage(pathname: string, hasRouteSpec
  */
 export function canonicalLink(pathname: string): MetaDescriptor {
   return { tagName: "link", rel: "canonical", href: canonicalUrl(pathname) };
+}
+
+export type SocialMetaOptions = {
+  /** The card title, without the trailing site name; `og:site_name` carries it. */
+  title: string;
+  /** Leave it out for a page without a description of its own. */
+  description?: string;
+  /** The page's own path. It becomes `og:url`, so pass the same path as the canonical link. */
+  pathname: string;
+  type?: "website" | "article";
+};
+
+/**
+ * Open Graph and X (Twitter) card tags for a page, except the image.
+ *
+ * X reads `twitter:*` first and falls back to Open Graph, and Open Graph tags must use `property`. A page without a
+ * title here shows no title on X or in other link previews. The image comes from the root layout's default, or from
+ * the route itself when it sets `handle.ownsOpenGraphImage`.
+ */
+export function socialMeta({ title, description, pathname, type = "website" }: SocialMetaOptions): MetaDescriptor[] {
+  const descriptors: MetaDescriptor[] = [
+    { property: "og:type", content: type },
+    { property: "og:site_name", content: SITE_NAME },
+    { property: "og:locale", content: "ko_KR" },
+    { property: "og:title", content: title },
+    { property: "og:url", content: canonicalUrl(pathname) },
+    { name: "twitter:title", content: title },
+  ];
+  if (description) {
+    descriptors.push(
+      { property: "og:description", content: description },
+      { name: "twitter:description", content: description },
+    );
+  }
+  return descriptors;
 }
 
 export function canonicalUrl(pathname: string): string {

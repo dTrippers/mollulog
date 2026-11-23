@@ -17,6 +17,13 @@ import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
 import type { OcrJobKind, OcrTaskMessage } from "~/domain/ocr";
 import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
+import type {
+  RaidRecordParty,
+  RaidRecordRaidType,
+  RaidRecordScore,
+  RaidRecordScoreMode,
+  RaidRecordServer,
+} from "~/domain/raid-record";
 import type { SiteBannerPreset, SiteBannerScreen } from "~/domain/site-banner";
 import type {
   MenuBadgeLabelMode,
@@ -252,6 +259,7 @@ export type DiscordNotificationTrigger =
   | "reward-exchange-end"
   | "recruitment-start"
   | "shop-reset"
+  | "coupon-expiry"
   | "feedback-reply"
   | "event-opinion-reply";
 export type DiscordNotificationJobTrigger = DiscordNotificationTrigger | "connection-verification";
@@ -355,12 +363,16 @@ export const pgPostsTable = pgTable(
     board: text().notNull(),
     timelineContentUid: text("timeline_content_uid"),
     thumbnailImageUrl: text("thumbnail_image_url"),
+    // Null while the post is a draft. Drafts are visible only in the admin app.
+    publishedAt: timestamptz("published_at").default(sql`now()`),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },
   (table) => [
     uniqueIndex("posts_uid_uidx").on(table.uid),
-    index("posts_board_created_at_uid_idx").on(table.board, table.createdAt.desc(), table.uid.desc()),
+    index("posts_board_published_at_uid_idx")
+      .on(table.board, table.publishedAt.desc(), table.uid.desc())
+      .where(sql`${table.publishedAt} is not null`),
     index("posts_timeline_content_uid_idx").on(table.timelineContentUid),
   ],
 );
@@ -926,6 +938,8 @@ export const pgStudentTargetsTable = pgTable(
     relationshipTargetLevel: integer("relationship_target_level"),
     giftPlan: jsonb("gift_plan").$type<Record<string, number>>().notNull().default({}),
     plannerAddedAt: exactTimestamptz("planner_added_at"),
+    // The student growth planner's manual order, ascending from the top. Null sits above every positioned row.
+    plannerPosition: integer("planner_position"),
     deletedAt: timestamptz("deleted_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
@@ -1217,6 +1231,8 @@ export const pgSyncDraftEntriesTable = pgTable(
   ],
 );
 
+// No code reads the resource inventory draft tables. They stay until a later change renames them with the `zzz_`
+// prefix (docs/data/database.md).
 export const pgUserResourceInventoryDraftsTable = pgTable(
   "user_resource_inventory_drafts",
   {
@@ -1588,5 +1604,36 @@ export const pgRecruitTicketsTable = pgTable(
       .on(table.productUid, table.itemUid)
       .where(sql`${table.productUid} is not null`),
     uniqueIndex("recruit_tickets_item_uidx").on(table.itemUid).where(sql`${table.productUid} is null`),
+  ],
+);
+
+// A Sensei's own result in one 총력전 or 대결전 season on one game server; one row per (user, server, raid type, season).
+export const pgRaidRecordsTable = pgTable(
+  "raid_records",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    server: text().$type<RaidRecordServer>().notNull(),
+    raidType: text("raid_type").$type<RaidRecordRaidType>().notNull(),
+    seasonIndex: integer("season_index").notNull(),
+    scores: jsonb().$type<RaidRecordScore[]>().notNull(),
+    scoreMode: text("score_mode").$type<RaidRecordScoreMode>().notNull().default("defense_type"),
+    totalScore: integer("total_score"),
+    rank: integer(),
+    rankRecordedAt: exactTimestamptz("rank_recorded_at"),
+    memo: text().notNull().default(""),
+    parties: jsonb().$type<RaidRecordParty[]>().notNull().default([]),
+    createdAt: exactTimestamptz("created_at").notNull().defaultNow(),
+    updatedAt: exactTimestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("raid_records_uid_uidx").on(table.uid),
+    uniqueIndex("raid_records_user_server_raid_season_uidx").on(
+      table.userId,
+      table.server,
+      table.raidType,
+      table.seasonIndex,
+    ),
   ],
 );
