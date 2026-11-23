@@ -1,6 +1,22 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockGetAccountSessionState = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+// Every cookie read made through the mocked session storages, in call order, so a
+// test can wait for specific reads and delay others to imitate a slow runtime.
+const mockSessionReads: Promise<unknown>[] = [];
+let mockBeforeSessionRead: ((index: number) => Promise<void>) | undefined;
+
+function mockTrackSessionReads<T extends { getSession: (...args: never[]) => Promise<unknown> }>(storage: T): T {
+  return {
+    ...storage,
+    getSession: (...args: Parameters<T["getSession"]>) => {
+      const index = mockSessionReads.length;
+      const read = (mockBeforeSessionRead?.(index) ?? Promise.resolve()).then(() => storage.getSession(...args));
+      mockSessionReads.push(read);
+      return read;
+    },
+  };
+}
 
 jest.mock("~/models/account-security", () => ({
   getAccountSessionState: (...args: unknown[]) => mockGetAccountSessionState(...args),
@@ -11,31 +27,35 @@ jest.mock("~/auth/authenticator.server", () => ({
   sessionValidationSessionKey: "auth:sessionValidation",
   sessionStorage: (env: { SESSION_SECRET: string }) => {
     const { createCookieSessionStorage } = jest.requireActual<typeof import("react-router")>("react-router");
-    return createCookieSessionStorage({
-      cookie: {
-        name: "__session",
-        path: "/",
-        httpOnly: true,
-        secure: true,
-        secrets: [env.SESSION_SECRET],
-        sameSite: "lax",
-        maxAge: 30 * 24 * 60 * 60,
-      },
-    });
+    return mockTrackSessionReads(
+      createCookieSessionStorage({
+        cookie: {
+          name: "__session",
+          path: "/",
+          httpOnly: true,
+          secure: true,
+          secrets: [env.SESSION_SECRET],
+          sameSite: "lax",
+          maxAge: 30 * 24 * 60 * 60,
+        },
+      }),
+    );
   },
   sessionValidationStorage: (env: { SESSION_SECRET: string }) => {
     const { createCookieSessionStorage } = jest.requireActual<typeof import("react-router")>("react-router");
-    return createCookieSessionStorage({
-      cookie: {
-        name: "__session_validation",
-        path: "/",
-        httpOnly: true,
-        secure: true,
-        secrets: [env.SESSION_SECRET],
-        sameSite: "lax",
-        maxAge: 15 * 60,
-      },
-    });
+    return mockTrackSessionReads(
+      createCookieSessionStorage({
+        cookie: {
+          name: "__session_validation",
+          path: "/",
+          httpOnly: true,
+          secure: true,
+          secrets: [env.SESSION_SECRET],
+          sameSite: "lax",
+          maxAge: 15 * 60,
+        },
+      }),
+    );
   },
 }));
 
@@ -80,6 +100,8 @@ async function createAuthCookie(options: { validatedAt?: number; sessionVersion?
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSessionReads.length = 0;
+  mockBeforeSessionRead = undefined;
 });
 
 describe("session validation", () => {
@@ -201,6 +223,12 @@ describe("session validation", () => {
       }),
     );
     const cookie = await createAuthCookie();
+    mockSessionReads.length = 0;
+    // Each request reads two cookies before it can join the in-flight validation.
+    // Delay the second request's reads past the first request's lookup, as a slow
+    // runtime can, so the second request joins only after the lookup has started.
+    mockBeforeSessionRead = (index) =>
+      index >= 2 ? new Promise((resolve) => setTimeout(resolve, 10)) : Promise.resolve();
     const first = validateSessionRequest(
       env,
       new Request("https://mollulog.net/edit/leave", { headers: { Cookie: cookie } }),
@@ -213,12 +241,18 @@ describe("session validation", () => {
       undefined,
       20_000,
     );
-    for (let attempt = 0; attempt < 20 && mockGetAccountSessionState.mock.calls.length === 0; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
+    expect(mockSessionReads).toHaveLength(4);
+    await Promise.all(mockSessionReads);
+    // After its reads settle, a request reaches the in-flight lookup through
+    // microtasks only; a macrotask turn lets both requests get there.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(mockGetAccountSessionState).toHaveBeenCalledTimes(1);
     resolveState({ active: true });
-    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ kind: "validated" }),
+      expect.objectContaining({ kind: "validated" }),
+    ]);
+    expect(mockGetAccountSessionState).toHaveBeenCalledTimes(1);
 
     mockGetAccountSessionState.mockResolvedValue({ active: true });
     await validateSessionRequest(
