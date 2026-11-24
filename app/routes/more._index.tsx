@@ -6,10 +6,8 @@ import { Link, useLoaderData, useOutletContext, useRevalidator } from "react-rou
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { HaloModeIcon } from "~/components/media/HaloModeIcon";
 import { SenseiAvatar } from "~/components/v2/features/comments/SenseiAvatar";
-import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
 import StudentPortrait from "~/components/v2/features/students/StudentPortrait";
-import { PageHeader } from "~/components/v2/layout/PageHeader";
-import { PageMain } from "~/components/v2/layout/PageMain";
+import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
 import {
   mobileNavigationSettingsAnchorId,
   useMobileNavigationSettingsArrival,
@@ -20,6 +18,8 @@ import {
   type MoreNavigationSection,
   type NavigationItem,
 } from "~/components/v2/layout/navigation/navigation-menu";
+import { PageHeader } from "~/components/v2/layout/PageHeader";
+import { PageMain } from "~/components/v2/layout/PageMain";
 import { v2FocusRing } from "~/components/v2/layout/styles";
 import { V2Page } from "~/components/v2/layout/V2Page";
 import { Button, v2ButtonClassName } from "~/components/v2/primitives/Button";
@@ -573,9 +573,7 @@ function MenuCell({ item }: { item: MoreMenuItem }) {
     return (
       <div aria-disabled="true" title={item.name} className={cn(className, "text-v2-fg-disabled")}>
         {content}
-        {item.badgeLabel ? (
-          <span className="sr-only @min-[34rem]/more:hidden">, {item.badgeLabel}</span>
-        ) : null}
+        {item.badgeLabel ? <span className="sr-only @min-[34rem]/more:hidden">, {item.badgeLabel}</span> : null}
       </div>
     );
   }
@@ -680,7 +678,9 @@ function BottomTabPins({
       className="relative scroll-mt-[var(--mobile-header-height)]"
     >
       <SectionHeading id="more-bottom-tab-pins-title">하단 탭 고정</SectionHeading>
-      <p className="-mt-1 mb-2.5 text-[0.8125rem] break-keep text-v2-fg-tertiary">즐겨찾는 메뉴를 하단 탭에 고정할 수 있어요</p>
+      <p className="-mt-1 mb-2.5 text-[0.8125rem] break-keep text-v2-fg-tertiary">
+        즐겨찾는 메뉴를 하단 탭에 고정할 수 있어요
+      </p>
       <div className="flex items-center gap-3.5 rounded-lg bg-v2-surface py-2 pr-2 pl-3.5">
         <ul className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3.5 gap-y-1">
           {pinnedItems.map((item) => {
