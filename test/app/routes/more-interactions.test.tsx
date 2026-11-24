@@ -27,6 +27,17 @@ const mockUseOutletContext = useOutletContext as unknown as jest.Mock;
 const mockUseSubmit = useSubmit as unknown as jest.Mock;
 const mockSubmitPreference = submitPreference as unknown as jest.Mock<(...args: unknown[]) => Promise<unknown>>;
 
+// jsdom has no PointerEvent, so a fired pointer event would lose its pointerType and every press would look like touch.
+class TestPointerEvent extends MouseEvent {
+  readonly pointerType: string;
+
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init);
+    this.pointerType = init.pointerType ?? "";
+  }
+}
+Object.defineProperty(window, "PointerEvent", { configurable: true, value: TestPointerEvent });
+
 function renderMore(setMobileNavigationIds: jest.Mock) {
   mockUseLoaderData.mockReturnValue({ account: null, summary: null });
   mockUseOutletContext.mockReturnValue({
@@ -117,6 +128,20 @@ describe("more screen halo mode button", () => {
     // The page has no halo mode provider here, so the toggle shows as the saved preference.
     expect(mockSubmitPreference).toHaveBeenCalledWith({ haloMode: true });
     expect(document.querySelectorAll("[data-placement]")).toHaveLength(0);
+  });
+
+  it("does not open the tooltip on a mouse press held as long as a touch hold", () => {
+    renderMore(jest.fn());
+    const button = screen.getByRole("button", { name: "헤일로 모드" });
+
+    fireEvent.pointerDown(button, { pointerType: "mouse" });
+    act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    fireEvent.pointerUp(button, { pointerType: "mouse" });
+    fireEvent.click(button);
+
+    expect(mockSubmitPreference).toHaveBeenCalledWith({ haloMode: true });
   });
 
   it("opens the tooltip on a hold and does not toggle on its release", () => {
