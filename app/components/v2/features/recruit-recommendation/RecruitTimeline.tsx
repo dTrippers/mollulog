@@ -59,9 +59,10 @@ export function RecruitTimeline({
   );
   return (
     <div className="@container relative">
+      {/* Starts at the first content's image, below the first date heading (mt-1, one text-xs line, mb-3). */}
       <span
         aria-hidden="true"
-        className="absolute top-2 bottom-0 left-[1.1875rem] hidden w-0.5 bg-v2-inset @md:block"
+        className="absolute top-8 bottom-0 left-[1.1875rem] hidden w-0.5 bg-v2-inset @md:block"
       />
       {groups.map((group) => (
         <section
