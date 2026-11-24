@@ -1103,9 +1103,15 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   position: sticky;
   top: 1.5rem;
   align-self: start;
-  max-height: calc(100dvh - 3rem);
+  max-height: calc(100dvh - 3rem + var(--v2-aside-bleed));
   overflow-y: auto;
   min-width: 0;
+  /* The scroll box clips on every side, so it reaches past the column by the column gap at the sides and bottom: a
+     block's outer glow (the 미래시 AI banner) fades out inside it instead of being cut. The negative margins keep the
+     blocks where they were, and the bleed never reaches the main column. */
+  --v2-aside-bleed: var(--spacing-v2-column-gap);
+  padding: 0 var(--v2-aside-bleed) var(--v2-aside-bleed);
+  margin: 0 calc(-1 * var(--v2-aside-bleed)) calc(-1 * var(--v2-aside-bleed));
 }
 
 .v2-action-bar {
