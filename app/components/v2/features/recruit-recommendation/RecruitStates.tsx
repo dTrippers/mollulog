@@ -8,9 +8,9 @@ import { Skeleton } from "../../primitives/Skeleton";
 import { StatusNotice } from "../../primitives/StatusNotice";
 
 const goalDescriptions: Record<RecruitGoal, string> = {
-  top: "루나틱 클리어와 상위 순위",
-  platinum: "토먼트 클리어로 플래티넘 달성",
-  newbie: "특정 목표 없이 모집 순서만 확인",
+  top: "1,000위 안에 들기 위한 필수 조건 확인",
+  platinum: "플래티넘 트로피를 획득하기 위한 모집 학생 추천",
+  newbie: "높은 순위로 오르기 위한 모집 순서 추천",
 };
 
 // A Sensei who never picked a goal picks one here instead of the timeline. The Aside's goal panel picks the same goal.
@@ -27,14 +27,16 @@ export function RecruitGoalCards({ onSelect }: { onSelect: (goal: RecruitGoal) =
               type="button"
               onClick={() => onSelect(goal)}
               className={cn(
-                "relative flex w-full cursor-pointer items-center gap-3 rounded-lg bg-v2-surface px-4 py-3.5 text-left",
+                "relative flex h-full w-full cursor-pointer items-center gap-3 rounded-lg bg-v2-surface px-4 py-3.5 text-left",
                 "before:pointer-events-none before:absolute before:inset-0 before:rounded-lg before:content-[''] hover:before:bg-v2-hover before:v2-interaction-transition",
                 v2FocusRing,
               )}
             >
-              <span className="min-w-0 flex-1">
+              <span className="min-w-0 flex-1 self-start">
                 <span className="block text-base font-semibold text-v2-fg">{recruitGoalLabels[goal]}</span>
-                <span className="mt-0.5 block text-[0.8125rem] text-v2-fg-secondary">{goalDescriptions[goal]}</span>
+                <span className="mt-0.5 block break-keep text-[0.8125rem] text-v2-fg-secondary">
+                  {goalDescriptions[goal]}
+                </span>
               </span>
               <ChevronRightIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
             </button>
