@@ -43,7 +43,9 @@ export function RoundStudentImage({ studentUid, imageUrl, alt = "", size = "md",
         className={cn(sizeClassName[size], "relative inline-block shrink-0 overflow-hidden rounded-full bg-v2-inset", className)}
         {...(alt ? { role: "img", "aria-label": alt } : { "aria-hidden": true })}
       >
-        <StudentPortrait uid={studentUid} className="size-full object-cover" />
+        {/* Out of flow, so the portrait's natural width never sizes the frame: a frame sized by height and
+            aspect-ratio was otherwise as wide as the 200px source image on iOS Safari. */}
+        <StudentPortrait uid={studentUid} className="absolute inset-0 size-full object-cover" />
       </span>
     );
   }

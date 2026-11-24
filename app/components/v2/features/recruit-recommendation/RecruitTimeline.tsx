@@ -67,13 +67,15 @@ export function RecruitTimeline({
         aria-hidden="true"
         className="absolute top-8 bottom-0 left-[1.1875rem] hidden w-0.5 bg-v2-inset @md:block"
       />
-      {groups.map((group) => (
+      {/* Date groups sit further apart than the contents of one date, so a date heading reads as the start of its group. */}
+      {groups.map((group, index) => (
         <section
           key={group.groupDate ? formatInstantDateKey(group.groupDate, timeZone) : "live"}
           aria-label={group.groupDate ? undefined : "진행 중"}
+          className={index > 0 ? "mt-12" : undefined}
         >
           <DateDivider groupDate={group.groupDate} now={now} timeZone={timeZone} />
-          <ol>
+          <ol className="flex flex-col gap-8">
             {group.contents.map((entry) => (
               <li key={entry.content.uid}>
                 <TimelineItem
@@ -104,7 +106,7 @@ function DateDivider({
   now: UtcIsoString;
   timeZone: string;
 }) {
-  const className = "relative mt-7 mb-3 text-xs first:mt-1 @md:ml-[3.25rem]";
+  const className = "relative mt-1 mb-3 text-xs @md:ml-[3.25rem]";
   if (groupDate === null) {
     return (
       <p className={cn(className, "flex items-center gap-1.5 font-semibold text-v2-live")}>
@@ -148,7 +150,7 @@ function TimelineItem({
   const tileKey = (pickup: RecruitPickupView) => `${content.uid}\u0000${pickup.favoriteKey}`;
 
   return (
-    <article className="relative mb-5 grid grid-cols-[minmax(0,1fr)] @md:grid-cols-[2.5rem_minmax(0,1fr)] @md:gap-x-3">
+    <article className="relative grid grid-cols-[minmax(0,1fr)] @md:grid-cols-[2.5rem_minmax(0,1fr)] @md:gap-x-3">
       <div className="relative z-10 hidden self-start rounded-md shadow-[0_0_0_4px_var(--color-v2-canvas)] @md:block">
         <ContentMedia
           source={content.hidden ? { kind: "placeholder" } : content.mediaSource}
