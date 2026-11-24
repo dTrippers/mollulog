@@ -1,11 +1,11 @@
-import { type CSSProperties, useId } from "react";
-import type { RaidRecordSnapshotField } from "~/domain/raid-record";
+import { type CSSProperties, type ReactNode, useId } from "react";
+import type { RaidRecordSnapshotField, RaidRecordUnit } from "~/domain/raid-record";
 import { STUDENT_GROWTH_EDIT_RANGES } from "~/domain/student-growth-edit";
 import { cn } from "~/lib/utils";
 import { useNumberInputFlowNavigation } from "../../primitives/use-number-input-flow-navigation";
 import { GrowthValueInput } from "../students/GrowthValueInput";
 import { RoundStudentImage } from "../students/RoundStudentImage";
-import { TierInput } from "../students/TierInput";
+import { getTierMeaning, TierFace, TierInput } from "../students/TierInput";
 import { formatRaidStudentName, isRaidGrowthFieldApplicable, type RaidPartyStudent } from "./raid-party-student";
 import { changedRaidFormFields, type RaidFormUnit, setRaidFormUnitValue } from "./raid-record-form-state";
 
@@ -81,8 +81,90 @@ const changedClassName =
 
 type Row = { unit: RaidFormUnit; slot: number; student: RaidPartyStudent | undefined; name: string };
 
-// The growth values of a party's students, laid out as the 학생 성장 플래너 table: one row per student, the values of a
-// group side by side in one box. A box narrower than the table scrolls sideways, with the student column kept in view.
+type FrameRow = { key: number; studentUid: string; name: string; assist: boolean };
+
+// The 학생 성장 플래너 table: one row per student, the values of a group side by side in one box. A box narrower than
+// the table scrolls sideways, with the student column kept in view. The editor and the read-only view fill the boxes.
+function GrowthTableFrame({
+  title,
+  rows,
+  tierRequired,
+  renderGroup,
+}: {
+  title: string;
+  rows: readonly FrameRow[];
+  tierRequired: boolean;
+  renderGroup: (rowKey: number, group: GrowthGroup) => ReactNode;
+}) {
+  const headerCell = "text-xs font-semibold text-v2-fg-secondary";
+  return (
+    <div className="w-fit max-w-full min-w-0 overflow-x-auto">
+      <table className="w-max border-separate border-spacing-0 text-sm">
+        <caption className="sr-only">{title} 성장 정보</caption>
+        <thead>
+          <tr>
+            <th scope="col" rowSpan={2} className={cn(headerCell, stickyColumn, "pr-1 pb-1.5 text-left align-bottom")}>
+              학생
+            </th>
+            {GROUPS.map((group) => (
+              <th key={group.key} scope="colgroup" className={cn(headerCell, "h-8 px-1.5 text-left align-bottom")}>
+                <span className="block leading-4">
+                  {group.labelHidden ? <span className="sr-only">{group.label}</span> : group.label}
+                  {group.labelHidden ? <span aria-hidden="true">&nbsp;</span> : null}
+                </span>
+              </th>
+            ))}
+          </tr>
+          <tr>
+            {GROUPS.map((group) => (
+              <th key={group.key} scope="colgroup" className="h-7 px-1.5 text-xs font-medium text-v2-fg-tertiary">
+                <span className="grid text-center" style={columnsStyle(group.cells)}>
+                  {group.cells.map((cell) => (
+                    <span key={cell.field} className="truncate">
+                      {cell.label}
+                      {cell.field === "tier" && tierRequired ? (
+                        <span aria-hidden="true" className="text-v2-danger">
+                          *
+                        </span>
+                      ) : null}
+                    </span>
+                  ))}
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key}>
+              <th
+                scope="row"
+                className={cn(stickyColumn, "w-28 max-w-28 py-1.5 pr-1 text-left font-normal sm:w-36 sm:max-w-36")}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <RoundStudentImage studentUid={row.studentUid} size="sm" />
+                  <span className="min-w-0 truncate text-sm font-semibold text-v2-fg">{row.name}</span>
+                  {row.assist ? (
+                    <span className="inline-flex min-h-[1.125rem] shrink-0 items-center rounded bg-v2-inset px-1.5 text-[0.6875rem] font-semibold text-v2-fg-secondary">
+                      조력자
+                    </span>
+                  ) : null}
+                </span>
+              </th>
+              {GROUPS.map((group) => (
+                <td key={group.key} className="px-1.5 py-1.5">
+                  {renderGroup(row.key, group)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// The growth values of a party's students, editable. 성급 can be required, as a guide asks.
 export function PartyGrowthTable({
   slots,
   title,
@@ -107,86 +189,36 @@ export function PartyGrowthTable({
     const student = studentsByUid.get(unit.studentUid);
     return [{ unit, slot, student, name: student ? formatRaidStudentName(student.name) : "알 수 없는 학생" }];
   });
+  const rowsBySlot = new Map(rows.map((row) => [row.slot, row]));
   const anyChanged = rows.some(({ unit }) => changedRaidFormFields(unit).size > 0);
-  const headerCell = "text-xs font-semibold text-v2-fg-secondary";
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <div className="w-fit max-w-full min-w-0 overflow-x-auto">
-        <table className="w-max border-separate border-spacing-0 text-sm">
-          <caption className="sr-only">{title} 성장 정보</caption>
-          <thead>
-            <tr>
-              <th
-                scope="col"
-                rowSpan={2}
-                className={cn(headerCell, stickyColumn, "pr-1 pb-1.5 text-left align-bottom")}
-              >
-                학생
-              </th>
-              {GROUPS.map((group) => (
-                <th key={group.key} scope="colgroup" className={cn(headerCell, "h-8 px-1.5 text-left align-bottom")}>
-                  <span className="block leading-4">
-                    {group.labelHidden ? <span className="sr-only">{group.label}</span> : group.label}
-                    {group.labelHidden ? <span aria-hidden="true">&nbsp;</span> : null}
-                  </span>
-                </th>
-              ))}
-            </tr>
-            <tr>
-              {GROUPS.map((group) => (
-                <th key={group.key} scope="colgroup" className="h-7 px-1.5 text-xs font-medium text-v2-fg-tertiary">
-                  <span className="grid text-center" style={columnsStyle(group.cells)}>
-                    {group.cells.map((cell) => (
-                      <span key={cell.field} className="truncate">
-                        {cell.label}
-                        {cell.field === "tier" && tierRequired ? (
-                          <span aria-hidden="true" className="text-v2-danger">
-                            *
-                          </span>
-                        ) : null}
-                      </span>
-                    ))}
-                  </span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.slot}>
-                <th
-                  scope="row"
-                  className={cn(stickyColumn, "w-28 max-w-28 py-1.5 pr-1 text-left font-normal sm:w-36 sm:max-w-36")}
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <RoundStudentImage studentUid={row.unit.studentUid} size="sm" />
-                    <span className="min-w-0 truncate text-sm font-semibold text-v2-fg">{row.name}</span>
-                    {row.unit.assist ? (
-                      <span className="inline-flex min-h-[1.125rem] shrink-0 items-center rounded bg-v2-inset px-1.5 text-[0.6875rem] font-semibold text-v2-fg-secondary">
-                        조력자
-                      </span>
-                    ) : null}
-                  </span>
-                </th>
-                {GROUPS.map((group) => (
-                  <td key={group.key} className="px-1.5 py-1.5">
-                    <GrowthFieldBox
-                      group={group}
-                      row={row}
-                      tierRequired={tierRequired}
-                      missingTier={missingTier}
-                      changedLegendId={changedLegendId}
-                      flowProps={getInputProps}
-                      onChange={(field, value) => onChange(row.slot, setRaidFormUnitValue(row.unit, field, value))}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <GrowthTableFrame
+        title={title}
+        rows={rows.map((row) => ({
+          key: row.slot,
+          studentUid: row.unit.studentUid,
+          name: row.name,
+          assist: row.unit.assist,
+        }))}
+        tierRequired={tierRequired}
+        renderGroup={(slot, group) => {
+          const row = rowsBySlot.get(slot);
+          if (!row) return null;
+          return (
+            <GrowthFieldBox
+              group={group}
+              row={row}
+              tierRequired={tierRequired}
+              missingTier={missingTier}
+              changedLegendId={changedLegendId}
+              flowProps={getInputProps}
+              onChange={(field, value) => onChange(row.slot, setRaidFormUnitValue(row.unit, field, value))}
+            />
+          );
+        }}
+      />
       {tierRequired || anyChanged ? (
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-v2-fg-tertiary">
           {tierRequired ? (
@@ -207,6 +239,78 @@ export function PartyGrowthTable({
       ) : null}
     </div>
   );
+}
+
+type ReadOnlyUnit = Pick<RaidRecordUnit, "slot" | "studentUid" | "assist" | "snapshot">;
+
+// The growth values of a saved party's students, in the same table as the editor. A box is a fill rather than an
+// input's outline, so it does not read as editable.
+export function PartyGrowthReadOnlyTable({
+  units,
+  title,
+  studentsByUid,
+}: {
+  units: readonly ReadOnlyUnit[];
+  title: string;
+  studentsByUid: ReadonlyMap<string, Pick<RaidPartyStudent, "name">>;
+}) {
+  const unitsBySlot = new Map(units.map((unit) => [unit.slot, unit]));
+  const nameOf = (uid: string) => {
+    const student = studentsByUid.get(uid);
+    return student ? formatRaidStudentName(student.name) : "알 수 없는 학생";
+  };
+  return (
+    <GrowthTableFrame
+      title={title}
+      rows={units.map((unit) => ({
+        key: unit.slot,
+        studentUid: unit.studentUid,
+        name: nameOf(unit.studentUid),
+        assist: unit.assist,
+      }))}
+      tierRequired={false}
+      renderGroup={(slot, group) => {
+        const unit = unitsBySlot.get(slot);
+        if (!unit) return null;
+        return (
+          <span className="grid rounded-md bg-v2-inset" style={columnsStyle(group.cells)}>
+            {group.cells.map((cell) => (
+              <span
+                key={cell.field}
+                className="flex h-7 min-w-0 items-center justify-center text-sm text-v2-fg tabular-nums"
+              >
+                <GrowthValueText field={cell.field} value={unit.snapshot[cell.field]} />
+              </span>
+            ))}
+          </span>
+        );
+      }}
+    />
+  );
+}
+
+function GrowthValueText({ field, value }: { field: RaidRecordSnapshotField; value: number | undefined }) {
+  if (value === undefined) {
+    return (
+      <span className="text-v2-fg-tertiary">
+        <span aria-hidden="true">–</span>
+        <span className="sr-only">없음</span>
+      </span>
+    );
+  }
+  if (field === "tier") {
+    return (
+      <>
+        <span aria-hidden="true">
+          <TierFace tier={value} />
+        </span>
+        <span className="sr-only">{getTierMeaning(value)}</span>
+      </>
+    );
+  }
+  // A skill at its highest level reads "MAX", as the editor shows it.
+  if (SKILL_FIELDS.has(field) && value === STUDENT_GROWTH_EDIT_RANGES[field].max) return "MAX";
+  return value;
 }
 
 function GrowthFieldBox({

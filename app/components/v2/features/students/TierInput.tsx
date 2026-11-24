@@ -28,7 +28,7 @@ export { getTierMeaning };
 
 // The visible face of a tier: a star and the number up to 5, and the exclusive weapon icon with its level after 5 (the
 // GrowthTier pattern).
-function TierFace({ tier }: { tier: number }) {
+export function TierFace({ tier }: { tier: number }) {
   if (tier <= 5) {
     return (
       <span className="inline-flex items-center gap-0.5">

@@ -77,7 +77,7 @@ export default function RaidRecordDetail() {
   const defenseTypes = season.scoreDefenseTypes.map(({ defenseType }) => defenseType);
 
   return (
-    <V2Page width="reading">
+    <V2Page width="wide">
       <PageHeader
         back={{ title: `@${username}의 총력전·대결전 기록`, to: listTo }}
         title={`#${season.seasonIndex} ${season.boss.name}`}

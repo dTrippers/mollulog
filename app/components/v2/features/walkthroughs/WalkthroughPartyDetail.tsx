@@ -5,7 +5,7 @@ import { walkthroughPartyLabel } from "~/domain/walkthrough-mentions";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../../layout/styles";
 import { IconButton } from "../../primitives/IconButton";
-import { PartyGrowthReadOnlyTable } from "../raid-records/RaidPartyView";
+import { PartyGrowthReadOnlyTable } from "../raid-records/PartyGrowthTable";
 import { WalkthroughPartyThumbs, WalkthroughTimelineSteps, type WalkthroughStudentsByUid } from "./walkthrough-parts";
 
 export function walkthroughPartyAnchorId(party: Pick<WalkthroughParty, "uid">): string {
