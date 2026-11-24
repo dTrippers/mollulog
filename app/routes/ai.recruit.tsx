@@ -15,6 +15,7 @@ import { getFutureMediaTypeLabel } from "~/components/v2/features/futures/labels
 import { RecruitCriteria, RecruitGoalChoice } from "~/components/v2/features/recruit-recommendation/RecruitPanels";
 import {
   RecruitAllRecruited,
+  RecruitBetaNotice,
   RecruitGoalCards,
   RecruitLoadFailure,
   RecruitNoPickups,
@@ -536,6 +537,7 @@ export default function RecruitRecommendationPage() {
           : null;
     main = (
       <>
+        <RecruitBetaNotice />
         {goalSaveFailed ? (
           <RecruitViewerNotice message="목표를 저장하지 못했어요" onRetry={() => saveGoal(goal)} />
         ) : null}

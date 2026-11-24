@@ -81,6 +81,15 @@ export function RecruitViewerNotice({ message, onRetry }: { message: string; onR
   );
 }
 
+// The beta disclaimer at the top of the timeline.
+export function RecruitBetaNotice() {
+  return (
+    <StatusNotice tone="warning" boxed className="mb-3 break-keep">
+      아직 베타 단계라 추천이 정확하지 않을 수 있어요. 참고용으로만 봐주세요.
+    </StatusNotice>
+  );
+}
+
 export function RecruitAllRecruited() {
   return (
     <div className="mb-2 flex items-center gap-2 rounded-lg bg-v2-surface p-v2-block-p">

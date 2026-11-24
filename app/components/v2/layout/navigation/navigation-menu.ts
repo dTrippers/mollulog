@@ -48,7 +48,7 @@ import {
   UserIcon as UserIconSolid,
 } from "@heroicons/react/24/solid";
 import type { ComponentProps, ComponentType } from "react";
-import { AronaGradientMark } from "~/components/v2/features/ai/AronaMark";
+import { AronaMark } from "~/components/v2/features/ai/AronaMark";
 import {
   DEFAULT_MOBILE_NAVIGATION_IDS,
   MOBILE_NAVIGATION_IDS,
@@ -160,7 +160,7 @@ export const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
     shortName: "Arona",
     OutlineIcon: SparklesIconOutline,
     SolidIcon: SparklesIconSolid,
-    TitleMark: AronaGradientMark,
+    TitleMark: AronaMark,
   },
   {
     id: "community",
