@@ -9,6 +9,12 @@ import { StudentThumb } from "./StudentThumb";
 import { splitVisibleStudentName } from "./split-student-name";
 import type { FutureStudentEntry } from "./types";
 
+// Whether any student in one list shows a variant, so the students without one keep the variant line and their AI marks
+// line up.
+export function hasVariantName(entries: FutureStudentEntry[]): boolean {
+  return entries.some((entry) => splitVisibleStudentName(entry.studentName).variant !== null);
+}
+
 // One student thumbnail with its quick panel. On side-by-side it opens a popover anchored to the thumbnail. On stacked
 // it opens a sheet.
 export function StudentSlot({
@@ -17,6 +23,7 @@ export function StudentSlot({
   open,
   onOpenChange,
   large = false,
+  reserveVariantLine = false,
 }: {
   entry: FutureStudentEntry;
   signedIn: boolean;
@@ -24,6 +31,8 @@ export function StudentSlot({
   onOpenChange: (open: boolean) => void;
   // The home's larger portrait. The default keeps the 1.x-sized thumbnail used by /futures.
   large?: boolean;
+  // Another student in the same list shows a variant.
+  reserveVariantLine?: boolean;
 }) {
   const { stacked } = useV2Page();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -79,6 +88,7 @@ export function StudentSlot({
         favorite={favorite}
         personalStatePending={entry.viewerPending}
         aiRecommended={entry.aiRecommended}
+        reserveVariantLine={reserveVariantLine}
         expanded={panelOpen}
         large={large}
         onOpen={() => onOpenChange(true)}

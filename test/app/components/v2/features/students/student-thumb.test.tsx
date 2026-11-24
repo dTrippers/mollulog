@@ -190,3 +190,29 @@ describe("StudentThumb shop grid options", () => {
     expect(selectedIndicator?.className).not.toContain("bottom-1");
   });
 });
+
+describe("StudentThumb AI mark", () => {
+  // The caption lines below the portrait: the name, the variant or the empty line kept in its place, and the mark.
+  function captionLines(container: HTMLElement) {
+    const column = container.firstElementChild as HTMLElement;
+    return [...column.children].slice(1).map((line) => line.textContent ?? "");
+  }
+
+  it("puts the mark right under the name when no student in the list has a variant", () => {
+    const { container } = renderThumb({ variant: null, aiRecommended: true });
+
+    expect(captionLines(container)).toEqual(["키사키", "AI 추천"]);
+  });
+
+  it("keeps an empty variant line above the mark when another student in the list has a variant", () => {
+    const { container } = renderThumb({ variant: null, aiRecommended: true, reserveVariantLine: true });
+
+    expect(captionLines(container)).toEqual(["키사키", "", "AI 추천"]);
+  });
+
+  it("puts the mark under the variant", () => {
+    const { container } = renderThumb({ aiRecommended: true, reserveVariantLine: true });
+
+    expect(captionLines(container)).toEqual(["키사키", "수영복", "AI 추천"]);
+  });
+});

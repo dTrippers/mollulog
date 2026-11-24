@@ -16,7 +16,7 @@ import { cn } from "~/lib/utils";
 import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
-import { StudentSlot } from "../students/StudentSlot";
+import { hasVariantName, StudentSlot } from "../students/StudentSlot";
 import { StudentThumbList } from "../students/StudentThumbList";
 import type { FutureStudentEntry } from "../students/types";
 import { ContentMedia } from "./ContentMedia";
@@ -232,6 +232,7 @@ function ScheduleRow({
                               signedIn={signedIn}
                               open={openKey === entry.favoriteKey}
                               onOpenChange={(open) => onOpenKeyChange(open ? entry.favoriteKey : null)}
+                              reserveVariantLine={hasVariantName(section.entries)}
                             />
                           </li>
                         ))}

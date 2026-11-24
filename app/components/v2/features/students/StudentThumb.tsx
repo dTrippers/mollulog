@@ -58,9 +58,11 @@ export type StudentThumbProps = {
   captionPlacement?: "below" | "overlay";
   // Hides an overlay caption below the md breakpoint, for dense mobile grids where portraits stay clean.
   hideOverlayCaptionOnMobile?: boolean;
-  // The 미래시 mark of a student the Sensei's recruit recommendation goal recommends, as a third caption line. A student
-  // without a variant keeps the variant line empty, so every mark in a row sits at the same height.
+  // The 미래시 mark of a student the Sensei's recruit recommendation goal recommends, as a caption line under the name.
   aiRecommended?: boolean;
+  // Keeps an empty variant line above the mark when the student has no variant, so the mark sits at the same height as
+  // a neighbor's under a variant. Lists without any variant leave it out, and the mark follows the name.
+  reserveVariantLine?: boolean;
 };
 
 // A linked or clickable thumbnail fades on hover, as every 2.0 pressable element does. It never scales. The fade needs a
@@ -103,6 +105,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     captionPlacement = "below",
     hideOverlayCaptionOnMobile = false,
     aiRecommended = false,
+    reserveVariantLine = false,
   },
   ref,
 ) {
@@ -206,7 +209,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
           <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
             {variant}
           </span>
-        ) : showAiMark ? (
+        ) : showAiMark && reserveVariantLine ? (
           <span aria-hidden="true" className="block h-4" />
         ) : null}
         {showAiMark ? <AiRecommendedMark size="sm" className="mt-0.5" /> : null}

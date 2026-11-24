@@ -47,7 +47,7 @@ import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
 import { HintChip } from "../../primitives/HintChip";
 import { TrailingIconText } from "../../primitives/TrailingIconText";
-import { StudentSlot } from "../students/StudentSlot";
+import { hasVariantName, StudentSlot } from "../students/StudentSlot";
 import { StudentThumbList } from "../students/StudentThumbList";
 import { ContentMedia } from "./ContentMedia";
 import { FeatureBanner } from "./FeatureBanner";
@@ -534,6 +534,7 @@ function StudentBlock({
   openKey: string | null;
   onOpenKeyChange: (key: string | null) => void;
 }) {
+  const reserveVariantLine = hasVariantName(entries);
   return (
     <div className="space-y-2">
       {label || showPickupUnavailableNotice ? (
@@ -550,6 +551,7 @@ function StudentBlock({
               signedIn={signedIn}
               open={openKey === entry.favoriteKey}
               onOpenChange={(open) => onOpenKeyChange(open ? entry.favoriteKey : null)}
+              reserveVariantLine={reserveVariantLine}
             />
           </li>
         ))}
