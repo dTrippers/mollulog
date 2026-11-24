@@ -12,7 +12,7 @@ import { formatThousands } from "~/domain/futures/futures-view-model";
 import { cn } from "~/lib/utils";
 import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { v2FocusRing } from "../../layout/styles";
-import { AiSparklesIcon } from "../ai/AiMarks";
+import { AronaGradientMark } from "../ai/AronaMark";
 import { AttributeStripes } from "./AttributeStripes";
 import type { FutureStudentEntry } from "./types";
 
@@ -69,7 +69,7 @@ export function StudentQuickPanelBody({
             className={cn(rowClassName, "items-start py-2")}
             {...getV2LinkTransitionProps("forward")}
           >
-            <AiSparklesIcon className="mt-0.5 size-4" />
+            <AronaGradientMark className="mt-0.5 size-4" />
             <span className="min-w-0 flex-1">
               <span className="block font-semibold">AI 모집 추천</span>
               <span className="mt-0.5 block text-xs break-keep text-v2-fg-tertiary">

@@ -1,4 +1,4 @@
-import { Bars3BottomLeftIcon, CalendarDaysIcon, SparklesIcon, TableCellsIcon } from "@heroicons/react/24/outline";
+import { Bars3BottomLeftIcon, CalendarDaysIcon, TableCellsIcon } from "@heroicons/react/24/outline";
 import { FunnelIcon } from "@heroicons/react/24/solid";
 import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -13,6 +13,7 @@ import {
   useRouteError,
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { AronaMark } from "~/components/v2/features/ai/AronaMark";
 import type { CommentVisibility } from "~/components/v2/features/comments/CommentComposer";
 import { OpinionSheet } from "~/components/v2/features/comments/OpinionSheet";
 import {
@@ -544,7 +545,7 @@ function buildFutureTabs(
     {
       key: "recruit-recommendation",
       text: "모집 추천",
-      Icon: SparklesIcon,
+      Icon: AronaMark,
       link: "/ai/recruit",
       stackedOnly: true,
       accentIcon: true,

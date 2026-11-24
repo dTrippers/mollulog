@@ -8,7 +8,7 @@ import {
   MagnifyingGlassIcon,
   RectangleGroupIcon as RectangleGroupIconOutline,
 } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ComponentProps, type ComponentType, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useMatches, useNavigate } from "react-router";
 import { SenseiAvatar } from "~/components/v2/features/comments/SenseiAvatar";
 import { FeatureHint } from "~/components/v2/features/feature-hint";
@@ -661,6 +661,7 @@ export default function NavigationBar({
                 key={section.id}
                 id={section.id as DesktopNavigationPreferenceGroupId}
                 title={section.name}
+                TitleMark={section.TitleMark}
                 items={section.items}
                 expanded={groupIsExpanded(section.id as DesktopNavigationPreferenceGroupId)}
                 dot={getNavigationGroupBadgeSummary(section.items)}
@@ -765,6 +766,7 @@ export default function NavigationBar({
 function DesktopNavigationGroup({
   id,
   title,
+  TitleMark,
   items,
   expanded,
   dot,
@@ -775,6 +777,7 @@ function DesktopNavigationGroup({
 }: {
   id: DesktopNavigationPreferenceGroupId;
   title: string;
+  TitleMark?: ComponentType<ComponentProps<"svg">>;
   items: NavigationItem[];
   expanded: boolean;
   dot: NavigationDot | undefined;
@@ -798,6 +801,7 @@ function DesktopNavigationGroup({
         aria-controls={controlsId}
         onClick={() => onToggle?.(!expanded)}
       >
+        {TitleMark ? <TitleMark className="size-4" aria-hidden="true" /> : null}
         <span className="min-w-0 flex-1 truncate">{title}</span>
         {!expanded && dot ? <span className="sr-only">, {NAVIGATION_DOT_LABELS[dot]}</span> : null}
         {!expanded && dot ? <NavigationDotMark dot={dot} className="shrink-0" /> : null}

@@ -48,6 +48,7 @@ import {
   UserIcon as UserIconSolid,
 } from "@heroicons/react/24/solid";
 import type { ComponentProps, ComponentType } from "react";
+import { AronaGradientMark } from "~/components/v2/features/ai/AronaMark";
 import {
   DEFAULT_MOBILE_NAVIGATION_IDS,
   MOBILE_NAVIGATION_IDS,
@@ -133,6 +134,9 @@ export type NavigationGroup = {
   shortName: string;
   OutlineIcon: IconComponent;
   SolidIcon: IconComponent;
+  // A mark before the group's title in the expanded sidebar. Only Arona Intelligence has one, its logo; the menu rows
+  // and the rail keep their icons.
+  TitleMark?: IconComponent;
 };
 
 export const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
@@ -156,6 +160,7 @@ export const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
     shortName: "Arona",
     OutlineIcon: SparklesIconOutline,
     SolidIcon: SparklesIconSolid,
+    TitleMark: AronaGradientMark,
   },
   {
     id: "community",
@@ -765,7 +770,7 @@ export function getNavigationCatalog({
 
 export type DesktopNavigation = {
   homeItem: NavigationItem;
-  groups: { id: NavigationGroupId; name: string; items: NavigationItem[] }[];
+  groups: { id: NavigationGroupId; name: string; TitleMark?: IconComponent; items: NavigationItem[] }[];
 };
 
 export function getDesktopNavigation(options: NavigationCatalogOptions): DesktopNavigation {
@@ -783,6 +788,7 @@ export function getDesktopNavigation(options: NavigationCatalogOptions): Desktop
     groups: NAVIGATION_GROUPS.map((group) => ({
       id: group.id,
       name: group.name,
+      ...(group.TitleMark ? { TitleMark: group.TitleMark } : {}),
       items: catalog.filter((item) => item.group === group.id),
     })).filter((group) => group.items.length > 0),
   };
