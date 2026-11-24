@@ -84,7 +84,7 @@ describe("global navigation catalog", () => {
     expect(aiItems.map(({ menuId }) => menuId)).toEqual(["recruit-recommendation", "ai-question"]);
     expect(aiItems[0]).toMatchObject({
       to: "/ai/recruit",
-      name: "모집 추천",
+      name: "모집 추천 (β)",
       favoriteId: "recruit-recommendation",
       mobileNavigationId: "recruit-recommendation",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
@@ -303,7 +303,7 @@ describe("global navigation catalog", () => {
       "인연 계산기",
       "공략",
       "점수 계산기",
-      "모집 추천",
+      "모집 추천 (β)",
     ]);
   });
 

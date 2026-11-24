@@ -57,7 +57,7 @@ import {
   recruitGoalLabels,
 } from "~/domain/recruit-recommendation";
 import { buildRecruitTimeline } from "~/domain/recruit-recommendation-timeline";
-import { formatInstant, isInstantAfter, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { isInstantAfter, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import { createLatestSaveQueue } from "~/lib/latest-save-queue";
 import { captureClientError } from "~/lib/observability.client";
@@ -78,6 +78,10 @@ import {
   syncFavoriteCounts,
 } from "./futures._components/favorited-counts";
 import { settleViewerState, useSettledValue, type ViewerLoaded } from "./futures._components/viewer-state";
+
+// The screen is in beta, which its header title says; the browser title keeps the plain name.
+const PAGE_TITLE = "모집 추천 (β)";
+const PAGE_DESCRIPTION = "다가오는 픽업 학생의 모집 우선순위를 확인해보세요";
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "모집 추천";
@@ -104,7 +108,7 @@ export function ErrorBoundary() {
 
   return (
     <V2Page width="wide">
-      <PageHeader title="모집 추천" />
+      <PageHeader title={PAGE_TITLE} description={PAGE_DESCRIPTION} />
       <RecruitLoadFailure onRetry={() => navigate(pathWithSearch, { replace: true })} />
     </V2Page>
   );
@@ -557,14 +561,7 @@ export default function RecruitRecommendationPage() {
   const criteria = <RecruitCriteria />;
   return (
     <V2Page width="wide">
-      <PageHeader
-        title="모집 추천"
-        meta={
-          answer ? (
-            <span className="tabular-nums">{`${formatInstant(answer.answer.computedAt, { timeZone, format: "MM/DD HH:mm" })} 기준`}</span>
-          ) : undefined
-        }
-      />
+      <PageHeader title={PAGE_TITLE} description={PAGE_DESCRIPTION} />
       <PageMain>{main}</PageMain>
       <PageAside>
         <PanelSheet panelId={GOAL_PANEL_ID} title="목표" Icon={FlagIcon}>

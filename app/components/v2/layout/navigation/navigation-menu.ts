@@ -320,7 +320,7 @@ export function getNavigationCatalog({
       group: "ai",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/ai/recruit",
-      name: "모집 추천",
+      name: "모집 추천 (β)",
       mobileNavigationId: "recruit-recommendation",
       favoriteId: "recruit-recommendation",
       description: "다가오는 픽업 학생의 모집 우선순위를 확인해보세요",
