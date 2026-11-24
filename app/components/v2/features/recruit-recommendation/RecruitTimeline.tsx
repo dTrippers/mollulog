@@ -328,8 +328,10 @@ function StudentGroup({
 }
 
 // A pickup student without a recommendation, or one already recruited: the portrait, the name, the variant and the
-// recruitment label, and the heart. Every chip in a group has the same width, and a long name is cut short. A student
-// the answer has opens its evidence; the heart button sits above the chip's own button, so it stays a separate control.
+// recruitment label on lines of their own (the label follows the name when there is no variant), and the heart. Every
+// chip in a group has the same width, and a long name is cut short. A student the answer has opens its evidence, marked
+// by the same chevron as a recommended tile; a chip without evidence keeps the chevron's space so the hearts line up. The heart button sits above the chip's
+// own button, so it stays a separate control.
 function PickupStudentChip({
   goal,
   pickup,
@@ -372,7 +374,7 @@ function PickupStudentChip({
           )}
         />
       ) : null}
-      <span className="pointer-events-none relative h-[2.375rem] w-8 shrink-0 overflow-hidden rounded bg-v2-inset">
+      <span className="pointer-events-none relative h-12 w-10 shrink-0 overflow-hidden rounded bg-v2-inset">
         <StudentPortrait
           uid={pickup.studentUid ?? "unlisted"}
           className="absolute inset-0 size-full object-cover"
@@ -381,12 +383,18 @@ function PickupStudentChip({
       </span>
       <span className="pointer-events-none relative min-w-0 flex-1 leading-4">
         <span className="block truncate text-xs text-v2-fg">{pickup.name}</span>
-        <span className="block truncate text-[0.6875rem] text-v2-fg-tertiary">
-          {pickup.variant ? `${pickup.variant} · ` : null}
-          <span className={cn(pickup.isNew && "text-v2-new")}>{pickup.recruitmentLabel}</span>
+        {pickup.variant ? (
+          <span className="block truncate text-[0.6875rem] text-v2-fg-tertiary">{pickup.variant}</span>
+        ) : null}
+        <span className={cn("block truncate text-[0.6875rem] text-v2-fg-tertiary", pickup.isNew && "text-v2-new")}>
+          {pickup.recruitmentLabel}
         </span>
       </span>
       <FavoriteToggle favorite={pickup.favorite} studentLabel={studentLabel} size="sm" />
+      <ChevronRightIcon
+        aria-hidden="true"
+        className={cn("pointer-events-none -ml-1 size-4 shrink-0 text-v2-fg-tertiary", !student && "invisible")}
+      />
       {student ? (
         <RecruitEvidencePanel
           open={open}
