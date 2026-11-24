@@ -50,7 +50,6 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `text-v2-info` | `var(--v2-accent)` | `var(--v2-accent)` | Information status text; separate semantic token with the link color |
 | `bg-v2-ai-gradient` | `linear-gradient(135deg, oklch(0.623 0.214 259.815), oklch(0.606 0.25 292.717))` | `linear-gradient(135deg, oklch(0.707 0.165 254.624), oklch(0.702 0.183 293.541))` | AI mark, input focus glow, and working halo only |
 | `shadow-v2-ai-glow` | `0 0 1.25rem oklch(0.606 0.25 292.717 / 16%)` | `0 0 1.25rem oklch(0.702 0.183 293.541 / 24%)` | AI input focus glow |
-| `shadow-v2-ai-banner` | `0 0 0.75rem` AI-from at 40%, `0 0 2rem` AI-to at 45% | AI-from at 40%, AI-to at 50% | The 모집 추천 link banner in the 미래시 Aside only. An approved exception: a link that is not AI work wears the AI glow, stronger than `shadow-v2-ai-glow` |
 | `animate-v2-ai-working` | `v2-ai-working 2s ease-in-out infinite` | same | AI working halo; stopped by reduced motion |
 | `text-v2-dev-accent`, `bg-v2-dev-accent` | `oklch(0.623 0.214 259.815)` | same | Blue emphasis and illustration accents on the developers introduction. Tint with `/5`, `/10`, or `/25` when the surface needs a lighter treatment |
 | `bg-v2-dev-accent-strong` | `oklch(0.515 0.215 263.6)` | same | Developers introduction CTA fill; supports white text in normal and hover states |
