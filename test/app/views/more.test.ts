@@ -9,6 +9,7 @@ const mockGetPyroxeneUserState = jest.fn<(...args: unknown[]) => Promise<unknown
 const mockGetUserFavoritedStudents = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetRelationshipLevels = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockCountUnregisteredActiveCoupons = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockGetAllStudentsMap = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
 jest.mock("~/views/navigation", () => ({ getNavigationBarContents: mockGetNavigationBarContents }));
 jest.mock("~/views/pyroxene", () => ({ getPyroxenePlannerContents: mockGetPyroxenePlannerContents }));
@@ -21,8 +22,11 @@ jest.mock("~/models/pyroxene-planner", () => ({ getPyroxeneUserState: mockGetPyr
 jest.mock("~/models/favorite-students", () => ({ getUserFavoritedStudents: mockGetUserFavoritedStudents }));
 jest.mock("~/models/relationship-level", () => ({ getRelationshipLevels: mockGetRelationshipLevels }));
 jest.mock("~/models/coupon", () => ({ countUnregisteredActiveCoupons: mockCountUnregisteredActiveCoupons }));
+jest.mock("~/models/student", () => ({ getAllStudentsMap: mockGetAllStudentsMap }));
 
 import { getMoreViewData } from "~/views/more";
+
+mockGetAllStudentsMap.mockResolvedValue({ "student-0": { uid: "student-0", name: "무츠키(드레스)" } });
 
 describe("More view relationship summary", () => {
   it("counts all target students while showing at most three chips", async () => {
@@ -66,13 +70,13 @@ describe("More view relationship summary", () => {
       } as never,
     );
 
-    expect(result.currentUser?.relationship).toEqual({
+    expect(result.summary?.relationship).toEqual({
       savedCount: 5,
       targetStudentCount: 5,
       targetStudents: [
-        { uid: "student-0", currentLevel: 10 },
-        { uid: "student-1", currentLevel: 10 },
-        { uid: "student-2", currentLevel: 10 },
+        { uid: "student-0", name: "무츠키(드레스)", currentLevel: 10 },
+        { uid: "student-1", name: null, currentLevel: 10 },
+        { uid: "student-2", name: null, currentLevel: 10 },
       ],
     });
   });
@@ -96,7 +100,36 @@ describe("More view relationship summary", () => {
       } as never,
     );
 
-    expect(result.currentUser?.pickupHistoryCount).toBe(3);
+    expect(result.summary?.pickupHistoryCount).toBe(3);
+  });
+});
+
+describe("More view account", () => {
+  it("returns no account and no summary for a guest", async () => {
+    const callsBefore = mockGetRecruitedStudents.mock.calls.length;
+
+    const result = await getMoreViewData({} as Env, {} as ExecutionContext, null);
+
+    expect(result).toEqual({ account: null, summary: null });
+    expect(mockGetRecruitedStudents.mock.calls.length).toBe(callsBefore);
+  });
+
+  it("keeps the account and drops only the summary when a summary query fails", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      mockGetRecruitedStudents.mockRejectedValueOnce(new Error("database unavailable"));
+
+      const result = await getMoreViewData(
+        {} as Env,
+        {} as ExecutionContext,
+        { id: 1, username: "sensei", profileStudentId: "10000" } as never,
+      );
+
+      expect(result).toEqual({ account: { username: "sensei", profileStudentId: "10000" }, summary: null });
+      expect(consoleError).toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });
 
@@ -167,7 +200,7 @@ describe("More view next recruitment pyroxene", () => {
           {} as ExecutionContext,
           { id: 1, username: "sensei", profileStudentId: null } as never,
         );
-        return result.currentUser?.pyroxene?.expectedPyroxene;
+        return result.summary?.pyroxene?.expectedPyroxene;
       };
       const purchase = {
         uid: "purchase",

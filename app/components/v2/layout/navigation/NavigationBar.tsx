@@ -36,7 +36,11 @@ import { cn } from "~/lib/utils";
 import { timelineContentTypeLocale } from "~/locales/ko";
 import type { SearchResponse, SearchResult } from "~/routes/api.search";
 import { v2FocusRing } from "../styles";
-import { mobileNavigationTutorialStorageKey } from "./mobile-navigation-tutorial";
+import {
+  mobileNavigationSettingsPath,
+  mobileNavigationTutorialStorageKey,
+  useMobileNavigationSettingsArrival,
+} from "./mobile-navigation-tutorial";
 import { NavigationAccountPopover } from "./NavigationAccountPopover";
 import { NAVIGATION_DOT_LABELS, NavigationDotMark } from "./NavigationDotMark";
 import { NavigationFlyout } from "./NavigationFlyout";
@@ -908,7 +912,7 @@ function MobileNavigationPersonalizationTutorial({
             actionLabel="바꾸기"
             onAction={() => {
               close();
-              navigate("/more#mobile-navigation-settings");
+              navigate(mobileNavigationSettingsPath);
             }}
             closeLabel="탭 설정 안내 닫기"
             onClose={close}
@@ -1077,6 +1081,7 @@ function MobileBottomNavigation({
     mobileNavigationIds,
     menuBadgeOverrides,
   });
+  const settingsArrival = useMobileNavigationSettingsArrival();
 
   return (
     <nav
@@ -1084,6 +1089,18 @@ function MobileBottomNavigation({
       className="lg:hidden fixed inset-x-0 bottom-0 z-layer-navigation h-[var(--mobile-nav-height)] bg-v2-nav pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1"
       aria-label="주요 메뉴"
     >
+      {settingsArrival > 0 ? (
+        // Arriving at 하단 탭 고정 highlights the 3rd and 4th tabs, the ones that section changes. The layer sits apart
+        // from the tabs, so a tab that a pin replaces does not replay it.
+        <div
+          key={settingsArrival}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-1 mx-auto grid h-12 max-w-xl grid-cols-5"
+        >
+          <span className="col-start-3 mx-1.5 my-0.5 rounded-lg bg-v2-highlight opacity-0 v2-panel-highlight" />
+          <span className="col-start-4 mx-1.5 my-0.5 rounded-lg bg-v2-highlight opacity-0 v2-panel-highlight" />
+        </div>
+      ) : null}
       <div className="mx-auto grid h-12 max-w-xl grid-cols-5">
         {items.map((item) => {
           const Icon = item.isActive ? item.SolidIcon : item.OutlineIcon;
