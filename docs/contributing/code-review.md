@@ -56,6 +56,13 @@ single owner for commands and claim-to-evidence mapping.
   names its route action explicitly. Without one, React Router posts it to
   whichever page is current when it is sent, so a Sensei who leaves the page
   first loses the edit.
+- Does a screen that shows records saved on another screen, such as
+  relationship targets or favorited pickups, resolve them through the same
+  source as that screen, so no saved record loses its name or image? The
+  relationship calculator lists unreleased students too, so a summary of its
+  targets reads the student list with them. A pickup student's image comes
+  from its `imageUid`, with the `unlisted` image when it is null, never from
+  its favorite key.
 - Does a component that copies loader data into state still show revalidated
   data? Copy only what the screen edits locally, and refresh the copy whenever
   the loader data changes, not only when its list of keys does.
