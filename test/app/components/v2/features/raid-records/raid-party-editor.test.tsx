@@ -6,11 +6,8 @@ import { describe, expect, it } from "@jest/globals";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { MemoryRouter } from "react-router";
-import {
-  RaidPartyCard,
-  type RaidPartyEditorContext,
-  type RaidPartyStudent,
-} from "~/components/v2/features/raid-records/RaidPartyEditor";
+import { RaidPartyCard, type RaidPartyEditorContext } from "~/components/v2/features/raid-records/RaidPartyEditor";
+import type { RaidPartyStudent } from "~/components/v2/features/raid-records/raid-party-student";
 import { V2Page } from "~/components/v2/layout/V2Page";
 import { emptyRaidFormParty, type RaidFormParty } from "~/components/v2/features/raid-records/raid-record-form-state";
 

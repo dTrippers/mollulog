@@ -29,7 +29,8 @@ import { Button, v2ButtonClassName } from "../../primitives/Button";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { StatusNotice } from "../../primitives/StatusNotice";
 import { DigitsInput } from "./DigitsInput";
-import { RaidPartyCard, type RaidPartyEditorContext, type RaidPartyStudent } from "./RaidPartyEditor";
+import { RaidPartyCard, type RaidPartyEditorContext } from "./RaidPartyEditor";
+import type { RaidPartyStudent } from "./raid-party-student";
 import { DefenseTypeLabel, RaidBossBackdrop, RaidRankTierBadge, RankStatusPill } from "./RaidRecordBits";
 import { RaidSeasonSelect, type RaidSeasonSelectOption } from "./RaidSeasonSelect";
 import {

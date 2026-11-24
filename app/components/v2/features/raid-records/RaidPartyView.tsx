@@ -5,13 +5,63 @@ import { v2FocusRing } from "../../layout/styles";
 import { RoundStudentImage } from "../students/RoundStudentImage";
 import { StudentThumb } from "../students/StudentThumb";
 import { splitVisibleStudentName } from "../students/split-student-name";
-import {
-  formatRaidStudentName,
-  RAID_GROWTH_STACKED_BUNDLES,
-  RAID_GROWTH_WIDE_BUNDLES,
-  type RaidPartyStudent,
-} from "./RaidPartyEditor";
+import { formatRaidStudentName, type RaidPartyStudent } from "./raid-party-student";
 import { useBundledGrowthTable } from "./use-bundled-growth-table";
+
+type GrowthColumn = { field: RaidRecordSnapshotField; label: string };
+type GrowthBundle = { key: string; label: string; columns: GrowthColumn[] };
+
+const BASIC: GrowthBundle = {
+  key: "basic",
+  label: "기본 정보",
+  columns: [
+    { field: "tier", label: "성급" },
+    { field: "level", label: "Lv" },
+    { field: "weaponLevel", label: "고유무기" },
+  ],
+};
+const SKILL: GrowthBundle = {
+  key: "skill",
+  label: "스킬",
+  columns: [
+    { field: "skillEx", label: "EX" },
+    { field: "skillNormal", label: "기본" },
+    { field: "skillEnhanced", label: "강화" },
+    { field: "skillSub", label: "서브" },
+  ],
+};
+const EQUIPMENT_TIER: GrowthColumn[] = [
+  { field: "equip1", label: "1" },
+  { field: "equip2", label: "2" },
+  { field: "equip3", label: "3" },
+];
+const GEAR: GrowthColumn = { field: "equipSpecial", label: "애용품" };
+const ABILITY: GrowthBundle = {
+  key: "ability",
+  label: "능력 개방",
+  columns: [
+    { field: "abilityHp", label: "체력" },
+    { field: "abilityAtk", label: "공격력" },
+    { field: "abilityHeal", label: "치유력" },
+  ],
+};
+
+// Side-by-side: every value in one row. 애용품 has its own box beside the equipment tiers.
+const RAID_GROWTH_WIDE_BUNDLES: GrowthBundle[] = [
+  BASIC,
+  SKILL,
+  { key: "equipment", label: "장비 티어", columns: EQUIPMENT_TIER },
+  { key: "gear", label: "", columns: [GEAR] },
+  ABILITY,
+];
+
+// Stacked: one bundle at a time, the way the "모집한 학생" growth table stacks.
+const RAID_GROWTH_STACKED_BUNDLES: GrowthBundle[] = [
+  BASIC,
+  SKILL,
+  { key: "equipment", label: "장비", columns: [...EQUIPMENT_TIER, GEAR] },
+  ABILITY,
+];
 
 function TierValue({ tier }: { tier: number }) {
   if (tier <= 5) return <span>★{tier}</span>;

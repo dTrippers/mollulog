@@ -10,40 +10,23 @@ import {
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { RaidRecordSnapshotField } from "~/domain/raid-record";
 import { filterStudentByName } from "~/filters/student";
-import { STUDENT_GROWTH_EDIT_RANGES } from "~/domain/student-growth-edit";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
 import { IconButton } from "../../primitives/IconButton";
-import { NumberInput } from "../../primitives/NumberInput";
-import {
-  type NumberInputFlowNavigationInputProps,
-  useNumberInputFlowNavigation,
-} from "../../primitives/use-number-input-flow-navigation";
 import { RoundStudentImage } from "../students/RoundStudentImage";
 import { StudentThumb } from "../students/StudentThumb";
 import { splitVisibleStudentName } from "../students/split-student-name";
-import { TierInput } from "../students/TierInput";
-import { useBundledGrowthTable } from "./use-bundled-growth-table";
+import { PartyGrowthTable } from "./PartyGrowthTable";
+import { PartySlotGroups } from "./PartySlotGroups";
+import { formatRaidStudentName, type RaidPartyStudent } from "./raid-party-student";
 import {
-  changedRaidFormFields,
   fillRaidFormUnit,
   type RaidFormParty,
   type RaidFormUnit,
   raidFormPartyStudentCount,
   refillRaidFormParty,
-  setRaidFormUnitValue,
 } from "./raid-record-form-state";
-
-export type RaidPartyStudent = {
-  uid: string;
-  name: string;
-  // Other names the student goes by, which the search also matches.
-  altNames: string[];
-  role: "striker" | "special";
-  initialTier: number;
-  equipmentSlots: number;
-};
 
 export type RaidPartyEditorContext = {
   studentsByUid: ReadonlyMap<string, RaidPartyStudent>;
@@ -55,12 +38,6 @@ export type RaidPartyEditorContext = {
 const MAX_LISTED_STUDENTS = 12;
 
 const noop = () => {};
-
-// "시로코*테러" reads as "시로코(테러)", as the other v2 pickers show it.
-export function formatRaidStudentName(rawName: string): string {
-  const { name, variant } = splitVisibleStudentName(rawName);
-  return variant ? `${name}(${variant})` : name;
-}
 
 function slotLabel(slot: number, strikerSlots: number): string {
   return slot < strikerSlots ? `STRIKER ${slot + 1}` : `SPECIAL ${slot - strikerSlots + 1}`;
@@ -138,7 +115,7 @@ export function RaidPartyCard({
       />
       {raidFormPartyStudentCount(party) > 0 ? (
         <PartyGrowthTable
-          party={party}
+          slots={party.slots}
           title={title}
           studentsByUid={context.studentsByUid}
           onChange={(slot, unit) =>
@@ -209,13 +186,10 @@ export type PartySlotsOptions = {
   // "always" keeps the search field under the slots, disabled until a slot is selected. "selected" shows it only while
   // a slot is selected, so a filled party is one row of portraits; an empty party starts with its first slot selected.
   search?: "always" | "selected";
-  showGroupLabels?: boolean;
   // Extra marks on a filled slot's portrait, such as a guide's starting skill order and star tier.
   slotScrimLabel?: (unit: RaidFormUnit, slot: number) => ReactNode;
   slotScrimAriaLabel?: (unit: RaidFormUnit, slot: number) => string | undefined;
   slotBadge?: (unit: RaidFormUnit, slot: number) => ReactNode;
-  // Narrower portraits on a phone, so a six-student party fits one row inside a card.
-  dense?: boolean;
 };
 
 // The slots and one search field under them. Typing a name and pressing Enter fills the selected slot and selects the
@@ -231,11 +205,9 @@ export function PartySlots<P extends Pick<RaidFormParty, "slots">>({
   strikerSlots = 4,
   allowAssist = true,
   search = "always",
-  showGroupLabels = true,
   slotScrimLabel,
   slotScrimAriaLabel,
   slotBadge,
-  dense = false,
 }: {
   party: P;
   title: string;
@@ -381,7 +353,8 @@ export function PartySlots<P extends Pick<RaidFormParty, "slots">>({
     const isSelected = slot === selectedSlot;
     const studentName = unit ? (student ? formatRaidStudentName(student.name) : "알 수 없는 학생") : null;
     return (
-      <li key={slot} className={cn("relative flex flex-col sm:w-16", dense ? "w-11" : "w-14")}>
+      // Narrower portraits on a phone, so a six-student party fits one row inside a card.
+      <li key={slot} className="relative flex w-10 flex-col sm:w-16">
         <button
           ref={(element) => {
             slotRefs.current[slot] = element;
@@ -402,7 +375,7 @@ export function PartySlots<P extends Pick<RaidFormParty, "slots">>({
               studentUid={unit.studentUid}
               name={student ? name : "알 수 없는 학생"}
               variant={student ? variant : null}
-              fluid={dense}
+              fluid
               recruitmentLabel={unit.assist ? "조력자" : undefined}
               scrimLabel={slotScrimLabel?.(unit, slot)}
               scrimAriaLabel={slotScrimAriaLabel?.(unit, slot)}
@@ -440,17 +413,10 @@ export function PartySlots<P extends Pick<RaidFormParty, "slots">>({
   const showSearch = search === "always" || selectedSlot !== null;
   return (
     <div ref={rootRef} className="flex min-w-0 flex-col gap-2.5">
-      <div className={cn("flex min-w-0 flex-wrap items-start gap-y-3", dense ? "gap-x-3 sm:gap-x-4" : "gap-x-2.5")}>
-        <SlotGroup label="STRIKER" showLabel={showGroupLabels} dense={dense}>
-          {slotIndexes.slice(0, strikerSlots).map(renderSlot)}
-        </SlotGroup>
-        {showGroupLabels ? (
-          <span aria-hidden="true" className="mx-1 hidden w-px self-stretch bg-v2-divider sm:block" />
-        ) : null}
-        <SlotGroup label="SPECIAL" showLabel={showGroupLabels} dense={dense}>
-          {slotIndexes.slice(strikerSlots).map(renderSlot)}
-        </SlotGroup>
-      </div>
+      <PartySlotGroups
+        strikers={slotIndexes.slice(0, strikerSlots).map(renderSlot)}
+        specials={slotIndexes.slice(strikerSlots).map(renderSlot)}
+      />
       <div className={cn("flex min-w-0 flex-wrap items-center gap-2", !showSearch && "hidden")}>
         <label
           className={cn(
@@ -573,322 +539,5 @@ export function PartySlots<P extends Pick<RaidFormParty, "slots">>({
         ) : null}
       </div>
     </div>
-  );
-}
-
-function SlotGroup({
-  label,
-  showLabel,
-  dense,
-  children,
-}: {
-  label: string;
-  showLabel: boolean;
-  dense: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className="min-w-0">
-      {showLabel ? (
-        <p aria-hidden="true" className="mb-1.5 text-[0.6875rem] font-semibold tracking-wide text-v2-fg-tertiary">
-          {label}
-        </p>
-      ) : null}
-      <ul aria-label={label} className={cn("flex", dense ? "flex-wrap gap-1.5 sm:gap-2" : "gap-2")}>
-        {children}
-      </ul>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
-// Growth table
-// ---------------------------------------------------------------------------------------------------------------------
-
-type GrowthColumn = { field: RaidRecordSnapshotField; label: string };
-type GrowthBundle = { key: string; label: string; columns: GrowthColumn[] };
-
-const BASIC: GrowthBundle = {
-  key: "basic",
-  label: "기본 정보",
-  columns: [
-    { field: "tier", label: "성급" },
-    { field: "level", label: "Lv" },
-    { field: "weaponLevel", label: "고유무기" },
-  ],
-};
-const SKILL: GrowthBundle = {
-  key: "skill",
-  label: "스킬",
-  columns: [
-    { field: "skillEx", label: "EX" },
-    { field: "skillNormal", label: "기본" },
-    { field: "skillEnhanced", label: "강화" },
-    { field: "skillSub", label: "서브" },
-  ],
-};
-const EQUIPMENT_TIER: GrowthColumn[] = [
-  { field: "equip1", label: "1" },
-  { field: "equip2", label: "2" },
-  { field: "equip3", label: "3" },
-];
-const GEAR: GrowthColumn = { field: "equipSpecial", label: "애용품" };
-const ABILITY: GrowthBundle = {
-  key: "ability",
-  label: "능력 개방",
-  columns: [
-    { field: "abilityHp", label: "체력" },
-    { field: "abilityAtk", label: "공격력" },
-    { field: "abilityHeal", label: "치유력" },
-  ],
-};
-
-// Side-by-side: every value in one row. 애용품 has its own box beside the equipment tiers.
-export const RAID_GROWTH_WIDE_BUNDLES: GrowthBundle[] = [
-  BASIC,
-  SKILL,
-  { key: "equipment", label: "장비 티어", columns: EQUIPMENT_TIER },
-  { key: "gear", label: "", columns: [GEAR] },
-  ABILITY,
-];
-
-// Stacked: one bundle at a time, the way the "모집한 학생" growth table stacks.
-export const RAID_GROWTH_STACKED_BUNDLES: GrowthBundle[] = [
-  BASIC,
-  SKILL,
-  { key: "equipment", label: "장비", columns: [...EQUIPMENT_TIER, GEAR] },
-  ABILITY,
-];
-
-// A value the student cannot have: an equipment slot they lack, or a weapon or ability release below ★6.
-export function isRaidGrowthFieldApplicable(
-  field: RaidRecordSnapshotField,
-  student: Pick<RaidPartyStudent, "equipmentSlots"> | undefined,
-  tier: number | undefined,
-): boolean {
-  if (field === "equip1" || field === "equip2" || field === "equip3") {
-    const index = Number(field.slice(-1)) - 1;
-    return student !== undefined && index < student.equipmentSlots;
-  }
-  if (field === "weaponLevel" || field === "abilityHp" || field === "abilityAtk" || field === "abilityHeal") {
-    return tier === undefined || tier > 5;
-  }
-  return true;
-}
-
-export function PartyGrowthTable({
-  party,
-  title,
-  studentsByUid,
-  onChange,
-}: {
-  party: Pick<RaidFormParty, "slots">;
-  title: string;
-  studentsByUid: ReadonlyMap<string, RaidPartyStudent>;
-  onChange: (slot: number, unit: RaidFormUnit) => void;
-}) {
-  const { ref: tableBoxRef, bundled: stacked } = useBundledGrowthTable();
-  const [bundleKey, setBundleKey] = useState(RAID_GROWTH_STACKED_BUNDLES[0].key);
-  const { getInputProps } = useNumberInputFlowNavigation();
-  const bundles = stacked
-    ? RAID_GROWTH_STACKED_BUNDLES.filter((bundle) => bundle.key === bundleKey)
-    : RAID_GROWTH_WIDE_BUNDLES;
-  const rows = party.slots.flatMap((unit, slot) => (unit ? [{ unit, slot }] : []));
-  const anyChanged = rows.some(({ unit }) => changedRaidFormFields(unit).size > 0);
-  // The legend names what the highlight means; each changed cell points to it, so the change is not color alone.
-  const changedLegendId = useId();
-
-  return (
-    <div className="min-w-0">
-      {stacked ? (
-        <fieldset className="mb-2 flex min-w-0 gap-1 overflow-x-auto border-0 border-b border-v2-divider p-0">
-          <legend className="sr-only">성장 정보 묶음</legend>
-          {RAID_GROWTH_STACKED_BUNDLES.map((bundle) => (
-            <button
-              key={bundle.key}
-              type="button"
-              aria-pressed={bundle.key === bundleKey}
-              onClick={() => setBundleKey(bundle.key)}
-              className={cn(
-                "flex min-h-8 shrink-0 cursor-pointer items-center border-b-2 px-2.5 text-sm whitespace-nowrap",
-                bundle.key === bundleKey
-                  ? "border-v2-link font-semibold text-v2-fg"
-                  : "border-transparent text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
-                v2FocusRing,
-              )}
-            >
-              {bundle.label}
-            </button>
-          ))}
-        </fieldset>
-      ) : null}
-      <div ref={tableBoxRef} className="min-w-0 overflow-x-auto">
-        <table className="border-separate border-spacing-x-1 border-spacing-y-1.5 text-sm">
-          <caption className="sr-only">{title} 성장 정보</caption>
-          <thead>
-            <tr>
-              <th scope="col" rowSpan={2}>
-                <span className="sr-only">학생</span>
-              </th>
-              {bundles.map((bundle) => (
-                <th
-                  key={bundle.key}
-                  scope="colgroup"
-                  colSpan={bundle.columns.length}
-                  hidden={stacked}
-                  className="pb-0 pl-3 text-center text-[0.6875rem] font-semibold text-v2-fg-secondary"
-                >
-                  {bundle.label || <span className="sr-only">애용품</span>}
-                </th>
-              ))}
-            </tr>
-            <tr>
-              {bundles.flatMap((bundle) =>
-                bundle.columns.map((column, index) => (
-                  <th
-                    key={column.field}
-                    scope="col"
-                    className={cn(
-                      "px-0 text-center text-[0.6875rem] font-normal whitespace-nowrap text-v2-fg-tertiary",
-                      index === 0 && "pl-3",
-                    )}
-                  >
-                    {column.label}
-                  </th>
-                )),
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ unit, slot }) => {
-              const student = studentsByUid.get(unit.studentUid);
-              const studentName = student ? formatRaidStudentName(student.name) : "알 수 없는 학생";
-              const changed = changedRaidFormFields(unit);
-              return (
-                <tr key={slot}>
-                  <th scope="row" className="w-28 max-w-28 text-left font-normal sm:w-36 sm:max-w-36">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <RoundStudentImage studentUid={unit.studentUid} size="sm" />
-                      <span className="min-w-0 truncate text-sm font-semibold text-v2-fg">{studentName}</span>
-                      {unit.assist ? (
-                        <span className="inline-flex min-h-[1.125rem] shrink-0 items-center rounded bg-v2-inset px-1.5 text-[0.6875rem] font-semibold text-v2-fg-secondary">
-                          조력자
-                        </span>
-                      ) : null}
-                    </span>
-                  </th>
-                  {bundles.flatMap((bundle) =>
-                    bundle.columns.map((column, index) => (
-                      <td key={column.field} className={cn("p-0", index === 0 && "pl-3")}>
-                        <GrowthCellInput
-                          field={column.field}
-                          unit={unit}
-                          student={student}
-                          studentName={studentName}
-                          changedDescriptionId={changed.has(column.field) ? changedLegendId : undefined}
-                          flowProps={getInputProps()}
-                          onChange={(value) => onChange(slot, setRaidFormUnitValue(unit, column.field, value))}
-                        />
-                      </td>
-                    )),
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {anyChanged ? (
-        <p className="mt-1 flex items-center gap-1 text-xs text-v2-fg-tertiary">
-          <span
-            aria-hidden="true"
-            className={cn(
-              "size-3.5 rounded-sm bg-v2-accent-subtle ring-1 ring-v2-accent ring-inset",
-              CHANGED_FORCED_COLORS_MARK,
-            )}
-          />
-          <span id={changedLegendId}>모집한 학생 정보에서 수정한 값</span>
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-// Forced colors drop the fill and ring that mark a changed value, so the cell and the legend swatch also get a dashed
-// outline there.
-const CHANGED_FORCED_COLORS_MARK =
-  "forced-colors:outline-2 forced-colors:outline-offset-[-3px] forced-colors:outline-dashed";
-
-function GrowthCellInput({
-  field,
-  unit,
-  student,
-  studentName,
-  changedDescriptionId,
-  flowProps,
-  onChange,
-}: {
-  field: RaidRecordSnapshotField;
-  unit: RaidFormUnit;
-  student: RaidPartyStudent | undefined;
-  studentName: string;
-  // Set when the value differs from the recruited student's: the id of the text that says so.
-  changedDescriptionId: string | undefined;
-  flowProps: NumberInputFlowNavigationInputProps;
-  onChange: (value: number | null) => void;
-}) {
-  const value = unit.snapshot[field] ?? null;
-  const range = STUDENT_GROWTH_EDIT_RANGES[field];
-  // A stored value that the tier no longer allows stays editable, so it can be corrected.
-  const editable = isRaidGrowthFieldApplicable(field, student, unit.snapshot.tier) || value !== null;
-  const changed = changedDescriptionId !== undefined;
-  const cellClassName = cn(
-    "w-10",
-    changed && cn("bg-v2-accent-subtle ring-1 ring-v2-accent ring-inset", CHANGED_FORCED_COLORS_MARK),
-  );
-  if (!editable) {
-    return <span aria-hidden="true" className="block min-h-7 w-10 rounded-md bg-v2-inset" />;
-  }
-  if (field === "tier") {
-    return (
-      <TierInput
-        label={studentName}
-        value={value}
-        initialTier={student?.initialTier ?? 1}
-        min={range.min}
-        max={range.max}
-        compact
-        describedBy={changedDescriptionId}
-        flowProps={flowProps}
-        onChange={(tier) => onChange(tier)}
-        className={cn(cellClassName, "w-12")}
-      />
-    );
-  }
-  const outOfRange = value !== null && (value < range.min || value > range.max);
-  return (
-    <NumberInput
-      aria-label={`${studentName} ${range.label}`}
-      aria-invalid={outOfRange || undefined}
-      aria-describedby={changedDescriptionId}
-      compact
-      step={1}
-      min={range.min}
-      max={range.max}
-      placeholder="–"
-      value={value ?? ""}
-      data-number-input-flow={flowProps["data-number-input-flow"]}
-      onFocus={flowProps.onFocus}
-      onKeyDown={flowProps.onKeyDown}
-      onChange={(event) => {
-        const raw = event.currentTarget.value;
-        onChange(raw === "" ? null : Number(raw));
-      }}
-      className={cn(
-        cellClassName,
-        "px-0 font-normal",
-        outOfRange && "bg-v2-danger-subtle ring-2 ring-v2-danger ring-inset",
-      )}
-    />
   );
 }

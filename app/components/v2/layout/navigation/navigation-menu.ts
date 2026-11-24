@@ -264,9 +264,6 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
       return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/pickups`));
     case "raid-records":
       return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/raids`));
-    case "my-walkthroughs":
-      // The walkthrough list itself stays under 공략/타임라인; this entry owns the earlier parties page.
-      return Boolean(currentUsername && pathname.startsWith("/timelines/parties/"));
     case "screen-scanner":
       return isMyDataConnectionPath(pathname);
     case "mollulog-api":
@@ -280,9 +277,7 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
     case "community-feed":
       return pathname.startsWith("/community");
     case "community-timelines":
-      return (
-        (pathname === "/timelines" || pathname.startsWith("/timelines/")) && !pathname.startsWith("/timelines/parties/")
-      );
+      return pathname === "/timelines" || pathname.startsWith("/timelines/");
     case "news":
       return pathname.startsWith("/news");
     case "contact":
@@ -658,17 +653,6 @@ export function getNavigationCatalog({
       OutlineIcon: QueueListIconOutline,
       SolidIcon: QueueListIconSolid,
       isActive: itemIsActive("community-timelines", pathname, currentUsername),
-    },
-    {
-      menuId: "my-walkthroughs",
-      group: "community",
-      surfaces: ["desktop", "more", "search"],
-      to: currentUsername ? "/timelines?mine=1" : "/unauthorized",
-      name: "공략 작성하기",
-      requiresSignIn: true,
-      OutlineIcon: QueueListIconOutline,
-      SolidIcon: QueueListIconSolid,
-      isActive: itemIsActive("my-walkthroughs", pathname, currentUsername),
     },
     {
       menuId: "news",

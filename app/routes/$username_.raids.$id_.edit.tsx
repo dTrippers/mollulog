@@ -74,7 +74,7 @@ export default function EditRaidRecord() {
   const timeZone = useDisplayTimeZone();
   const [deleteOpen, setDeleteOpen] = useState(false);
   return (
-    <V2Page width="reading">
+    <V2Page width="wide">
       <PageHeader
         back={{ title: "총력전·대결전 기록", to: listTo }}
         title="기록 수정"

@@ -10,13 +10,14 @@ import {
 import { walkthroughPartyLabel } from "~/domain/walkthrough-mentions";
 import { Button } from "../../primitives/Button";
 import { IconButton } from "../../primitives/IconButton";
+import { PartyGrowthTable } from "../raid-records/PartyGrowthTable";
 import { PartySlots, type RaidPartyEditorContext } from "../raid-records/RaidPartyEditor";
 import {
   type WalkthroughPartyBaselines,
   walkthroughPartySlots,
   walkthroughUnitsFromSlots,
 } from "./walkthrough-editor-state";
-import { WalkthroughGrowthTable } from "./WalkthroughGrowthTable";
+
 import { StartingSkillBadge, TierBandLabel, tierMeaning, WalkthroughPartyThumbs } from "./walkthrough-parts";
 
 const noop = () => {};
@@ -31,7 +32,6 @@ export function WalkthroughPartyEditorCard({
   context,
   baselines,
   focusSearch,
-  stacked,
   missingTier,
   onSearchFocused,
   onChange,
@@ -44,8 +44,6 @@ export function WalkthroughPartyEditorCard({
   context: RaidPartyEditorContext;
   baselines: WalkthroughPartyBaselines;
   focusSearch: boolean;
-  // The page shows one growth group at a time.
-  stacked: boolean;
   // A save was refused because a student of this party has no 성급.
   missingTier: boolean;
   onSearchFocused: () => void;
@@ -113,6 +111,7 @@ export function WalkthroughPartyEditorCard({
           partySize={partySize}
           studentsByUid={context.studentsByUid}
           label={`${title} 시작 스킬 순서`}
+          groupLabels
           onSelect={(studentUid) =>
             onChange({
               ...party,
@@ -135,8 +134,6 @@ export function WalkthroughPartyEditorCard({
           strikerSlots={walkthroughStrikerSlotCount(partySize)}
           allowAssist={false}
           search="selected"
-          showGroupLabels={false}
-          dense
           slotScrimLabel={(unit) =>
             unit.snapshot.tier !== undefined ? <TierBandLabel tier={unit.snapshot.tier} /> : undefined
           }
@@ -151,11 +148,11 @@ export function WalkthroughPartyEditorCard({
       )}
 
       {hasStudent ? (
-        <WalkthroughGrowthTable
+        <PartyGrowthTable
           slots={slots}
           title={title}
           studentsByUid={context.studentsByUid}
-          stacked={stacked}
+          tierRequired
           missingTier={missingTier}
           onChange={(slot, unit) => changeSlots(slots.map((current, index) => (index === slot ? unit : current)))}
         />

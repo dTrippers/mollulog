@@ -35,7 +35,7 @@ export default function NewRaidRecord() {
   const timeZone = useDisplayTimeZone();
   const listTo = raidRecordListTo(username, server);
   return (
-    <V2Page width="reading">
+    <V2Page width="wide">
       <PageHeader back={{ title: "총력전·대결전 기록", to: listTo }} title="기록 추가" />
       <PageMain>
         <RaidRecordForm

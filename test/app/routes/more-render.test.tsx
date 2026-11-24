@@ -84,7 +84,6 @@ describe("MoreIndexPage SSR rendering", () => {
     expect(markup).toContain("게임 정보");
     if (currentUser) {
       expect(markup).toContain("모집한 학생");
-      expect(markup).toContain("공략 작성하기");
       expect(markup).toContain('href="/@sensei"');
       expect(markup.indexOf("커뮤니티")).toBeLessThan(markup.indexOf("나의 데이터"));
     }

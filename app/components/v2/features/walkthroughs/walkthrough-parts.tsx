@@ -9,7 +9,8 @@ import {
   type WalkthroughUnit,
 } from "~/domain/walkthrough-timeline";
 import { cn } from "~/lib/utils";
-import { formatRaidStudentName, type RaidPartyStudent } from "../raid-records/RaidPartyEditor";
+import { PartySlotGroups } from "../raid-records/PartySlotGroups";
+import { formatRaidStudentName, type RaidPartyStudent } from "../raid-records/raid-party-student";
 import { RoundStudentImage } from "../students/RoundStudentImage";
 import { StudentThumb } from "../students/StudentThumb";
 import { splitVisibleStudentName } from "../students/split-student-name";
@@ -82,6 +83,7 @@ export function WalkthroughPartyThumbs({
   partySize,
   studentsByUid,
   size = "default",
+  groupLabels = false,
   onSelect,
   label,
 }: {
@@ -89,6 +91,8 @@ export function WalkthroughPartyThumbs({
   partySize: WalkthroughTimelineDocument["partySize"];
   studentsByUid: WalkthroughStudentsByUid;
   size?: "default" | "small";
+  // Shows the portraits under STRIKER and SPECIAL, as the party slots of the editor do.
+  groupLabels?: boolean;
   onSelect?: (studentUid: string) => void;
   label: string;
 }) {
@@ -103,7 +107,10 @@ export function WalkthroughPartyThumbs({
     const order = startingSkillOrderOf(party, unit.studentUid);
     const tier = unit.snapshot?.tier;
     return (
-      <li key={unit.slot} className={cn("relative shrink-0", size === "small" ? "w-12" : "w-11 sm:w-16")}>
+      <li
+        key={unit.slot}
+        className={cn("relative shrink-0", size === "small" ? "w-12" : groupLabels ? "w-10 sm:w-16" : "w-11 sm:w-16")}
+      >
         <StudentThumb
           studentUid={unit.studentUid}
           name={student ? name : UNKNOWN_STUDENT_NAME}
@@ -120,6 +127,13 @@ export function WalkthroughPartyThumbs({
       </li>
     );
   };
+  if (groupLabels) {
+    return (
+      <fieldset aria-label={label} className="m-0 min-w-0 border-0 p-0">
+        <PartySlotGroups strikers={strikers.map(renderThumb)} specials={specials.map(renderThumb)} />
+      </fieldset>
+    );
+  }
   return (
     <fieldset aria-label={label} className="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-3 sm:gap-x-4">
       {strikers.length > 0 ? <ul className="flex flex-wrap gap-1.5 sm:gap-2">{strikers.map(renderThumb)}</ul> : null}
