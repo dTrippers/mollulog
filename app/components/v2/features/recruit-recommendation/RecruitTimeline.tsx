@@ -1,6 +1,6 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ClockIcon, EyeIcon } from "@heroicons/react/24/outline";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { Link } from "react-router";
 import { groupFutureContents } from "~/domain/futures/content-timeline-grouping";
 import {
@@ -13,6 +13,7 @@ import type { RecruitGoal } from "~/domain/recruit-recommendation";
 import type { RecruitTimelineContent } from "~/domain/recruit-recommendation-timeline";
 import { formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
+import type { RecruitRecommendationStudent } from "~/models/recruit-recommendation-contract";
 import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
@@ -21,14 +22,16 @@ import { ContentMedia } from "../futures/ContentMedia";
 import { RemainingLabel } from "../futures/RemainingLabel";
 import StudentPortrait from "../students/StudentPortrait";
 import { StudentThumb } from "../students/StudentThumb";
+import { RecruitEvidencePanel } from "./RecruitEvidencePanel";
+import { RecruitStudentDetail } from "./RecruitStudentDetail";
 import { RecruitStudentTile } from "./RecruitStudentTile";
 import { FavoriteToggle } from "./RecruitValues";
 import type { RecruitContentView, RecruitPickupView } from "./types";
 
 type TimelineContent = RecruitTimelineContent<RecruitContentView, RecruitPickupView>;
 
-// The upcoming pickups by date, each with its recommended students as tiles, then the students without a recommendation
-// and the ones not judged yet. One tile's evidence is open at a time.
+// The upcoming pickups by date, each with its recommended students as tiles, then the students without a recommendation,
+// the recruited ones, and the ones not judged yet. One student's evidence is open at a time.
 export function RecruitTimeline({
   goal,
   contents,
@@ -209,26 +212,34 @@ function TimelineItem({
                 ))}
               </ul>
             ) : null}
-            {entry.notRecommended.length > 0 ? (
-              <StudentGroup title="추천 없음">
-                {entry.notRecommended.map(({ pickup }) => (
-                  <li key={pickup.favoriteKey}>
-                    <PickupStudentChip pickup={pickup} />
-                  </li>
-                ))}
-              </StudentGroup>
-            ) : null}
-            {entry.recruited.length > 0 ? (
-              <StudentGroup title="모집한 학생">
-                {entry.recruited.map((pickup) => (
-                  <li key={pickup.favoriteKey}>
-                    <PickupStudentChip pickup={pickup} />
-                  </li>
-                ))}
-              </StudentGroup>
-            ) : null}
+            {[
+              { title: "추천 없음", pickups: entry.notRecommended },
+              { title: "모집한 학생", pickups: entry.recruited },
+            ].map(({ title, pickups }) =>
+              pickups.length > 0 ? (
+                <StudentGroup
+                  key={title}
+                  title={title}
+                  listClassName="grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-1.5"
+                >
+                  {pickups.map(({ pickup, student }) => (
+                    <li key={pickup.favoriteKey}>
+                      <PickupStudentChip
+                        goal={goal}
+                        pickup={pickup}
+                        student={student}
+                        substituteNames={substituteNames}
+                        timeZone={timeZone}
+                        open={openKey === tileKey(pickup)}
+                        onOpenChange={(open) => onOpenKeyChange(open ? tileKey(pickup) : null)}
+                      />
+                    </li>
+                  ))}
+                </StudentGroup>
+              ) : null,
+            )}
             {entry.pending.length > 0 ? (
-              <StudentGroup title="판정 준비 중" gapClassName="gap-3">
+              <StudentGroup title="판정 준비 중" listClassName="flex flex-wrap items-start gap-3">
                 {entry.pending.map((pickup) => (
                   <li key={pickup.favoriteKey} className="w-12">
                     <StudentThumb
@@ -284,41 +295,102 @@ function Separated({ children }: { children: ReactNode }) {
 
 function StudentGroup({
   title,
-  gapClassName = "gap-1.5",
+  listClassName,
   children,
 }: {
   title: string;
-  gapClassName?: string;
+  listClassName: string;
   children: ReactNode;
 }) {
   return (
     <section className="mt-2.5" aria-label={title}>
       <h3 className="mb-1.5 text-xs font-normal text-v2-fg-tertiary">{title}</h3>
-      <ul className={cn("flex flex-wrap items-start", gapClassName)}>{children}</ul>
+      <ul className={listClassName}>{children}</ul>
     </section>
   );
 }
 
-// A pickup student without a recommendation: the portrait, the name, the recruitment label, and the heart.
-function PickupStudentChip({ pickup }: { pickup: RecruitPickupView }) {
+// A pickup student without a recommendation, or one already recruited: the portrait, the name, the variant and the
+// recruitment label, and the heart. Every chip in a group has the same width, and a long name is cut short. A student
+// the answer has opens its evidence; the heart button sits above the chip's own button, so it stays a separate control.
+function PickupStudentChip({
+  goal,
+  pickup,
+  student,
+  substituteNames,
+  timeZone,
+  open,
+  onOpenChange,
+}: {
+  goal: RecruitGoal;
+  pickup: RecruitPickupView;
+  student: RecruitRecommendationStudent | null;
+  substituteNames: ReadonlyMap<string, string>;
+  timeZone: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const chipRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const studentLabel = pickup.variant ? `${pickup.name}(${pickup.variant})` : pickup.name;
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-v2-surface py-1 pr-2 pl-1">
-      <span className="relative h-[2.375rem] w-8 shrink-0 overflow-hidden rounded bg-v2-inset">
+    <div
+      ref={chipRef}
+      className={cn(
+        "relative flex h-full items-center gap-2 rounded-lg py-1 pr-1 pl-1 v2-interaction-transition",
+        open ? "bg-v2-inset" : "bg-v2-surface",
+      )}
+    >
+      {student ? (
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label={`${studentLabel} 근거`}
+          onClick={() => onOpenChange(!open)}
+          className={cn(
+            "absolute inset-0 cursor-pointer rounded-lg [@media(hover:hover)_and_(pointer:fine)]:hover:bg-v2-hover v2-interaction-transition",
+            v2FocusRing,
+          )}
+        />
+      ) : null}
+      <span className="pointer-events-none relative h-[2.375rem] w-8 shrink-0 overflow-hidden rounded bg-v2-inset">
         <StudentPortrait
           uid={pickup.studentUid ?? "unlisted"}
           className="absolute inset-0 size-full object-cover"
           haloScale="72%"
         />
       </span>
-      <span className="min-w-0 text-xs leading-4 text-v2-fg">
-        <span className="block whitespace-nowrap">{pickup.name}</span>
-        {pickup.variant ? (
-          <span className="block text-[0.6875rem] whitespace-nowrap text-v2-fg-tertiary">{pickup.variant}</span>
-        ) : null}
+      <span className="pointer-events-none relative min-w-0 flex-1 leading-4">
+        <span className="block truncate text-xs text-v2-fg">{pickup.name}</span>
+        <span className="block truncate text-[0.6875rem] text-v2-fg-tertiary">
+          {pickup.variant ? `${pickup.variant} · ` : null}
+          <span className={cn(pickup.isNew && "text-v2-new")}>{pickup.recruitmentLabel}</span>
+        </span>
       </span>
-      <span className="text-[0.6875rem] whitespace-nowrap text-v2-fg-tertiary">{pickup.recruitmentLabel}</span>
-      <FavoriteToggle favorite={pickup.favorite} studentLabel={studentLabel} size="sm" className="ml-0.5" />
+      <FavoriteToggle favorite={pickup.favorite} studentLabel={studentLabel} size="sm" />
+      {student ? (
+        <RecruitEvidencePanel
+          open={open}
+          onClose={() => onOpenChange(false)}
+          studentLabel={studentLabel}
+          anchorRef={chipRef}
+          triggerRef={triggerRef}
+          detail={(showHeader) => (
+            <RecruitStudentDetail
+              goal={goal}
+              student={student}
+              aiRecommended={false}
+              substituteNames={substituteNames}
+              timeZone={timeZone}
+              name={pickup.name}
+              variant={pickup.variant}
+              showHeader={showHeader}
+            />
+          )}
+        />
+      ) : null}
     </div>
   );
 }

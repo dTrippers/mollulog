@@ -7,6 +7,7 @@ import {
   newbieGroupLabels,
   type RecruitGoal,
   recruitEvidenceLabels,
+  recruitVerdictLabel,
   usageColumnLabel,
 } from "~/domain/recruit-recommendation";
 import { formatCommunityTagLines, formatUsageSeason } from "~/domain/recruit-recommendation-display";
@@ -47,6 +48,13 @@ export function RecruitStudentDetail({
   const windowBosses = recommendation.bosses.filter((boss) => boss.source === "window");
   const pastBosses = recommendation.bosses.filter((boss) => boss.source === "past");
   const tagLines = formatCommunityTagLines(student.tags, substituteNames);
+  // A student without a recommendation has no verdict line, so its evidence starts right under the name.
+  const verdictLine =
+    goal === "newbie"
+      ? recommendation.newbie !== null
+      : recruitVerdictLabel(goal, recommendation.verdict) !== null ||
+        recommendation.verdict.evidence !== null ||
+        aiRecommended;
   return (
     <div className="break-keep [overflow-wrap:anywhere]">
       {showHeader ? (
@@ -55,24 +63,26 @@ export function RecruitStudentDetail({
           {variant ? <span className="ml-1 text-[0.8125rem] font-medium text-v2-fg-secondary">{variant}</span> : null}
         </p>
       ) : null}
-      <div className={cn("flex flex-wrap items-center gap-2", showHeader && "mt-2")}>
-        {goal === "newbie" && recommendation.newbie ? (
-          <p className="flex items-center gap-2 text-[0.8125rem] text-v2-fg-secondary">
-            <b className="text-[0.9375rem] text-v2-fg tabular-nums">{recommendation.newbie.rank}위</b>
-            <span>{newbieGroupLabels[recommendation.newbie.group]}</span>
-          </p>
-        ) : (
-          <>
-            <VerdictPill goal={goal} verdict={recommendation.verdict} />
-            {recommendation.verdict.evidence ? (
-              <span className="text-xs text-v2-fg-secondary">
-                {recruitEvidenceLabels[recommendation.verdict.evidence]}
-              </span>
-            ) : null}
-            {aiRecommended ? <AiRecommendedMark /> : null}
-          </>
-        )}
-      </div>
+      {verdictLine ? (
+        <div className={cn("flex flex-wrap items-center gap-2", showHeader && "mt-2")}>
+          {goal === "newbie" && recommendation.newbie ? (
+            <p className="flex items-center gap-2 text-[0.8125rem] text-v2-fg-secondary">
+              <b className="text-[0.9375rem] text-v2-fg tabular-nums">{recommendation.newbie.rank}위</b>
+              <span>{newbieGroupLabels[recommendation.newbie.group]}</span>
+            </p>
+          ) : (
+            <>
+              <VerdictPill goal={goal} verdict={recommendation.verdict} />
+              {recommendation.verdict.evidence ? (
+                <span className="text-xs text-v2-fg-secondary">
+                  {recruitEvidenceLabels[recommendation.verdict.evidence]}
+                </span>
+              ) : null}
+              {aiRecommended ? <AiRecommendedMark /> : null}
+            </>
+          )}
+        </div>
+      ) : null}
 
       <DetailSection title={usageColumnLabel(goal)}>
         {recommendation.bosses.length === 0 ? (
@@ -134,7 +144,7 @@ function DetailSection({
   children: ReactNode;
 }) {
   return (
-    <section className="mt-4">
+    <section className="mt-4 first:mt-0">
       <h3 className="mb-1.5 flex items-baseline gap-1.5 text-xs leading-4 text-v2-fg-tertiary">
         <span className="font-semibold text-v2-fg-secondary">{title}</span>
         {aside ? <span className="tabular-nums">{aside}</span> : null}

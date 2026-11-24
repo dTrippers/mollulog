@@ -131,9 +131,9 @@ describe("recruit recommendation timeline", () => {
 
     expect(timeline.contents.map(({ content }) => content.uid)).toEqual(["open", "recruited-only"]);
     expect(timeline.contents[0].recommended.map(({ pickup }) => pickup.studentUid)).toEqual(["10002"]);
-    expect(timeline.contents[0].recruited.map(({ studentUid }) => studentUid)).toEqual(["10001"]);
+    expect(timeline.contents[0].recruited.map(({ student }) => student?.studentUid)).toEqual(["10001"]);
     expect(timeline.contents[1].recommended).toEqual([]);
-    expect(timeline.contents[1].recruited.map(({ studentUid }) => studentUid)).toEqual(["10001"]);
+    expect(timeline.contents[1].recruited.map(({ pickup }) => pickup.studentUid)).toEqual(["10001"]);
     expect(timeline.allRecommendedRecruited).toBe(false);
   });
 
@@ -159,7 +159,20 @@ describe("recruit recommendation timeline", () => {
     );
 
     expect(timeline.allRecommendedRecruited).toBe(false);
-    expect(timeline.contents[0].recruited.map(({ studentUid }) => studentUid)).toEqual(["10002"]);
+    expect(timeline.contents[0].recruited.map(({ pickup }) => pickup.studentUid)).toEqual(["10002"]);
+  });
+
+  it("keeps a recruited student the answer does not have, without its evidence", () => {
+    const timeline = build(
+      [{ uid: "fes", until, pickups: [pickup("10004")] }],
+      { students: [], pickups: [] },
+      { recruited: ["10004"] },
+    );
+
+    expect(timeline.contents[0].pending).toEqual([]);
+    expect(timeline.contents[0].recruited.map(({ pickup, student }) => [pickup.studentUid, student])).toEqual([
+      ["10004", null],
+    ]);
   });
 
   it("orders the newbie goal's students by newbie rank", () => {

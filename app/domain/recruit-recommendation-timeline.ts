@@ -24,6 +24,8 @@ export type RecruitTimelineContentInput<P extends RecruitTimelinePickup> = {
 
 export type RecommendedPickup<P> = { pickup: P; student: RecruitRecommendationStudent; aiRecommended: boolean };
 export type JudgedPickup<P> = { pickup: P; student: RecruitRecommendationStudent };
+// Null when the answer does not have the student yet.
+export type RecruitedPickup<P> = { pickup: P; student: RecruitRecommendationStudent | null };
 
 export type RecruitTimelineContent<C, P> = {
   content: C;
@@ -34,7 +36,7 @@ export type RecruitTimelineContent<C, P> = {
   // Not judged yet: a pickup that came after the last daily computation.
   pending: P[];
   // Already in the member's 학생부, whatever the answer says.
-  recruited: P[];
+  recruited: RecruitedPickup<P>[];
 };
 
 export type RecruitTimeline<C, P> = {
@@ -93,7 +95,7 @@ export function buildRecruitTimeline<C extends RecruitTimelineContentInput<P>, P
     const recommended: RecommendedPickup<P>[] = [];
     const notRecommended: JudgedPickup<P>[] = [];
     const pending: P[] = [];
-    const recruited: P[] = [];
+    const recruited: RecruitedPickup<P>[] = [];
     for (const pickup of content.pickups) {
       if (seen.has(pickup.favoriteKey)) continue;
       if (pickup.until !== null && !isInstantAfter(pickup.until, now)) continue;
@@ -102,7 +104,7 @@ export function buildRecruitTimeline<C extends RecruitTimelineContentInput<P>, P
       const judged = student !== undefined && hasRecruitRecommendation(goal, student.recommendation);
       if (pickup.studentUid !== null && recruitedStudentUids.has(pickup.studentUid)) {
         if (judged) recruitedRecommended += 1;
-        recruited.push(pickup);
+        recruited.push({ pickup, student: student ?? null });
         continue;
       }
       if (student === undefined) {
