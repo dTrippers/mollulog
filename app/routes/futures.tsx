@@ -544,7 +544,7 @@ function buildFutureTabs(
     },
     {
       key: "recruit-recommendation",
-      text: "모집 추천",
+      text: "모집 추천 (β)",
       Icon: AronaMark,
       link: "/ai/recruit",
       stackedOnly: true,
