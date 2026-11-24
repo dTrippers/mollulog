@@ -9,30 +9,12 @@ import {
 } from "~/views/recruit-recommendations.server";
 
 const mockGetRecruitedStudents = jest.fn<(env: Env, userId: number) => Promise<{ studentUid: string }[]>>();
-const mockGetRecruitmentResultsByRecruitmentGroupUids =
-  jest.fn<
-    (
-      env: Env,
-      userId: number,
-      uids: string[],
-    ) => Promise<
-      {
-        completedAt: string | null;
-        recruitedStudents: { studentUid: string }[];
-        exchangedStudents: { studentUid: string }[];
-      }[]
-    >
-  >();
 const mockGetAllStudentsMap =
   jest.fn<(env: Env, includeUnreleased: boolean) => Promise<Record<string, { name: string }>>>();
 const mockGetRecruitRecommendations = jest.fn<(env: Env, request: unknown) => Promise<RecruitRecommendationCall>>();
 
 jest.mock("~/models/recruited-student", () => ({
   getRecruitedStudents: (...args: never[]) => (mockGetRecruitedStudents as (...a: never[]) => unknown)(...args),
-}));
-jest.mock("~/models/recruitment-result.server", () => ({
-  getRecruitmentResultsByRecruitmentGroupUids: (...args: never[]) =>
-    (mockGetRecruitmentResultsByRecruitmentGroupUids as (...a: never[]) => unknown)(...args),
 }));
 jest.mock("~/models/student", () => ({
   getAllStudentsMap: (...args: never[]) => (mockGetAllStudentsMap as (...a: never[]) => unknown)(...args),
@@ -75,11 +57,7 @@ function answer(overrides: Partial<RecruitRecommendationAnswer> = {}): RecruitRe
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockGetRecruitedStudents.mockResolvedValue([{ studentUid: "10001" }]);
-  mockGetRecruitmentResultsByRecruitmentGroupUids.mockResolvedValue([
-    { completedAt: "2026-11-25T03:00:00.000Z", recruitedStudents: [{ studentUid: "10002" }], exchangedStudents: [] },
-    { completedAt: null, recruitedStudents: [{ studentUid: "10003" }], exchangedStudents: [] },
-  ]);
+  mockGetRecruitedStudents.mockResolvedValue([{ studentUid: "10001" }, { studentUid: "10002" }]);
   mockGetAllStudentsMap.mockResolvedValue({ "10009": { name: "아루" } });
   mockGetRecruitRecommendations.mockResolvedValue({ ok: true, answer: answer() });
 });
@@ -113,12 +91,12 @@ describe("recruit recommendation pickups", () => {
 describe("recruit recommendation view", () => {
   const contents = [content({ recruitments: [recruitment("10001")] })];
 
-  it("joins the 학생부 students and the completed results as recruited", async () => {
+  it("reads the 학생부 students as recruited", async () => {
     const view = await loadRecruitRecommendations(env, { goal: "top", userId: 7, contents });
 
     expect(view).toMatchObject({ status: "ok", recruited: "available" });
     expect(view.status === "ok" && [...view.recruitedStudentUids].sort()).toEqual(["10001", "10002"]);
-    expect(mockGetRecruitmentResultsByRecruitmentGroupUids).toHaveBeenCalledWith(env, 7, ["group-1"]);
+    expect(mockGetRecruitedStudents).toHaveBeenCalledWith(env, 7);
   });
 
   it("reads no records for a guest", async () => {
@@ -192,7 +170,6 @@ describe("미래시 recruit marks view", () => {
       marks: [],
     });
     mockGetRecruitedStudents.mockResolvedValue([]);
-    mockGetRecruitmentResultsByRecruitmentGroupUids.mockResolvedValue([]);
     await expect(loadRecruitMarks(env, { goal: "top", userId: 7, contents })).resolves.toEqual({
       status: "ok",
       marks: [

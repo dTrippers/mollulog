@@ -4,14 +4,13 @@ import { isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { getRecruitRecommendations } from "~/models/recruit-recommendation.server";
 import type { RecruitRecommendationAnswer } from "~/models/recruit-recommendation-contract";
 import { getRecruitedStudents } from "~/models/recruited-student";
-import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
 import { getAllStudentsMap } from "~/models/student";
 import type { FutureContent } from "./futures";
 
 /**
- * The account's recruited students, which the screens leave out of the answer: none for a guest, the students of both
- * records when both were read, and none with `unavailable` when either read failed (the screens then say so, or hide
- * the marks).
+ * The account's recruited students, which 모집 추천 places apart and 미래시 never marks: none for a guest, the 학생부
+ * students when it was read, and none with `unavailable` when the read failed (the screens then say so, or hide the
+ * marks).
  */
 export type RecruitedStudentsStatus = "guest" | "available" | "unavailable";
 
@@ -42,23 +41,12 @@ export function collectRecommendationPickups(contents: FutureContent[], now: str
 }
 
 /**
- * The account's recruited students: the students in its 학생부, and the students its recruitment results on the
- * schedule mark as recruited or exchanged.
+ * The account's recruited students: the students in its 학생부. A 미래시 recruitment result adds its students to 학생부
+ * when it is recorded, and a student removed from 학생부 counts as not recruited, whatever an older result says.
  */
-async function readRecruitedStudentUids(env: Env, userId: number, contents: FutureContent[]): Promise<string[]> {
-  const recruitmentGroupUids = contents.flatMap((content) =>
-    content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
-  );
-  const [recruitedStudents, results] = await Promise.all([
-    getRecruitedStudents(env, userId),
-    getRecruitmentResultsByRecruitmentGroupUids(env, userId, recruitmentGroupUids),
-  ]);
-  const uids = new Set(recruitedStudents.map((student) => student.studentUid));
-  for (const result of results) {
-    if (result.completedAt === null) continue;
-    for (const student of [...result.recruitedStudents, ...result.exchangedStudents]) uids.add(student.studentUid);
-  }
-  return [...uids];
+async function readRecruitedStudentUids(env: Env, userId: number): Promise<string[]> {
+  const recruitedStudents = await getRecruitedStudents(env, userId);
+  return [...new Set(recruitedStudents.map((student) => student.studentUid))];
 }
 
 /**
@@ -114,7 +102,7 @@ export async function loadRecruitRecommendations(
   let recruitedStudentUids: string[] = [];
   if (input.userId !== null) {
     try {
-      recruitedStudentUids = await readRecruitedStudentUids(env, input.userId, input.contents);
+      recruitedStudentUids = await readRecruitedStudentUids(env, input.userId);
       recruited = "available";
     } catch (error) {
       input.onRecruitedReadFailure?.(error);
@@ -151,7 +139,7 @@ export async function loadRecruitMarks(
   let recruitedStudentUids: string[] = [];
   if (input.userId !== null) {
     try {
-      recruitedStudentUids = await readRecruitedStudentUids(env, input.userId, input.contents);
+      recruitedStudentUids = await readRecruitedStudentUids(env, input.userId);
     } catch (error) {
       input.onRecruitedReadFailure?.(error);
       return { status: "hidden" };

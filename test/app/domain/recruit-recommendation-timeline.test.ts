@@ -113,7 +113,7 @@ describe("recruit recommendation timeline", () => {
     expect(timeline.contents.map(({ recommended }) => recommended[0].aiRecommended)).toEqual([true, false]);
   });
 
-  it("leaves out recruited students, ended contents and pickups, repeated pickups, and contents left empty", () => {
+  it("places recruited students apart, and leaves out ended contents and pickups and repeated pickups", () => {
     const ended = "2026-11-20T02:00:00.000Z" as UtcIsoString;
     const timeline = build(
       [
@@ -129,8 +129,11 @@ describe("recruit recommendation timeline", () => {
       { recruited: ["10001"] },
     );
 
-    expect(timeline.contents.map(({ content }) => content.uid)).toEqual(["open"]);
+    expect(timeline.contents.map(({ content }) => content.uid)).toEqual(["open", "recruited-only"]);
     expect(timeline.contents[0].recommended.map(({ pickup }) => pickup.studentUid)).toEqual(["10002"]);
+    expect(timeline.contents[0].recruited.map(({ studentUid }) => studentUid)).toEqual(["10001"]);
+    expect(timeline.contents[1].recommended).toEqual([]);
+    expect(timeline.contents[1].recruited.map(({ studentUid }) => studentUid)).toEqual(["10001"]);
     expect(timeline.allRecommendedRecruited).toBe(false);
   });
 
@@ -156,7 +159,7 @@ describe("recruit recommendation timeline", () => {
     );
 
     expect(timeline.allRecommendedRecruited).toBe(false);
-    expect(timeline.contents).toEqual([]);
+    expect(timeline.contents[0].recruited.map(({ studentUid }) => studentUid)).toEqual(["10002"]);
   });
 
   it("orders the newbie goal's students by newbie rank", () => {

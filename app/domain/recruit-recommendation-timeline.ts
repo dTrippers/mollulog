@@ -1,6 +1,6 @@
 // 모집 추천 timeline: the pickups of the coming contents, each paired with the service's answer for one goal. The
-// service owns the judgment; this module only places each pickup student under a heading and leaves out the students
-// the member has already recruited.
+// service owns the judgment; this module only places each pickup student under a heading, the students the member has
+// already recruited under their own.
 import { isInstantAfter, type UtcIsoString } from "~/lib/date-time";
 import type {
   RecruitRecommendationAnswer,
@@ -33,11 +33,13 @@ export type RecruitTimelineContent<C, P> = {
   notRecommended: JudgedPickup<P>[];
   // Not judged yet: a pickup that came after the last daily computation.
   pending: P[];
+  // Already in the member's 학생부, whatever the answer says.
+  recruited: P[];
 };
 
 export type RecruitTimeline<C, P> = {
   contents: RecruitTimelineContent<C, P>[];
-  // Every pickup student with a recommendation was left out as recruited, and there was at least one.
+  // Every pickup student with a recommendation is recruited, and there was at least one.
   allRecommendedRecruited: boolean;
 };
 
@@ -60,8 +62,7 @@ export function selectRecruitMarks(
 
 /**
  * Places the pickup students that can still be recruited, in the contents that have not ended. A recruited student is
- * left out without a trace, a content with no student left is left out, and a student the answer does not have is
- * pending.
+ * placed as recruited, a content with no student left is left out, and a student the answer does not have is pending.
  */
 export function buildRecruitTimeline<C extends RecruitTimelineContentInput<P>, P extends RecruitTimelinePickup>({
   goal,
@@ -92,6 +93,7 @@ export function buildRecruitTimeline<C extends RecruitTimelineContentInput<P>, P
     const recommended: RecommendedPickup<P>[] = [];
     const notRecommended: JudgedPickup<P>[] = [];
     const pending: P[] = [];
+    const recruited: P[] = [];
     for (const pickup of content.pickups) {
       if (seen.has(pickup.favoriteKey)) continue;
       if (pickup.until !== null && !isInstantAfter(pickup.until, now)) continue;
@@ -100,6 +102,7 @@ export function buildRecruitTimeline<C extends RecruitTimelineContentInput<P>, P
       const judged = student !== undefined && hasRecruitRecommendation(goal, student.recommendation);
       if (pickup.studentUid !== null && recruitedStudentUids.has(pickup.studentUid)) {
         if (judged) recruitedRecommended += 1;
+        recruited.push(pickup);
         continue;
       }
       if (student === undefined) {
@@ -120,8 +123,8 @@ export function buildRecruitTimeline<C extends RecruitTimelineContentInput<P>, P
       );
     }
     remainingRecommended += recommended.length;
-    if (recommended.length + notRecommended.length + pending.length === 0) continue;
-    timelineContents.push({ content, recommended, notRecommended, pending });
+    if (recommended.length + notRecommended.length + pending.length + recruited.length === 0) continue;
+    timelineContents.push({ content, recommended, notRecommended, pending, recruited });
   }
 
   return {

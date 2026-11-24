@@ -212,7 +212,16 @@ function TimelineItem({
               <StudentGroup title="추천 없음">
                 {entry.notRecommended.map(({ pickup }) => (
                   <li key={pickup.favoriteKey}>
-                    <NotRecommendedChip pickup={pickup} />
+                    <PickupStudentChip pickup={pickup} />
+                  </li>
+                ))}
+              </StudentGroup>
+            ) : null}
+            {entry.recruited.length > 0 ? (
+              <StudentGroup title="모집한 학생">
+                {entry.recruited.map((pickup) => (
+                  <li key={pickup.favoriteKey}>
+                    <PickupStudentChip pickup={pickup} />
                   </li>
                 ))}
               </StudentGroup>
@@ -290,7 +299,7 @@ function StudentGroup({
 }
 
 // A pickup student without a recommendation: the portrait, the name, the recruitment label, and the heart.
-function NotRecommendedChip({ pickup }: { pickup: RecruitPickupView }) {
+function PickupStudentChip({ pickup }: { pickup: RecruitPickupView }) {
   const studentLabel = pickup.variant ? `${pickup.name}(${pickup.variant})` : pickup.name;
   return (
     <div className="flex items-center gap-2 rounded-lg bg-v2-surface py-1 pr-2 pl-1">
