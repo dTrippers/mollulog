@@ -46,8 +46,7 @@ export type ScoreRange = {
 
 export type SelectedRange = {
   // Set when the range is a whole difficulty band chosen from the rail, not a drag. Range stats
-  // are then requested by difficulty, because score bounds rebuilt from the band's per-second
-  // buckets drop the entries of its fastest clear second.
+  // are then requested by difficulty, which names the band's entries directly.
   difficulty?: string;
   scoreRanges: ScoreRange[];
   displayRange: {
@@ -63,6 +62,7 @@ export type HistogramChartRow = {
   xEnd: number;
   count: number;
   difficulty?: string;
+  // The row holds clear times above timeStartSec up to and including timeEndSec.
   timeStartSec: number;
   timeEndSec: number;
   scoreRange?: ScoreRange;
@@ -814,18 +814,23 @@ function buildRowsForBand({
 }): HistogramChartRow[] {
   const rows: HistogramChartRow[] = [];
   const { axis } = distribution;
+  // The ranks service puts a clear in the bin of its clear time rounded up to a whole second, and
+  // gives the band's fastest and slowest clears in those seconds too. So bin i, labelled
+  // minSec + i * binWidthSec, holds the clear times above one second before its label, and the
+  // band holds the clear times above one second before band.minSec up to band.maxSec.
+  const bandStartSec = band.minSec - 1;
 
-  for (let bucketEnd = axis.maxSec; bucketEnd > axis.minSec; bucketEnd -= axis.binWidthSec) {
-    const bucketStart = Math.max(axis.minSec, bucketEnd - axis.binWidthSec);
-    const overlapStartSec = Math.max(bucketStart, band.minSec);
-    const overlapEndSec = Math.min(bucketEnd, band.maxSec);
+  for (let bucketIndex = axis.binCount - 1; bucketIndex >= 0; bucketIndex -= 1) {
+    const bucketStartSec = axis.minSec + bucketIndex * axis.binWidthSec - 1;
+    const bucketEndSec = bucketStartSec + axis.binWidthSec;
+    const overlapStartSec = Math.max(bucketStartSec, bandStartSec);
+    const overlapEndSec = Math.min(bucketEndSec, band.maxSec);
     if (overlapStartSec >= overlapEndSec) {
       continue;
     }
 
-    const bucketIndex = Math.floor((bucketStart - axis.minSec) / axis.binWidthSec);
     rows.push({
-      id: `${band.difficulty}:${bucketStart}`,
+      id: `${band.difficulty}:${bucketIndex}`,
       x: rows.length + 0.5,
       xStart: rows.length,
       xEnd: rows.length + 1,
@@ -988,11 +993,11 @@ function timeBucketToScoreRange(
   startSec: number,
   endSec: number,
 ): ScoreRange {
-  const startScore = timeToScoreFromBand(band, timeBudgetSec, startSec);
-  const endScore = timeToScoreFromBand(band, timeBudgetSec, endSec);
+  // A slower clear scores less, so the inclusive end time gives the inclusive lowest score and the
+  // exclusive start time the exclusive highest score.
   return {
-    gte: Math.min(startScore, endScore) + 1,
-    lt: Math.max(startScore, endScore) + 1,
+    gte: timeToScoreFromBand(band, timeBudgetSec, endSec),
+    lt: timeToScoreFromBand(band, timeBudgetSec, startSec),
   };
 }
 
