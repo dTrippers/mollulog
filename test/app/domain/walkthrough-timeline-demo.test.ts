@@ -54,8 +54,7 @@ describe("walkthrough timeline demo", () => {
       {
         kind: "student_ex",
         studentUid: DEMO_WALKTHROUGH_STUDENT_UIDS.armedAris,
-        copied: true,
-        text: "자신에게 사용",
+        text: "복제 스킬 / 자신에게 사용",
       },
       { kind: "student_ex", studentUid: DEMO_WALKTHROUGH_STUDENT_UIDS.armedAris },
     ]);

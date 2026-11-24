@@ -47,7 +47,7 @@ describe("parseTimelineImport", () => {
 
   it("parses copied EX and normal skill expressions", () => {
     const draft = parseTimelineImport("즉시 c임리오\n임리오1스", students);
-    expect(draft.steps[0].parsed.actions[0]).toEqual({ kind: "student_ex", studentUid: "idol-rio", copied: true });
+    expect(draft.steps[0].parsed.actions[0]).toEqual({ kind: "student_ex", studentUid: "idol-rio", text: "복제 스킬" });
     expect(draft.steps[1].parsed.actions[0]).toEqual({ kind: "normal_skill", studentUid: "idol-rio" });
   });
 
@@ -63,7 +63,7 @@ describe("parseTimelineImport", () => {
       { uid: "amari", name: "아마리", altNames: [] },
     ]);
     expect(draft.steps[0].parsed.marker).toEqual({ kind: "after", value: "아마리 1스 직후" });
-    expect(draft.steps[0].parsed.actions[0]).toEqual({ kind: "student_ex", studentUid: "idol-rio", copied: true });
+    expect(draft.steps[0].parsed.actions[0]).toEqual({ kind: "student_ex", studentUid: "idol-rio", text: "복제 스킬" });
   });
 
   it("does not guess an unresolved nickname and preserves the source text", () => {
@@ -287,7 +287,7 @@ describe("parseTimelineImport", () => {
       actions: [{ studentUid: "camp-kotama" }, { studentUid: "seia", targetStudentUid: "camp-kotama" }],
     });
     expect(draft.steps[4].parsed).toMatchObject({
-      actions: [{ studentUid: "battle-hoshino", copied: true }, { studentUid: "dress-aru" }],
+      actions: [{ studentUid: "battle-hoshino", text: "복제 스킬" }, { studentUid: "dress-aru" }],
       note: "오른쪽 기둥",
     });
     expect(draft.steps[5].parsed.note).toBe("그로기 캠타마 빠르게");
@@ -303,7 +303,7 @@ describe("parseTimelineImport", () => {
 
     expect(draft.steps[0].parsed).toMatchObject({
       marker: { kind: "cost", value: "10+코" },
-      actions: [{ studentUid: "cherino", copied: true }, { studentUid: "swimsuit-aiz" }],
+      actions: [{ studentUid: "cherino", text: "복제 스킬" }, { studentUid: "swimsuit-aiz" }],
       note: "얼음 부서지는거 보고 · 코스트 오버 정상",
     });
     expect(draft.steps[1].parsed).toMatchObject({

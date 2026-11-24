@@ -489,14 +489,15 @@ function parseActionToken(rawToken: string, index: StudentIndex, mappings: Map<s
     ...(candidates.length === 1 ? { studentUid: candidates[0] } : {}),
     ...(candidates.length > 0 ? { candidates } : {}),
   };
+  // A copied skill is written into the detail, where the editor shows it and the Sensei can change it.
+  const text = [copied ? "복제 스킬" : "", actionDetail].filter(Boolean).join(" / ");
   const action: TimelineAction =
     candidates.length === 1
       ? {
           kind,
           studentUid: candidates[0],
           ...(targetStudentUid && targetStudentUid !== candidates[0] ? { targetStudentUid } : {}),
-          ...(copied ? { copied: true } : {}),
-          ...(actionDetail ? { text: actionDetail } : {}),
+          ...(text ? { text } : {}),
         }
       : { kind: "free_text", text: rawToken.trim() };
 

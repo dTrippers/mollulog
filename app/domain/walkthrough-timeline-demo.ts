@@ -185,7 +185,7 @@ export const DEMO_WALKTHROUGH_TIMELINE = {
             kind: "actions",
             marker: { kind: "immediate", value: "즉시" },
             actions: [
-              { kind: "student_ex", studentUid: armedAris, copied: true, text: "자신에게 사용" },
+              { kind: "student_ex", studentUid: armedAris, text: "복제 스킬 / 자신에게 사용" },
               { kind: "student_ex", studentUid: armedAris },
             ],
           },
