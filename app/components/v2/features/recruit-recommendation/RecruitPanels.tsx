@@ -67,16 +67,6 @@ const criteria: { title: string; items: CriteriaItem[] }[] = [
       { text: "타일은 가장 많은 성급과 그 비율. 편성 기록이 100건 미만이면 표본 부족" },
     ],
   },
-  {
-    title: "출처",
-    items: [
-      { text: "일본 서버 총력전·대결전 순위 통계" },
-      { text: "AppMedia" },
-      { text: "神ゲー攻略" },
-      { text: "아카라이브 게시글 (미래시 학생 평가, 리세마라 가이드)" },
-    ],
-  },
-  { title: "갱신", items: [{ text: "통계와 판정은 매일, 커뮤니티 평가는 매주" }] },
 ];
 
 // How a recommendation is made: the rules, what the values count, the sources, and how often they refresh.
