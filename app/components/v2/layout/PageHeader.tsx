@@ -28,6 +28,9 @@ export type PageHeaderProps = {
   details?: ReactNode;
   // Hide the header beside an aside, where the page renders `PageAsideHeader` at the top of the aside instead.
   stackedOnly?: boolean;
+  // On a reading page, caps the header at the main's 48rem, so `trailing` lines up with the right edge of the main
+  // instead of the page.
+  readingWidth?: boolean;
 };
 
 function HeaderBack({ back, titleHidden = false }: { back: PageHeaderBack; titleHidden?: boolean }) {
@@ -83,6 +86,7 @@ export function PageHeader({
   trailingClassName,
   stackedOnly = false,
   details,
+  readingWidth = false,
 }: PageHeaderProps) {
   // A title alone beside the media, with its lines moved to `details`, sits in the middle of the row.
   const centered = Boolean(media && details && !meta && !description && !back);
@@ -99,7 +103,7 @@ export function PageHeader({
   ) : null;
 
   const stackedOnlyAttribute = stackedOnly ? "true" : undefined;
-  const headerClassName = "v2-header min-w-0 pb-v2-group-gap";
+  const headerClassName = cn("v2-header min-w-0 pb-v2-group-gap", readingWidth && "max-w-3xl");
   const rowClassName = trailing
     ? cn(
         "flex min-w-0 gap-v2-block-gap",

@@ -1,9 +1,11 @@
 type HaloModeIconProps = {
   solid?: boolean;
+  // The outline's line width, as heroicons' `strokeWidth`.
+  strokeWidth?: number;
   className?: string;
 };
 
-export function HaloModeIcon({ solid = false, className }: HaloModeIconProps) {
+export function HaloModeIcon({ solid = false, strokeWidth = 1.5, className }: HaloModeIconProps) {
   return solid ? (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
       <g transform="rotate(-12 12 12)">
@@ -19,7 +21,7 @@ export function HaloModeIcon({ solid = false, className }: HaloModeIconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.5"
+      strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}

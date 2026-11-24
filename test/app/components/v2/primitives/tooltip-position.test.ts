@@ -38,4 +38,27 @@ describe("getTooltipPosition", () => {
     expect(position.left).toBe(8);
     expect(position.arrowLeft).toBe(8);
   });
+
+  it("places a below-preferred tooltip 8px below the trigger", () => {
+    const position = getTooltipPosition({
+      anchor: { top: 300, bottom: 340, left: 100, width: 40 },
+      tooltip,
+      viewport: { width: 390, height: 844 },
+      prefer: "below",
+    });
+
+    expect(position).toEqual({ top: 348, left: 60, placement: "below", arrowLeft: 60 });
+  });
+
+  it("flips a below-preferred tooltip above when it does not fit below", () => {
+    const position = getTooltipPosition({
+      anchor: { top: 800, bottom: 830, left: 100, width: 40 },
+      tooltip,
+      viewport: { width: 390, height: 844 },
+      prefer: "below",
+    });
+
+    expect(position.placement).toBe("above");
+    expect(position.top).toBe(768);
+  });
 });

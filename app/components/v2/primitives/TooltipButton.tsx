@@ -1,16 +1,5 @@
-import {
-  type MouseEvent,
-  type PointerEvent,
-  type ReactNode,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import { createPortal } from "react-dom";
-import { cn } from "~/lib/utils";
-import { getTooltipPosition, type TooltipPosition } from "./tooltip-position";
+import { type MouseEvent, type PointerEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { isHoverPointer, TooltipBubble } from "./Tooltip";
 
 export type TooltipButtonProps = {
   // The button's accessible name.
@@ -21,59 +10,14 @@ export type TooltipButtonProps = {
   children: ReactNode;
 };
 
-// Layout effects run before the browser paints. Server render has no layout, so it uses useEffect.
-const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
-
-function isHoverPointer(pointerType: string | null): boolean {
-  return pointerType === "mouse" || pointerType === "pen";
-}
-
 // A button that shows a short text in a tooltip, for an image whose name is not written beside it. A mouse opens the
 // tooltip on hover, a touch toggles it on tap, and the keyboard opens it on focus and toggles it with Enter or Space.
-// Escape, an outside press, and losing focus close it. The tooltip renders in a portal on the body, so a block with
-// `overflow-hidden` does not clip it, and follows the button on resize and scroll.
+// Escape, an outside press, and losing focus close it. The tooltip is a `TooltipBubble`.
 export function TooltipButton({ label, tooltip, className, children }: TooltipButtonProps) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState<TooltipPosition | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
   const lastPointerTypeRef = useRef<string | null>(null);
   const tooltipId = useId();
-
-  useIsomorphicLayoutEffect(() => {
-    if (!open) {
-      setPosition(null);
-      return;
-    }
-    const place = () => {
-      const anchor = triggerRef.current?.getBoundingClientRect();
-      const tooltipNode = tooltipRef.current;
-      if (!anchor || !tooltipNode) {
-        return;
-      }
-      const next = getTooltipPosition({
-        anchor,
-        tooltip: { width: tooltipNode.offsetWidth, height: tooltipNode.offsetHeight },
-        viewport: { width: document.documentElement.clientWidth },
-      });
-      setPosition((prev) =>
-        prev &&
-        prev.top === next.top &&
-        prev.left === next.left &&
-        prev.placement === next.placement &&
-        prev.arrowLeft === next.arrowLeft
-          ? prev
-          : next,
-      );
-    };
-    place();
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -139,34 +83,9 @@ export function TooltipButton({ label, tooltip, className, children }: TooltipBu
       >
         {children}
       </button>
-      {open && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              ref={tooltipRef}
-              id={tooltipId}
-              role="tooltip"
-              data-placement={position?.placement ?? "above"}
-              style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
-              className={cn(
-                "pointer-events-none fixed z-layer-navigation w-max max-w-[calc(100vw-1rem)] rounded-md bg-v2-scrim px-2 py-1 text-xs break-words text-v2-on-media shadow-md backdrop-blur-md",
-                // The first layout pass measures the tooltip before it is placed.
-                !position && "invisible",
-              )}
-            >
-              {tooltip}
-              <span
-                aria-hidden="true"
-                // The arrow is 8px wide, so its left edge sits 4px before the point it marks.
-                style={{ left: (position?.arrowLeft ?? 0) - 4 }}
-                className={cn(
-                  "absolute border-4 border-transparent",
-                  position?.placement === "below" ? "bottom-full border-b-v2-scrim" : "top-full border-t-v2-scrim",
-                )}
-              />
-            </div>,
-            document.body,
-          )
-        : null}
+      <TooltipBubble open={open} anchorRef={triggerRef} id={tooltipId}>
+        {tooltip}
+      </TooltipBubble>
     </>
   );
 }
