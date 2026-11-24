@@ -387,10 +387,11 @@ function PyroxenePlanCard({ summary }: { summary: MoreSummary | null }) {
       ) : nextStudents.length === 0 ? (
         <PlanStatus primary="관심 학생 모집 일정이 없어요" secondary={getHoldingsLine(pyroxene)} />
       ) : (
-        <div className="flex min-w-0 items-center gap-3.5">
+        // When the value does not fit beside the portraits, it moves below them as a whole.
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-2">
           <div className="flex shrink-0 gap-1.5">
             {nextStudents.map((student) => (
-              <MiniPortrait key={student.uid} uid={student.uid} name={student.name} />
+              <MiniPortrait key={student.uid} uid={student.imageUid} name={student.name} />
             ))}
           </div>
           <div className="min-w-0">
@@ -398,14 +399,24 @@ function PyroxenePlanCard({ summary }: { summary: MoreSummary | null }) {
             {pyroxene.expectedPyroxene === null ? (
               <p className="mt-0.5 text-sm text-v2-fg">계산할 수 없어요</p>
             ) : (
+              // Each amount keeps its number and unit on one line; only the space around "+" can break.
               <p className="mt-0.5 flex flex-wrap items-center text-[0.9375rem] font-semibold text-v2-fg">
-                <img src={PYROXENE_IMAGE_URL} alt="" className="-my-0.5 mr-1 size-5.5 object-contain" loading="lazy" />
-                <span className="tabular-nums">{pyroxene.expectedPyroxene.toLocaleString()}</span>
-                <PlanUnit>개</PlanUnit>
+                <span className="flex items-center whitespace-nowrap">
+                  <img
+                    src={PYROXENE_IMAGE_URL}
+                    alt=""
+                    className="-my-0.5 mr-1 size-5.5 object-contain"
+                    loading="lazy"
+                  />
+                  <span className="tabular-nums">{pyroxene.expectedPyroxene.toLocaleString()}</span>
+                  <PlanUnit>개</PlanUnit>
+                </span>
                 <span className="mx-1.5 font-medium text-v2-fg-tertiary">+</span>
-                <PlanUnit>티켓&nbsp;</PlanUnit>
-                <span className="tabular-nums">{(pyroxene.expectedTicketTrialCount ?? 0).toLocaleString()}</span>
-                <PlanUnit>회</PlanUnit>
+                <span className="whitespace-nowrap">
+                  <PlanUnit>티켓 </PlanUnit>
+                  <span className="tabular-nums">{(pyroxene.expectedTicketTrialCount ?? 0).toLocaleString()}</span>
+                  <PlanUnit>회</PlanUnit>
+                </span>
               </p>
             )}
           </div>
@@ -445,7 +456,7 @@ function LiveLabel({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-v2-live", className)}>
       <span className="size-1.5 shrink-0 rounded-full bg-v2-live" aria-hidden="true" />
-      진행중
+      <span className="min-w-0 truncate">진행중</span>
     </span>
   );
 }
@@ -465,10 +476,11 @@ function getStudentImageLabel(name: string): string {
   return variant ? `${mainName}(${variant})` : mainName;
 }
 
-function MiniPortrait({ uid, name }: { uid: string; name: string | null }) {
+// A pickup student who is not in the catalog yet has no image, so it shows the unlisted image with its name.
+function MiniPortrait({ uid, name }: { uid: string | null; name: string | null }) {
   return (
     <StudentPortrait
-      uid={uid}
+      uid={uid ?? "unlisted"}
       alt={name ? getStudentImageLabel(name) : ""}
       className="h-9 w-7.5 shrink-0 rounded object-cover"
     />
@@ -602,7 +614,7 @@ function MenuCell({ item }: { item: MoreMenuItem }) {
 function MenuLabel({ label }: { label: string }) {
   const placement = "ml-1.5 min-w-0 shrink-[1000] hidden @min-[34rem]/more:inline-flex";
   if (label === "진행중") {
-    return <LiveLabel className={placement} />;
+    return <LiveLabel className={cn(placement, "overflow-hidden")} />;
   }
   return <span className={cn(placement, "truncate text-xs text-v2-fg-secondary")}>{label}</span>;
 }

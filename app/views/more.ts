@@ -31,7 +31,8 @@ export type MoreSummary = {
     oneTimeTicket: number;
     tenTimeTicket: number;
     favoritedRecruitmentCount: number;
-    nextStudents: { uid: string; name: string }[];
+    // `uid` is the favorite key; `imageUid` is the catalog student, null for a pickup not in the catalog yet.
+    nextStudents: { uid: string; imageUid: string | null; name: string }[];
     nextTimelineLabel: string | null;
     expectedPyroxene: number | null;
     expectedTicketTrialCount: number | null;
@@ -89,7 +90,8 @@ function getMorePersonalSummaryRows(env: Env, senseiId: number, ctx?: ExecutionC
     getRelationshipLevels(env, senseiId),
     countUnregisteredActiveCoupons(env, senseiId, { ctx }),
     recruitmentResultsPromise,
-    getAllStudentsMap(env),
+    // The relationship calculator also lists unreleased students, so their names come from the same list.
+    getAllStudentsMap(env, true),
   ]);
 }
 
@@ -254,7 +256,7 @@ function getFavoritedRecruitments(
           since: content.since,
           until: content.until,
           students: favoritedRecruitments.flatMap(({ student }) =>
-            student ? [{ uid: student.uid, name: student.name }] : [],
+            student ? [{ uid: student.uid, imageUid: student.imageUid, name: student.name }] : [],
           ),
         },
       ];

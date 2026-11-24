@@ -156,9 +156,9 @@ describe("MoreIndexPage SSR rendering", () => {
   it.each([
     [null, "현재 보유 재화를 입력해 주세요"],
     [{ nextStudents: [] }, "관심 학생 모집 일정이 없어요"],
-    [{ nextStudents: [{ uid: "s", name: "학생" }], expectedPyroxene: null }, "계산할 수 없어요"],
-    [{ nextStudents: [{ uid: "s", name: "학생" }], expectedPyroxene: 24800, expectedTicketTrialCount: 10 }, "24,800"],
-    [{ nextStudents: [{ uid: "s", name: "학생" }], nextTimelineLabel: "진행중" }, "진행중"],
+    [{ nextStudents: [{ uid: "s", imageUid: "s", name: "학생" }], expectedPyroxene: null }, "계산할 수 없어요"],
+    [{ nextStudents: [{ uid: "s", imageUid: "s", name: "학생" }], expectedPyroxene: 24800, expectedTicketTrialCount: 10 }, "24,800"],
+    [{ nextStudents: [{ uid: "s", imageUid: "s", name: "학생" }], nextTimelineLabel: "진행중" }, "진행중"],
   ])("shows the upcoming recruitment state %o", (pyroxene, text) => {
     const summary = createSummary();
     summary.pyroxene = pyroxene
@@ -175,6 +175,46 @@ describe("MoreIndexPage SSR rendering", () => {
       : null;
 
     expect(renderMore({ account, summary })).toContain(text);
+  });
+
+  it("shows a pickup student who is not in the catalog yet with the unlisted image and its name", () => {
+    const summary = createSummary();
+    summary.pyroxene = {
+      pyroxene: 12340,
+      oneTimeTicket: 0,
+      tenTimeTicket: 2,
+      favoritedRecruitmentCount: 1,
+      nextTimelineLabel: null,
+      expectedPyroxene: 26480,
+      expectedTicketTrialCount: 20,
+      nextStudents: [{ uid: "pickup-key", imageUid: null, name: "마나미" }],
+    };
+
+    const markup = renderMore({ account, summary });
+
+    const portrait = markup.match(/<img[^>]*alt="마나미"[^>]*>/)?.[0];
+    expect(portrait).toContain('src="https://assets.mollulog.net/assets/images/students/-1"');
+    expect(markup).not.toContain("pickup-key");
+  });
+
+  it("keeps each expected amount's number and unit together", () => {
+    const summary = createSummary();
+    summary.pyroxene = {
+      pyroxene: 12340,
+      oneTimeTicket: 0,
+      tenTimeTicket: 2,
+      favoritedRecruitmentCount: 1,
+      nextTimelineLabel: null,
+      expectedPyroxene: 26480,
+      expectedTicketTrialCount: 20,
+      nextStudents: [{ uid: "s", imageUid: "s", name: "학생" }],
+    };
+
+    const markup = renderMore({ account, summary });
+
+    expect(markup).toMatch(
+      /<span class="whitespace-nowrap"><span[^>]*>티켓 <\/span><span[^>]*>20<\/span><span[^>]*>회<\/span><\/span>/,
+    );
   });
 
   it("keeps a menu's label and dot in its accessible name while the label is hidden on mobile", () => {

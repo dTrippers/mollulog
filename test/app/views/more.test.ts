@@ -163,7 +163,7 @@ describe("More view next recruitment pyroxene", () => {
               pickup: true,
               rerun: false,
               until: "2026-11-28T02:00:00.000Z",
-              student: { uid: "student-0", name: "학생", initialTier: 3 },
+              student: { uid: "student-0", imageUid: "student-image-0", name: "학생", initialTier: 3 },
             },
           ],
         },
@@ -219,6 +219,17 @@ describe("More view next recruitment pyroxene", () => {
 
       expect(await expectedPyroxene([])).toBe(11000);
       expect(await expectedPyroxene([purchase])).toBe(17600);
+
+      // The portrait uses the catalog image, not the favorite key, and relationship names include unreleased students.
+      const result = await getMoreViewData(
+        {} as Env,
+        {} as ExecutionContext,
+        { id: 1, username: "sensei", profileStudentId: null } as never,
+      );
+      expect(result.summary?.pyroxene?.nextStudents).toEqual([
+        { uid: "student-0", imageUid: "student-image-0", name: "학생" },
+      ]);
+      expect(mockGetAllStudentsMap).toHaveBeenCalledWith(expect.anything(), true);
     } finally {
       jest.useRealTimers();
     }
