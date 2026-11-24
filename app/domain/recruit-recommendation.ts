@@ -56,8 +56,8 @@ export function usageColumnLabel(goal: RecruitGoal): string {
 
 /** The one-line description of the criteria panel for a goal. */
 export function recruitCriteriaSummary(goal: RecruitGoal): string {
-  if (goal === "top") return "일본 1~1,000위 채용률";
-  if (goal === "platinum") return "일본 플래티넘 구간 채용률";
+  if (goal === "top") return "1~1,000위 채용률";
+  if (goal === "platinum") return "플래티넘 구간 채용률";
   return "플래티넘 통계와 커뮤니티 평가";
 }
 
