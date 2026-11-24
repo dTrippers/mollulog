@@ -158,42 +158,59 @@ function TimelineItem({
         />
       </div>
       <div className="min-w-0">
-        {content.hidden ? (
-          <div className="space-y-1">
-            <p className="text-base font-semibold text-v2-fg">스포일러가 포함되어 있어요</p>
-            <Button variant="secondary" onClick={() => onRevealSpoiler(content.uid)}>
-              <EyeIcon className="size-4" aria-hidden="true" />
-              내용 보기
-            </Button>
+        {/* Below the side column the image sits beside the title, so the tiles keep the full width. */}
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 @md:hidden">
+            <ContentMedia
+              source={content.hidden ? { kind: "placeholder" } : content.mediaSource}
+              contentType={content.contentType}
+              typeLabel={content.typeLabel}
+              size="feed"
+            />
           </div>
-        ) : (
+          <div className="min-w-0 flex-1">
+            {content.hidden ? (
+              <div className="space-y-1">
+                <p className="text-base font-semibold text-v2-fg">스포일러가 포함되어 있어요</p>
+                <Button variant="secondary" onClick={() => onRevealSpoiler(content.uid)}>
+                  <EyeIcon className="size-4" aria-hidden="true" />
+                  내용 보기
+                </Button>
+              </div>
+            ) : (
+              <>
+                <ContentTitle content={content} />
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-v2-fg-tertiary">
+                  <span>{content.typeLabel}</span>
+                  <Separated>
+                    <span className="tabular-nums">
+                      {formatContentPeriod({
+                        since: content.since,
+                        until: content.until,
+                        endless: content.endless,
+                        contentType: content.contentType,
+                        timeZone,
+                      })}
+                    </span>
+                  </Separated>
+                  {remaining ? (
+                    <Separated>
+                      <RemainingLabel remaining={remaining} />
+                    </Separated>
+                  ) : null}
+                </p>
+                {content.cautionText ? (
+                  <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-v2-warning">
+                    <ClockIcon className="size-3.5" aria-hidden="true" />
+                    {content.cautionText}
+                  </p>
+                ) : null}
+              </>
+            )}
+          </div>
+        </div>
+        {content.hidden ? null : (
           <>
-            <ContentTitle content={content} />
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-v2-fg-tertiary">
-              <span>{content.typeLabel}</span>
-              <Separated>
-                <span className="tabular-nums">
-                  {formatContentPeriod({
-                    since: content.since,
-                    until: content.until,
-                    endless: content.endless,
-                    contentType: content.contentType,
-                    timeZone,
-                  })}
-                </span>
-              </Separated>
-              {remaining ? (
-                <Separated>
-                  <RemainingLabel remaining={remaining} />
-                </Separated>
-              ) : null}
-            </p>
-            {content.cautionText ? (
-              <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-v2-warning">
-                <ClockIcon className="size-3.5" aria-hidden="true" />
-                {content.cautionText}
-              </p>
-            ) : null}
             {entry.recommended.length > 0 ? (
               <ul className="mt-3 flex flex-col gap-2">
                 {entry.recommended.map(({ pickup, student, aiRecommended }) => (
