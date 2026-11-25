@@ -296,8 +296,9 @@ export type RaidClearResult = {
 // maximums did not change. The values are the game's RaidStageExcel table (DefaultClearScore, HPPercentScore,
 // MaximumScore, PerSecondMinusScore / 10): the jp client holds the earlier values up to its 2023-03-22 data and the
 // kr (global) client up to its 2023-07-11 data, and both hold the current values from the next version on. The jp
-// server's first five seasons (2021-03 to 2021-05) ran on yet other values the formula does not hold, so they have no
-// result. Every 대결전 season started after the change on both servers.
+// server's first four seasons (2021-03 to 2021-05) ran on yet other values the formula does not hold, so they have no
+// result; its client holds the earlier values from the 2021-05-27 data on, the day season 5 started. Every 대결전
+// season started after the change on both servers.
 const RAID_ROOM_TIME_SEC = 3600;
 const SCORE_DIFFICULTIES: readonly Difficulty[] = [
   "normal",
@@ -332,7 +333,7 @@ const LEGACY_HP_SCORE: Partial<Record<Difficulty, { 180: number; 240: number }>>
 
 // The first 총력전 season of each server on the current formula, and the first one on the earlier formula.
 const RAID_CURRENT_FORMULA_FIRST_SEASON: Record<RaidRecordServer, number> = { kr: 44, jp: 50 };
-const RAID_LEGACY_FORMULA_FIRST_SEASON: Record<RaidRecordServer, number> = { kr: 1, jp: 6 };
+const RAID_LEGACY_FORMULA_FIRST_SEASON: Record<RaidRecordServer, number> = { kr: 1, jp: 5 };
 
 // The season a score belongs to: the formula depends on the server and season as well as the boss.
 export type RaidScoreSeason = {

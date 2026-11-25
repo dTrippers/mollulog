@@ -224,8 +224,13 @@ describe("raid record score → difficulty and clear time", () => {
   });
 
   it("has no result for a season or boss the earlier formula does not hold", () => {
-    // jp 1–5 ran on other values.
-    expect(computeRaidClearResult(totalAssault("jp", 5, "hieronymus"), 15_000_000)).toBeNull();
+    // jp 1–4 ran on other values; season 5 is the first on the earlier formula.
+    expect(computeRaidClearResult(totalAssault("jp", 4, "shirokuro"), 15_000_000)).toBeNull();
+    // A ranked jp 5 예로니무스 score: hardcore floor 2,000,000 + 2,600,000, 3,200 a second over 16 minutes.
+    expect(computeRaidClearResult(totalAssault("jp", 5, "hieronymus"), 7_317_119)).toEqual({
+      difficulty: "hardcore",
+      clearTimeMs: 110_900,
+    });
     expect(computeRaidClearResult(totalAssault("jp", 6, "binah"), 11_592_531)).toEqual(
       computeRaidClearResult(totalAssault("kr", 13, "binah"), 11_592_531),
     );
