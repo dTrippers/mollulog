@@ -137,6 +137,13 @@ single owner for commands and claim-to-evidence mapping.
   frame (`absolute inset-0`) instead of relying on `height: 100%`? Inside a
   table cell, WebKit resolves that percentage to the image's natural height, and
   `object-cover` then shows a magnified crop.
+- Does a control that opens content appear only once that content can be
+  shown? An expand button offered while its illustration was still loading
+  opened an empty dialog, and a later load failure removed the open dialog
+  with the button.
+- Is a viewer for images of different shapes sized to the image, and checked
+  with both a portrait and a wide one? A dialog sized for portrait
+  illustrations drew a wide one at a fraction of the screen.
 - Is a visually hidden table, such as a chart's text equivalent, hidden by
   `sr-only` on a wrapping element instead of on the `<table>`? Firefox applies a
   table's `overflow` and `clip-path` to the table box, which does not contain
