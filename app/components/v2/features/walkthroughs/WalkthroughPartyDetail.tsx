@@ -56,6 +56,7 @@ export function WalkthroughPartyDetailCard({
         party={party}
         partySize={partySize}
         studentsByUid={studentsByUid}
+        groupLabels
         label={`${title} 편성`}
       />
       {hasGrowthDetails(party) ? (

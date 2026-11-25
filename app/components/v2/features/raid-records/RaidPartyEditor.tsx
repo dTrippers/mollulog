@@ -390,7 +390,11 @@ export function PartySlots<P extends Pick<RaidFormParty, "slots">>({
               >
                 <PlusIcon className="size-5" aria-hidden="true" />
               </span>
-              <span aria-hidden="true" className="mt-1 block text-center text-xs leading-4 text-v2-fg-tertiary">
+              {/* A phone-width slot is too narrow for the caption, and the dashed box already reads as empty. */}
+              <span
+                aria-hidden="true"
+                className="mt-1 hidden text-center text-xs leading-4 text-v2-fg-tertiary sm:block"
+              >
                 비어 있음
               </span>
             </>
