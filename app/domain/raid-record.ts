@@ -1,7 +1,6 @@
 import {
   type Difficulty,
   normalizeBossUid,
-  parseDifficulty,
   RAID_DIFFICULTY_SCORE,
   RAID_HP_SCORE,
   RAID_TIME_SCORE_PER_SECOND,
@@ -286,11 +285,20 @@ export type RaidClearResult = {
   clearTimeMs: number;
 };
 
-// The in-game score formula: score = difficulty score + boss HP score + time score, where the time score is what is
-// left of the one-hour room time at the clear, per second. The HP score depends on the boss's battle time limit, so a
-// boss the formula does not know (a new one) has no result rather than a guessed one. Elimination uses the same formula
-// per defense type.
-const RAID_ROOM_TIME_MS = 3_600_000;
+// The in-game score formula: score = difficulty score + boss HP score + time score. The time score falls by a fixed
+// amount per second of battle time until it reaches zero at a time limit. The HP score depends on the boss's battle
+// time limit, so a boss the formula does not know (a new one) has no result rather than a guessed one. Elimination
+// uses the same formula per defense type.
+//
+// 총력전 changed its formula once, from season 50 on the jp server (2023-04-12) and season 44 on the kr server
+// (2023-08-29). Before that the time limit was four battles' worth of time, 12 minutes for a 3-minute boss and 16 for a
+// 4-minute one, instead of the one-hour room time, and the HP and time scores were split differently; the season
+// maximums did not change. The values are the game's RaidStageExcel table (DefaultClearScore, HPPercentScore,
+// MaximumScore, PerSecondMinusScore / 10): the jp client holds the earlier values up to its 2023-03-22 data and the
+// kr (global) client up to its 2023-07-11 data, and both hold the current values from the next version on. The jp
+// server's first five seasons (2021-03 to 2021-05) ran on yet other values the formula does not hold, so they have no
+// result. Every 대결전 season started after the change on both servers.
+const RAID_ROOM_TIME_SEC = 3600;
 const SCORE_DIFFICULTIES: readonly Difficulty[] = [
   "normal",
   "hard",
@@ -302,52 +310,89 @@ const SCORE_DIFFICULTIES: readonly Difficulty[] = [
   "lunatic",
 ];
 
-function raidBossTimeClass(bossUid: string): 180 | 240 | 270 | null {
-  const boss = normalizeBossUid(bossUid);
-  return boss ? timeForBoss(boss) : null;
+const LEGACY_TIME_SCORE_PER_SECOND: Partial<Record<Difficulty, number>> = {
+  normal: 400,
+  hard: 800,
+  very_hard: 1600,
+  hardcore: 3200,
+  extreme: 6400,
+  insane: 12800,
+  torment: 12800,
+};
+
+const LEGACY_HP_SCORE: Partial<Record<Difficulty, { 180: number; 240: number }>> = {
+  normal: { 180: 373000, 240: 325000 },
+  hard: { 180: 746000, 240: 650000 },
+  very_hard: { 180: 1492000, 240: 1300000 },
+  hardcore: { 180: 2984000, 240: 2600000 },
+  extreme: { 180: 5968000, 240: 5200000 },
+  insane: { 180: 10145600, 240: 8840000 },
+  torment: { 180: 18300000, 240: 15860000 },
+};
+
+// The first 총력전 season of each server on the current formula, and the first one on the earlier formula.
+const RAID_CURRENT_FORMULA_FIRST_SEASON: Record<RaidRecordServer, number> = { kr: 44, jp: 50 };
+const RAID_LEGACY_FORMULA_FIRST_SEASON: Record<RaidRecordServer, number> = { kr: 1, jp: 6 };
+
+// The season a score belongs to: the formula depends on the server and season as well as the boss.
+export type RaidScoreSeason = {
+  server: RaidRecordServer;
+  raidType: RaidRecordRaidType;
+  seasonIndex: number;
+  boss: { uid: string };
+};
+
+type RaidScoreFormula = "current" | "legacy";
+
+function raidScoreFormula({ server, raidType, seasonIndex }: RaidScoreSeason): RaidScoreFormula | null {
+  if (raidType !== "total_assault" || seasonIndex >= RAID_CURRENT_FORMULA_FIRST_SEASON[server]) return "current";
+  return seasonIndex >= RAID_LEGACY_FORMULA_FIRST_SEASON[server] ? "legacy" : null;
 }
 
-function difficultyFloorScore(difficulty: Difficulty, timeClass: 180 | 240 | 270): number {
-  return RAID_DIFFICULTY_SCORE[difficulty] + RAID_HP_SCORE[difficulty][timeClass];
+type RaidDifficultyScoring = { floorScore: number; scorePerSecond: number; timeLimitSec: number };
+
+function raidDifficultyScoring(
+  formula: RaidScoreFormula,
+  difficulty: Difficulty,
+  timeClass: 180 | 240 | 270,
+): RaidDifficultyScoring | null {
+  if (formula === "current") {
+    return {
+      floorScore: RAID_DIFFICULTY_SCORE[difficulty] + RAID_HP_SCORE[difficulty][timeClass],
+      scorePerSecond: RAID_TIME_SCORE_PER_SECOND[difficulty],
+      timeLimitSec: RAID_ROOM_TIME_SEC,
+    };
+  }
+  // No boss with a 4:30 battle time and no lunatic stage existed under the earlier formula.
+  const scorePerSecond = LEGACY_TIME_SCORE_PER_SECOND[difficulty];
+  const hpScore = timeClass === 270 ? undefined : LEGACY_HP_SCORE[difficulty]?.[timeClass];
+  if (scorePerSecond === undefined || hpScore === undefined) return null;
+  return {
+    floorScore: RAID_DIFFICULTY_SCORE[difficulty] + hpScore,
+    scorePerSecond,
+    timeLimitSec: timeClass * 4,
+  };
 }
 
-// The difficulty and clear time a score means. Null for a boss the formula does not know, and for a score no difficulty
-// can produce (below the lowest one, or between two). The difficulty ranges do not overlap, so a score has at most one.
-export function computeRaidClearResult(bossUid: string, score: number): RaidClearResult | null {
-  const timeClass = raidBossTimeClass(bossUid);
-  if (timeClass === null) return null;
+// The difficulty and clear time a score means. Null for a boss or season the formula does not know, and for a score
+// no difficulty can produce (below the lowest one, or between two). The difficulty ranges do not overlap, so a score
+// has at most one. A score whose time score is zero shows the time limit, the earliest time that gives it.
+export function computeRaidClearResult(season: RaidScoreSeason, score: number): RaidClearResult | null {
+  const formula = raidScoreFormula(season);
+  const boss = normalizeBossUid(season.boss.uid);
+  if (formula === null || boss === null) return null;
+  const timeClass = timeForBoss(boss);
   for (const difficulty of SCORE_DIFFICULTIES) {
-    const timeScore = score - difficultyFloorScore(difficulty, timeClass);
-    const scorePerSecond = RAID_TIME_SCORE_PER_SECOND[difficulty];
-    if (timeScore < 0 || timeScore > scorePerSecond * (RAID_ROOM_TIME_MS / 1000)) continue;
-    return { difficulty, clearTimeMs: Math.round(RAID_ROOM_TIME_MS - (timeScore * 1000) / scorePerSecond) };
+    const scoring = raidDifficultyScoring(formula, difficulty, timeClass);
+    if (scoring === null) continue;
+    const timeScore = score - scoring.floorScore;
+    if (timeScore < 0 || timeScore > scoring.scorePerSecond * scoring.timeLimitSec) continue;
+    return {
+      difficulty,
+      clearTimeMs: Math.round(scoring.timeLimitSec * 1000 - (timeScore * 1000) / scoring.scorePerSecond),
+    };
   }
   return null;
-}
-
-// The highest score the season allows: its top difficulty cleared at once. Null when the boss or the top difficulty is
-// unknown, so a valid score is never rejected on missing data.
-export function getRaidMaxScore(bossUid: string, maxDifficulty: string | null): number | null {
-  const timeClass = raidBossTimeClass(bossUid);
-  const difficulty = parseDifficulty(maxDifficulty);
-  if (timeClass === null || difficulty === null) return null;
-  return difficultyFloorScore(difficulty, timeClass) + RAID_TIME_SCORE_PER_SECOND[difficulty] * (RAID_ROOM_TIME_MS / 1000);
-}
-
-// The highest total the season allows: the sum of each defense type's maximum. Null when any of them is unknown, so a
-// valid total is never rejected on missing data.
-export function getRaidMaxTotalScore(
-  bossUid: string,
-  defenseTypes: readonly { maxDifficulty: string | null }[],
-): number | null {
-  if (defenseTypes.length === 0) return null;
-  let total = 0;
-  for (const { maxDifficulty } of defenseTypes) {
-    const maxScore = getRaidMaxScore(bossUid, maxDifficulty);
-    if (maxScore === null) return null;
-    total += maxScore;
-  }
-  return total;
 }
 
 export function formatRaidClearTime(clearTimeMs: number): string {

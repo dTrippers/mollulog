@@ -29,13 +29,7 @@ jest.mock("~/lib/observability.server", () => ({
   getLogger: () => ({ error: (...args: unknown[]) => mockLogError(...args) }),
 }));
 
-import {
-  RaidRecordBatchStaleError,
-  RaidRecordScoreAboveMaxError,
-  RaidRecordSeasonConflictError,
-  RaidRecordTableScoresAboveMaxError,
-  RaidRecordTotalScoreAboveMaxError,
-} from "~/models/raid-record";
+import { RaidRecordBatchStaleError, RaidRecordSeasonConflictError } from "~/models/raid-record";
 import { handleRaidRecordFormAction } from "~/routes/$username.raids._components/raid-record-form.server";
 import { handleRaidRecordTableAction } from "~/routes/$username.raids._components/raid-record-table.server";
 
@@ -237,48 +231,6 @@ describe("raid record table action", () => {
     ).resolves.toEqual(stale);
   });
 
-  it("marks each score cell above its season maximum", async () => {
-    mockSaveTable.mockRejectedValue(
-      new RaidRecordTableScoresAboveMaxError([
-        { seasonIndex: 35, error: new RaidRecordScoreAboveMaxError("heavy", 40_348_000) },
-        { seasonIndex: 34, error: new RaidRecordScoreAboveMaxError("elastic", 40_000_000) },
-      ]),
-    );
-    const result = await submit(
-      tableBody([
-        {
-          seasonIndex: 35,
-          recordUid: "record-35",
-          recordUpdatedAt: "2026-02-01T00:00:00.000Z",
-          scores: [{ defenseType: "heavy", score: 50_000_000 }],
-          rank: 1,
-        },
-        { seasonIndex: 34, recordUid: null, scores: [{ defenseType: "elastic", score: 50_000_000 }], rank: 1 },
-      ]),
-    );
-    expect(result).toEqual({
-      status: 400,
-      body: {
-        ok: false,
-        message: null,
-        rowErrors: [
-          {
-            seasonIndex: 35,
-            field: "score",
-            defenseType: "heavy",
-            message: "최대 점수(40,348,000)보다 높아요.",
-          },
-          {
-            seasonIndex: 34,
-            field: "score",
-            defenseType: "elastic",
-            message: "최대 점수(40,000,000)보다 높아요.",
-          },
-        ],
-      },
-    });
-  });
-
   it("rejects a malformed request, a season that has not started, and a repeated season", async () => {
     const invalid = { status: 400, body: { ok: false, message: "요청을 확인하지 못했어요.", rowErrors: [] } };
     await expect(submit("{")).resolves.toEqual(invalid);
@@ -382,7 +334,7 @@ describe("raid record form action", () => {
     });
   });
 
-  it("asks for the total a record shows, and checks it against the sum of the maximums", async () => {
+  it("asks for the total a record shows, and checks its range", async () => {
     await expect(submit(saveBody({ scoreMode: "total", totalScore: null }))).resolves.toEqual({
       status: 400,
       body: { ok: false, error: { field: "totalScore", message: "합산 점수를 입력해 주세요." } },
@@ -394,15 +346,6 @@ describe("raid record form action", () => {
     await expect(submit(saveBody({ scoreMode: "bogus" }))).resolves.toEqual({
       status: 400,
       body: { ok: false, error: { field: "score", message: "점수 입력 방식을 확인해 주세요." } },
-    });
-    // The season's two torment defense types top out at 40,348,000 each.
-    mockCreate.mockRejectedValueOnce(new RaidRecordTotalScoreAboveMaxError(80_696_000));
-    await expect(submit(saveBody({ scoreMode: "total", totalScore: 80_696_001 }))).resolves.toEqual({
-      status: 400,
-      body: {
-        ok: false,
-        error: { field: "totalScore", message: "최대 합산 점수(80,696,000)보다 높아요." },
-      },
     });
   });
 
@@ -426,23 +369,11 @@ describe("raid record form action", () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
-  it("points a season that already has a record and a score above the maximum to their fields", async () => {
+  it("points a season that already has a record to its field", async () => {
     mockCreate.mockRejectedValueOnce(new RaidRecordSeasonConflictError());
     await expect(submit(saveBody())).resolves.toEqual({
       status: 409,
       body: { ok: false, error: { field: "season", message: "이 시즌에는 이미 기록이 있어요." } },
-    });
-    mockCreate.mockRejectedValueOnce(new RaidRecordScoreAboveMaxError("heavy", 40_348_000));
-    await expect(submit(saveBody())).resolves.toEqual({
-      status: 400,
-      body: {
-        ok: false,
-        error: {
-          field: "score",
-          message: "최대 점수(40,348,000)보다 높아요.",
-          defenseType: "heavy",
-        },
-      },
     });
     mockCreate.mockRejectedValueOnce(new InvalidRaidRecordError("점수를 확인해 주세요."));
     await expect(submit(saveBody())).resolves.toEqual({

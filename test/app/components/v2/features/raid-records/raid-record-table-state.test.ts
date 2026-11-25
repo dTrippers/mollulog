@@ -160,30 +160,22 @@ describe("raid record table errors", () => {
     ]);
   });
 
-  it("flags every score above its defense type's maximum", () => {
-    const errors = raidTableRowErrors(
-      row("elimination", null),
-      draft({ heavy: 50_000_000, elastic: 30_000_000, light: 45_000_000 }, 1200),
-      { heavy: 40_348_000, elastic: 40_348_000, light: 40_000_000 },
-    );
-    expect(errors).toEqual([
-      { field: "score", defenseType: "heavy", message: "최대 점수(40,348,000)보다 높아요." },
-      { field: "score", defenseType: "light", message: "최대 점수(40,000,000)보다 높아요." },
-    ]);
-    // A defense type without a known maximum (a boss the score formula does not know) is not checked.
-    expect(raidTableRowErrors(row("elimination", null), draft({ heavy: 50_000_000 }, 1200), { heavy: null })).toEqual(
+  it("checks a score's range but not a season maximum", () => {
+    // Above any season's maximum: the season's top difficulty in BAQL is not trusted to reject a score.
+    expect(raidTableRowErrors(row("elimination", null), draft({ heavy: 60_000_000, light: 45_000_000 }, 1200))).toEqual(
       [],
     );
+    expect(raidTableRowErrors(row("elimination", null), draft({ heavy: 1_000_000_000 }, 1200))).toEqual([
+      { field: "score", defenseType: "heavy", message: "점수를 확인해 주세요." },
+    ]);
   });
 
-  it("asks for the total of a row that shows it alone, and checks it against the season maximum", () => {
+  it("asks for the total of a row that shows it alone, and checks its range", () => {
     const empty = row("elimination", null);
     expect(raidTableRowErrors(empty, draft({}, 1200, { scoreMode: "total" }))).toEqual([
       { field: "totalScore", message: "합산 점수를 입력해 주세요." },
     ]);
-    expect(
-      raidTableRowErrors(empty, draft({}, 1200, { scoreMode: "total", totalScore: 120_000_001 }), {}, 120_000_000),
-    ).toEqual([{ field: "totalScore", message: "최대 합산 점수(120,000,000)보다 높아요." }]);
+    expect(raidTableRowErrors(empty, draft({}, 1200, { scoreMode: "total", totalScore: 180_000_000 }))).toEqual([]);
     expect(raidTableRowErrors(empty, draft({}, 1200, { scoreMode: "total", totalScore: 0 }))).toEqual([
       { field: "totalScore", message: "합산 점수를 확인해 주세요." },
     ]);
@@ -194,13 +186,9 @@ describe("raid record table errors", () => {
   it("does not check the side a row does not show", () => {
     const empty = row("elimination", null);
     expect(
-      raidTableRowErrors(empty, draft({ heavy: 50_000_000 }, 1200, { scoreMode: "total", totalScore: 90_000_000 }), {
-        heavy: 40_348_000,
-      }),
+      raidTableRowErrors(empty, draft({ heavy: 1_000_000_000 }, 1200, { scoreMode: "total", totalScore: 90_000_000 })),
     ).toEqual([]);
-    expect(
-      raidTableRowErrors(empty, draft({ heavy: 30_000_000 }, 1200, { totalScore: 120_000_001 }), {}, 120_000_000),
-    ).toEqual([]);
+    expect(raidTableRowErrors(empty, draft({ heavy: 30_000_000 }, 1200, { totalScore: 1_000_000_000 }))).toEqual([]);
   });
 
   it("labels an error by season and field", () => {
@@ -296,16 +284,13 @@ describe("raid record table submission", () => {
     expect(
       toRaidTableSubmissionRow(
         saved,
-        draft({ heavy: 50_000_000, light: 30_000_000 }, 1200, { scoreMode: "total", totalScore: 90_000_000 }),
-        { heavy: 40_348_000, light: 40_000_000 },
+        draft({ heavy: 1_000_000_000, light: 30_000_000 }, 1200, { scoreMode: "total", totalScore: 90_000_000 }),
       ),
     ).toMatchObject({ scores: [{ defenseType: "light", score: 30_000_000 }], totalScore: 90_000_000 });
     expect(
       toRaidTableSubmissionRow(
         saved,
-        draft({ heavy: 30_000_000 }, 1200, { scoreMode: "defense_type", totalScore: 120_000_001 }),
-        {},
-        120_000_000,
+        draft({ heavy: 30_000_000 }, 1200, { scoreMode: "defense_type", totalScore: 1_000_000_000 }),
       ),
     ).toMatchObject({ scores: [{ defenseType: "heavy", score: 30_000_000 }], totalScore: null });
     // A 총력전 row never sends a total.

@@ -92,7 +92,7 @@ export function toRaidRecordRowView(
   const scoreByDefenseType = new Map(shown.map((entry) => [entry.defenseType, entry]));
   const scores = season.scoreDefenseTypes.map(({ defenseType }): RaidRecordScoreView => {
     const entry = scoreByDefenseType.get(defenseType);
-    const result = entry ? computeRaidClearResult(season.boss.uid, entry.score) : null;
+    const result = entry ? computeRaidClearResult(season, entry.score) : null;
     return {
       defenseType,
       score: entry?.score ?? null,

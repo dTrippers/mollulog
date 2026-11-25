@@ -20,8 +20,6 @@ import {
   getRaidRecordSeasons,
   listRaidRecords,
   RaidRecordBatchStaleError,
-  RaidRecordScoreAboveMaxError,
-  RaidRecordTableScoresAboveMaxError,
   type RaidRecordTableRowInput,
   raidRecordSeasonRules,
   saveRaidRecordTable,
@@ -160,16 +158,6 @@ export async function handleRaidRecordTableAction({
   try {
     await saveRaidRecordTable(env, userId, inputs, { ctx });
   } catch (error) {
-    if (error instanceof RaidRecordTableScoresAboveMaxError) {
-      return failure(
-        null,
-        error.rows.map(({ seasonIndex, error: rowError }) =>
-          rowError instanceof RaidRecordScoreAboveMaxError
-            ? { seasonIndex, field: "score" as const, defenseType: rowError.defenseType, message: rowError.message }
-            : { seasonIndex, field: "totalScore" as const, message: rowError.message },
-        ),
-      );
-    }
     if (error instanceof RaidRecordBatchStaleError) return failure(STALE_MESSAGE, [], 409);
     logger.error("Raid record table save failed", error, { server, raidType, rows: inputs.length });
     return failure("저장하지 못했어요. 잠시 후 다시 시도해 주세요.", [], 500);

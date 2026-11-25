@@ -4,8 +4,6 @@ import {
   countRaidRankTiers,
   defaultRaidRecordScoreMode,
   formatRaidClearTime,
-  getRaidMaxScore,
-  getRaidMaxTotalScore,
   getRaidRankConfirmAt,
   getRaidRecordRankStatus,
   getRaidRecordShownTotalScore,
@@ -123,36 +121,117 @@ describe("raid record seasons", () => {
 });
 
 describe("raid record score → difficulty and clear time", () => {
+  // A season on the current formula: every 총력전 season from kr 44 and jp 50, and every 대결전 season.
+  const current = (uid: string) => ({
+    server: "kr" as const,
+    raidType: "total_assault" as const,
+    seasonIndex: 90,
+    boss: { uid },
+  });
+  const totalAssault = (server: "kr" | "jp", seasonIndex: number, uid: string) => ({
+    server,
+    raidType: "total_assault" as const,
+    seasonIndex,
+    boss: { uid },
+  });
+
   // The floors and maxima below match the bands the ranks service returned for 240-second bosses (JP 총력전 94 and
   // 대결전 38), which come from the same formula.
   it("reads a score with the in-game formula of the boss's time limit", () => {
-    expect(computeRaidClearResult("hod", 40_000_000)).toEqual({ difficulty: "torment", clearTimeMs: 145_000 });
-    expect(computeRaidClearResult("hod", 44_025_000)).toEqual({ difficulty: "lunatic", clearTimeMs: 3_600_000 });
-    expect(computeRaidClearResult("hod", 54_393_000)).toEqual({ difficulty: "lunatic", clearTimeMs: 0 });
+    expect(computeRaidClearResult(current("hod"), 40_000_000)).toEqual({ difficulty: "torment", clearTimeMs: 145_000 });
+    expect(computeRaidClearResult(current("hod"), 44_025_000)).toEqual({
+      difficulty: "lunatic",
+      clearTimeMs: 3_600_000,
+    });
+    expect(computeRaidClearResult(current("hod"), 54_393_000)).toEqual({ difficulty: "lunatic", clearTimeMs: 0 });
     // Binah is a 3-minute boss, with a lower HP score.
-    expect(computeRaidClearResult("binah", 44_025_000)).toEqual({ difficulty: "lunatic", clearTimeMs: 3_325_694 });
+    expect(computeRaidClearResult(current("binah"), 44_025_000)).toEqual({
+      difficulty: "lunatic",
+      clearTimeMs: 3_325_694,
+    });
     // A legacy boss uid reads as its current one.
-    expect(computeRaidClearResult("kaiten-fx-mk0", 44_025_000)).toEqual(computeRaidClearResult("binah", 44_025_000));
+    expect(computeRaidClearResult(current("kaiten-fx-mk0"), 44_025_000)).toEqual(
+      computeRaidClearResult(current("binah"), 44_025_000),
+    );
     // 악몽 열차 is a 4-minute boss under both of its uids.
-    expect(computeRaidClearResult("nightmare_train", 44_025_000)).toEqual(computeRaidClearResult("hod", 44_025_000));
-    expect(getRaidMaxScore("nightmare", "lunatic")).toBe(54_393_000);
+    expect(computeRaidClearResult(current("nightmare_train"), 44_025_000)).toEqual(
+      computeRaidClearResult(current("hod"), 44_025_000),
+    );
   });
 
   it("has no result for a score no difficulty produces or a boss the formula does not know", () => {
     // Between the top of torment (40,348,000) and the floor of lunatic.
-    expect(computeRaidClearResult("hod", 42_000_000)).toBeNull();
-    expect(computeRaidClearResult("hod", 54_393_001)).toBeNull();
-    expect(computeRaidClearResult("hod", 500_000)).toBeNull();
-    expect(computeRaidClearResult("a-new-boss", 40_000_000)).toBeNull();
+    expect(computeRaidClearResult(current("hod"), 42_000_000)).toBeNull();
+    expect(computeRaidClearResult(current("hod"), 54_393_001)).toBeNull();
+    expect(computeRaidClearResult(current("hod"), 500_000)).toBeNull();
+    expect(computeRaidClearResult(current("a-new-boss"), 40_000_000)).toBeNull();
   });
 
-  it("takes the season's top difficulty cleared at once as the maximum score", () => {
-    expect(getRaidMaxScore("hod", "torment")).toBe(40_348_000);
-    expect(getRaidMaxScore("hod", "lunatic")).toBe(54_393_000);
-    // Without a known boss or top difficulty, no score is rejected.
-    expect(getRaidMaxScore("hod", null)).toBeNull();
-    expect(getRaidMaxScore("hod", "unknown")).toBeNull();
-    expect(getRaidMaxScore("a-new-boss", "lunatic")).toBeNull();
+  // The earlier values are the game's RaidStageExcel table before the change: the time score runs out after four
+  // battles' worth of time instead of the hour.
+  it("reads a 총력전 score before the formula change with the earlier formula", () => {
+    // kr 13 비나 (3 minutes): extreme floor 4,000,000 + 5,968,000, 6,400 a second over 12 minutes.
+    expect(computeRaidClearResult(totalAssault("kr", 13, "binah"), 11_592_531)).toEqual({
+      difficulty: "extreme",
+      clearTimeMs: 466_167,
+    });
+    // kr 30 비나: insane floor 6,800,000 + 10,145,600, 12,800 a second.
+    expect(computeRaidClearResult(totalAssault("kr", 30, "binah"), 24_675_090)).toEqual({
+      difficulty: "insane",
+      clearTimeMs: 116_134,
+    });
+    // jp 47 예로니무스 (4 minutes): torment floor 12,200,000 + 15,860,000, 12,800 a second over 16 minutes.
+    expect(computeRaidClearResult(totalAssault("jp", 47, "hieronymus"), 40_000_000)).toEqual({
+      difficulty: "torment",
+      clearTimeMs: 27_188,
+    });
+    // A time score of zero is the time limit.
+    expect(computeRaidClearResult(totalAssault("kr", 13, "binah"), 9_968_000)).toEqual({
+      difficulty: "extreme",
+      clearTimeMs: 720_000,
+    });
+    // The season maximums did not change: above extreme's 14,576,000 and below insane's floor, no difficulty fits.
+    expect(computeRaidClearResult(totalAssault("kr", 13, "binah"), 14_576_000)).toEqual({
+      difficulty: "extreme",
+      clearTimeMs: 0,
+    });
+    expect(computeRaidClearResult(totalAssault("kr", 13, "binah"), 14_576_001)).toBeNull();
+  });
+
+  it("switches formula at kr 44 and jp 50, and never for 대결전", () => {
+    expect(computeRaidClearResult(totalAssault("kr", 43, "shirokuro"), 27_667_903)).toEqual({
+      difficulty: "insane",
+      clearTimeMs: 20_320,
+    });
+    expect(computeRaidClearResult(totalAssault("kr", 44, "hieronymus"), 27_667_903)).toEqual({
+      difficulty: "insane",
+      clearTimeMs: 135_467,
+    });
+    expect(computeRaidClearResult(totalAssault("jp", 49, "binah"), 24_675_090)).toEqual({
+      difficulty: "insane",
+      clearTimeMs: 116_134,
+    });
+    expect(computeRaidClearResult(totalAssault("jp", 50, "chesed"), 27_667_903)).toEqual(
+      computeRaidClearResult(totalAssault("kr", 44, "hieronymus"), 27_667_903),
+    );
+    const elimination = {
+      server: "kr" as const,
+      raidType: "elimination" as const,
+      seasonIndex: 1,
+      boss: { uid: "hod" },
+    };
+    expect(computeRaidClearResult(elimination, 40_000_000)).toEqual(computeRaidClearResult(current("hod"), 40_000_000));
+  });
+
+  it("has no result for a season or boss the earlier formula does not hold", () => {
+    // jp 1–5 ran on other values.
+    expect(computeRaidClearResult(totalAssault("jp", 5, "hieronymus"), 15_000_000)).toBeNull();
+    expect(computeRaidClearResult(totalAssault("jp", 6, "binah"), 11_592_531)).toEqual(
+      computeRaidClearResult(totalAssault("kr", 13, "binah"), 11_592_531),
+    );
+    // No 4:30 boss and no lunatic stage existed before the change.
+    expect(computeRaidClearResult(totalAssault("kr", 40, "yesod"), 20_000_000)).toBeNull();
+    expect(computeRaidClearResult(totalAssault("kr", 40, "hod"), 50_000_000)).toBeNull();
   });
 
   it("formats a clear time as m:ss.mmm", () => {
@@ -448,14 +527,6 @@ describe("raid record total score", () => {
     expect(() => getRaidRecordShownTotalScore({ scoreMode: "total", scores, totalScore: null })).toThrow(
       InvalidRaidRecordError,
     );
-  });
-
-  it("caps the total at the sum of the defense types' maximums, and not at all when one is unknown", () => {
-    // Hod (4 minutes): torment tops out at 40,348,000.
-    expect(getRaidMaxTotalScore("hod", [{ maxDifficulty: "torment" }, { maxDifficulty: "torment" }])).toBe(80_696_000);
-    expect(getRaidMaxTotalScore("hod", [{ maxDifficulty: "torment" }, { maxDifficulty: null }])).toBeNull();
-    expect(getRaidMaxTotalScore("a-new-boss", [{ maxDifficulty: "torment" }])).toBeNull();
-    expect(getRaidMaxTotalScore("hod", [])).toBeNull();
   });
 
   it("parses a total and a score mode, and allows the total alone only on a 대결전 record", () => {

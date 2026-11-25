@@ -4,8 +4,6 @@ import { Link, useFetcher, useNavigate } from "react-router";
 import {
   computeRaidClearResult,
   defaultRaidRecordScoreMode,
-  getRaidMaxScore,
-  getRaidMaxTotalScore,
   getRaidRecordTotalScore,
   parseRaidRecordScore,
   parseRaidRecordTotalScore,
@@ -18,6 +16,7 @@ import {
   type RaidRecordScoreMode,
   type RaidRecordServer,
   type RaidRecordSnapshot,
+  type RaidScoreSeason,
 } from "~/domain/raid-record";
 import { isInstantBefore } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
@@ -208,23 +207,12 @@ export function RaidRecordForm({
   });
   const scoreErrors: Partial<Record<RaidRecordDefenseType, string>> = {};
   for (const { defenseType, score } of enteredScores) {
-    const maxDifficulty = season?.scoreDefenseTypes.find((entry) => entry.defenseType === defenseType)?.maxDifficulty;
-    const maxScore = season ? getRaidMaxScore(season.boss.uid, maxDifficulty ?? null) : null;
     const rangeError = raidRecordRangeError(() => parseRaidRecordScore(score));
     if (rangeError) scoreErrors[defenseType] = rangeError;
-    else if (maxScore !== null && score > maxScore) {
-      scoreErrors[defenseType] = `최대 점수(${formatRaidScore(maxScore)})보다 높아요.`;
-    }
   }
   const showsTotal = season?.raidType === "elimination" && scoreMode === "total";
-  const maxTotalScore = season ? getRaidMaxTotalScore(season.boss.uid, season.scoreDefenseTypes) : null;
   const totalScoreError =
-    totalScore === null
-      ? null
-      : (raidRecordRangeError(() => parseRaidRecordTotalScore(totalScore)) ??
-        (maxTotalScore !== null && totalScore > maxTotalScore
-          ? `최대 합산 점수(${formatRaidScore(maxTotalScore)})보다 높아요.`
-          : null));
+    totalScore === null ? null : raidRecordRangeError(() => parseRaidRecordTotalScore(totalScore));
   const hasScoreErrors = Object.keys(scoreErrors).length > 0;
   const rankError =
     rank === null ? "순위를 입력해 주세요." : rank > RAID_RECORD_LIMITS.maxRank ? "순위를 확인해 주세요." : null;
@@ -388,7 +376,7 @@ export function RaidRecordForm({
                     ) : serverErrorFor("score") ? (
                       <FieldMessage message={serverErrorFor("score")} />
                     ) : (
-                      <ScorePreview score={scores[defenseTypes[0]] ?? null} bossUid={season.boss.uid} />
+                      <ScorePreview score={scores[defenseTypes[0]] ?? null} season={season} />
                     )}
                   </div>
                 </div>
@@ -631,12 +619,12 @@ function FieldMessage({ id, message }: { id?: string; message: string | null | u
   );
 }
 
-function ScorePreview({ score, bossUid }: { score: number | null; bossUid: string }) {
+function ScorePreview({ score, season }: { score: number | null; season: RaidScoreSeason }) {
   if (score === null) return null;
-  const result = computeRaidClearResult(bossUid, score);
+  const result = computeRaidClearResult(season, score);
   const text = result ? formatRaidClearResult(result.difficulty, result.clearTimeMs) : null;
-  // Also no result for a boss the score formula does not know. Hidden while the score is being typed: a partly typed
-  // score is below every difficulty.
+  // Also no result for a boss or season the score formula does not know. Hidden while the score is being typed: a
+  // partly typed score is below every difficulty.
   if (!text) {
     return <p className="mt-1 text-xs text-v2-fg-tertiary group-focus-within/score:hidden">난이도를 알 수 없어요.</p>;
   }
@@ -734,7 +722,7 @@ function EliminationScores({
               ) : score === null ? (
                 <span className="text-xs text-v2-fg-tertiary">–</span>
               ) : (
-                <ScorePreview score={score} bossUid={season.boss.uid} />
+                <ScorePreview score={score} season={season} />
               )}
             </div>
           </div>

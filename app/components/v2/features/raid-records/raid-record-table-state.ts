@@ -103,13 +103,7 @@ function enteredScores(row: RaidRecordTableRowView, draft: RaidTableDraft) {
 }
 
 // The errors of a changed row. A row the Sensei did not touch keeps what is saved, even a score saved without a rank.
-// `maxScores` holds the season maximum of each defense type the score formula knows.
-export function raidTableRowErrors(
-  row: RaidRecordTableRowView,
-  draft: RaidTableDraft,
-  maxScores: Partial<Record<RaidRecordDefenseType, number | null>> = {},
-  maxTotalScore: number | null = null,
-): RaidTableCellError[] {
+export function raidTableRowErrors(row: RaidRecordTableRowView, draft: RaidTableDraft): RaidTableCellError[] {
   if (!isRaidTableRowChanged(row, draft)) return [];
   const scores = enteredScores(row, draft);
   const showsTotal = raidTableShowsTotal(row, draft);
@@ -128,11 +122,11 @@ export function raidTableRowErrors(
     });
   }
   if (showsTotal) {
-    const totalError = totalScoreErrorOf(draft, maxTotalScore);
+    const totalError = totalScoreErrorOf(draft);
     if (totalError) errors.push({ field: "totalScore", message: totalError });
   } else {
     for (const { defenseType, score } of scores) {
-      const scoreError = scoreErrorOf(defenseType, score, maxScores);
+      const scoreError = scoreErrorOf(score);
       if (scoreError) errors.push({ field: "score", defenseType, message: scoreError });
     }
   }
@@ -144,25 +138,14 @@ export function raidTableRowErrors(
   return errors;
 }
 
-// The same range the save checks, such as a score of 0, and the season maximum.
-function scoreErrorOf(
-  defenseType: RaidRecordDefenseType,
-  score: number,
-  maxScores: Partial<Record<RaidRecordDefenseType, number | null>>,
-): string | null {
-  const rangeError = raidRecordRangeError(() => parseRaidRecordScore(score));
-  if (rangeError) return rangeError;
-  const maxScore = maxScores[defenseType];
-  return typeof maxScore === "number" && score > maxScore ? `최대 점수(${maxScore.toLocaleString("ko-KR")})보다 높아요.` : null;
+// The same range the save checks, such as a score of 0.
+function scoreErrorOf(score: number): string | null {
+  return raidRecordRangeError(() => parseRaidRecordScore(score));
 }
 
-function totalScoreErrorOf(draft: RaidTableDraft, maxTotalScore: number | null): string | null {
+function totalScoreErrorOf(draft: RaidTableDraft): string | null {
   if (draft.totalScore === null) return null;
-  const rangeError = raidRecordRangeError(() => parseRaidRecordTotalScore(draft.totalScore));
-  if (rangeError) return rangeError;
-  return maxTotalScore !== null && draft.totalScore > maxTotalScore
-    ? `최대 합산 점수(${maxTotalScore.toLocaleString("ko-KR")})보다 높아요.`
-    : null;
+  return raidRecordRangeError(() => parseRaidRecordTotalScore(draft.totalScore));
 }
 
 // The message of a domain parse function that rejects a value, or null when it accepts it. Screens check input with the
@@ -198,12 +181,7 @@ export function raidTableRowStatus(row: RaidRecordTableRowView, draft: RaidTable
 
 // The side the row does not show is only checked here: a value that would not save is left out instead of
 // stopping the save, so a hidden value never needs a message.
-export function toRaidTableSubmissionRow(
-  row: RaidRecordTableRowView,
-  draft: RaidTableDraft,
-  maxScores: Partial<Record<RaidRecordDefenseType, number | null>> = {},
-  maxTotalScore: number | null = null,
-): RaidTableSubmissionRow {
+export function toRaidTableSubmissionRow(row: RaidRecordTableRowView, draft: RaidTableDraft): RaidTableSubmissionRow {
   if (draft.rank === null) throw new Error("A row without a rank cannot be submitted");
   const showsTotal = raidTableShowsTotal(row, draft);
   return {
@@ -212,10 +190,10 @@ export function toRaidTableSubmissionRow(
     recordUpdatedAt: row.record?.updatedAt ?? null,
     scoreMode: row.season.raidType === "elimination" ? draft.scoreMode : "defense_type",
     scores: showsTotal
-      ? enteredScores(row, draft).filter(({ defenseType, score }) => scoreErrorOf(defenseType, score, maxScores) === null)
+      ? enteredScores(row, draft).filter(({ score }) => scoreErrorOf(score) === null)
       : enteredScores(row, draft),
     totalScore:
-      row.season.raidType !== "elimination" || (!showsTotal && totalScoreErrorOf(draft, maxTotalScore) !== null)
+      row.season.raidType !== "elimination" || (!showsTotal && totalScoreErrorOf(draft) !== null)
         ? null
         : draft.totalScore,
     rank: draft.rank,

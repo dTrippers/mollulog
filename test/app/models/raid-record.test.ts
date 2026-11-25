@@ -19,17 +19,11 @@ jest.mock("~/models/student", () => ({
 }));
 
 import { InvalidRaidRecordError } from "~/domain/raid-record";
-import {
-  applyRaidRecordChartScore,
-  type RaidRecordSeason,
-  RaidRecordTableScoresAboveMaxError,
-  saveRaidRecordTable,
-} from "~/models/raid-record";
+import { applyRaidRecordChartScore, type RaidRecordSeason, saveRaidRecordTable } from "~/models/raid-record";
 
 const env = {} as Env;
 const USER_ID = 7;
 
-// Hod is a 4-minute boss: torment tops out at 40,348,000 (cleared at once).
 function season(
   seasonIndex: number,
   raidType: "total_assault" | "elimination" = "elimination",
@@ -82,16 +76,9 @@ beforeEach(() => {
 });
 
 describe("saveRaidRecordTable", () => {
-  it("reports every score above its season maximum at once, newest season first, and saves nothing", async () => {
-    const saving = saveRaidRecordTable(env, USER_ID, [
-      {
-        season: season(34),
-        current: null,
-        scoreMode: "defense_type",
-        totalScore: null,
-        scores: [{ defenseType: "heavy", score: 43_000_000 }],
-        rank: 1,
-      },
+  // The season's top difficulty in BAQL has been wrong for past seasons, so it does not reject a score.
+  it("saves a score above the season's maximum as entered", async () => {
+    await saveRaidRecordTable(env, USER_ID, [
       {
         season: season(35),
         current: null,
@@ -104,22 +91,10 @@ describe("saveRaidRecordTable", () => {
         rank: 1,
       },
     ]);
-
-    const error = await saving.catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(RaidRecordTableScoresAboveMaxError);
-    expect(
-      (error as RaidRecordTableScoresAboveMaxError).rows.map((row) => [
-        row.seasonIndex,
-        "defenseType" in row.error ? row.error.defenseType : null,
-        row.error.maxScore,
-      ]),
-    ).toEqual([
-      [35, "heavy", 40_348_000],
-      [35, "elastic", 40_348_000],
-      [34, "heavy", 40_348_000],
+    expect(mockSaveBatch.mock.calls[0][2][0].values.scores).toEqual([
+      { defenseType: "heavy", score: 41_000_000 },
+      { defenseType: "elastic", score: 42_000_000 },
     ]);
-    expect((error as Error).message).toBe("최대 점수(40,348,000)보다 높아요.");
-    expect(mockSaveBatch).not.toHaveBeenCalled();
   });
 
   it("keeps a rank's time unless the rank changed", async () => {
@@ -173,45 +148,22 @@ describe("saveRaidRecordTable", () => {
     expect(rows[3].key).toEqual({ server: "kr", raidType: "elimination", seasonIndex: 32 });
   });
 
-  it("saves a total shown alone with the scores it keeps, and checks it against the sum of the maximums", async () => {
+  it("saves a total shown alone with the scores it keeps", async () => {
     await saveRaidRecordTable(env, USER_ID, [
       {
         season: season(35),
         current: null,
         scoreMode: "total",
         scores: [{ defenseType: "heavy", score: 40_000_000 }],
-        totalScore: 80_696_000,
+        totalScore: 80_696_001,
         rank: 1200,
       },
     ]);
     expect(mockSaveBatch.mock.calls[0][2][0].values).toMatchObject({
       scoreMode: "total",
       scores: [{ defenseType: "heavy", score: 40_000_000 }],
-      totalScore: 80_696_000,
+      totalScore: 80_696_001,
     });
-
-    const error = await saveRaidRecordTable(env, USER_ID, [
-      { season: season(34), current: null, scoreMode: "total", scores: [], totalScore: 80_696_001, rank: 1 },
-    ]).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(RaidRecordTableScoresAboveMaxError);
-    const [row] = (error as RaidRecordTableScoresAboveMaxError).rows;
-    expect([row.seasonIndex, "defenseType" in row.error, row.error.maxScore]).toEqual([34, false, 80_696_000]);
-    expect(row.error.message).toBe("최대 합산 점수(80,696,000)보다 높아요.");
-    expect(mockSaveBatch).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not check the maximum for a boss the score formula does not know", async () => {
-    await saveRaidRecordTable(env, USER_ID, [
-      {
-        season: season(91, "total_assault", "a-new-boss"),
-        current: null,
-        scoreMode: "defense_type",
-        totalScore: null,
-        scores: [{ defenseType: "special", score: 99_000_000 }],
-        rank: 1,
-      },
-    ]);
-    expect(mockSaveBatch.mock.calls[0][2][0].values.scores).toEqual([{ defenseType: "special", score: 99_000_000 }]);
   });
 });
 
@@ -223,18 +175,14 @@ describe("applyRaidRecordChartScore", () => {
     expect(mockApplyChartScore).not.toHaveBeenCalled();
   });
 
-  it("saves a score, and rejects one above the maximum", async () => {
-    await applyRaidRecordChartScore(env, USER_ID, season(35), "elastic", 40_000_000);
+  it("saves a score, even one above the season's maximum", async () => {
+    await applyRaidRecordChartScore(env, USER_ID, season(35), "elastic", 40_348_001);
     expect(mockApplyChartScore).toHaveBeenCalledWith(
       env,
       USER_ID,
       { server: "kr", raidType: "elimination", seasonIndex: 35 },
-      { defenseType: "elastic", score: 40_000_000 },
+      { defenseType: "elastic", score: 40_348_001 },
       undefined,
-    );
-
-    await expect(applyRaidRecordChartScore(env, USER_ID, season(35), "elastic", 40_348_001)).rejects.toThrow(
-      "최대 점수(40,348,000)보다 높아요.",
     );
   });
 
