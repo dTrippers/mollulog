@@ -171,7 +171,7 @@ export default function StudentDetailPage() {
         <PageHeader {...header} stackedOnly />
       </div>
       <PageStackedSummary>
-        <StudentProfileFacts student={student} compact standingUid={student.uid} />
+        <StudentProfileFacts student={student} compact standing={{ uid: student.uid, name: fullName }} />
       </PageStackedSummary>
       <PageToolbar>
         <ScreenTabs
@@ -202,7 +202,7 @@ export default function StudentDetailPage() {
       </PageToolbar>
       <PageAside>
         <PageAsideHeader {...header} />
-        <StudentProfileFacts student={student} standingUid={student.uid} />
+        <StudentProfileFacts student={student} standing={{ uid: student.uid, name: fullName }} />
         <AsideLinks items={[...(schaleDbLink ? [schaleDbLink] : []), videoLink]} />
       </PageAside>
       <MobileActionBar links={pathname.endsWith("/grade") ? [] : mobileLinks} />

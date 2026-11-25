@@ -10,25 +10,39 @@ export type DialogProps = {
   title: string;
   children: ReactNode;
   size?: "sm";
+  // For an image that needs no caption: the title stays the panel's accessible name, and the close button floats over the content's corner.
+  titleHidden?: boolean;
 };
 
 // Modal dialog for a full-size image or a confirmation. The title is the accessible name of the panel.
 // It sits on the shared modal layer, above the global navigation, and has its own close button for touch users.
-export function Dialog({ open, onClose, title, children, size }: DialogProps) {
+export function Dialog({ open, onClose, title, children, size, titleHidden = false }: DialogProps) {
   return (
     <HeadlessDialog open={open} onClose={onClose} className="relative z-layer-modal">
       <DialogBackdrop className="fixed inset-0 bg-v2-backdrop" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel
           className={cn(
-            "flex max-h-full w-full flex-col gap-v2-block-gap overflow-hidden rounded-lg bg-v2-surface p-v2-block-p ring-1 ring-v2-divider shadow-xl",
+            "relative flex max-h-full w-full flex-col gap-v2-block-gap overflow-hidden rounded-lg bg-v2-surface p-v2-block-p ring-1 ring-v2-divider shadow-xl",
             size === "sm" ? "max-w-md" : "max-w-4xl",
           )}
         >
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <DialogTitle className="min-w-0 truncate text-base font-semibold text-v2-fg">{title}</DialogTitle>
-            <IconButton icon={XMarkIcon} label="닫기" onClick={onClose} className="-mr-2" />
-          </div>
+          {titleHidden ? (
+            <>
+              <DialogTitle className="sr-only">{title}</DialogTitle>
+              <IconButton
+                icon={XMarkIcon}
+                label="닫기"
+                onClick={onClose}
+                className="absolute top-[calc(var(--spacing-v2-block-p)+0.5rem)] right-[calc(var(--spacing-v2-block-p)+0.5rem)] z-10 bg-v2-surface/40 text-v2-fg-secondary backdrop-blur-sm hover:bg-v2-surface/70 hover:text-v2-fg"
+              />
+            </>
+          ) : (
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <DialogTitle className="min-w-0 truncate text-base font-semibold text-v2-fg">{title}</DialogTitle>
+              <IconButton icon={XMarkIcon} label="닫기" onClick={onClose} className="-mr-2" />
+            </div>
+          )}
           {children}
         </DialogPanel>
       </div>
