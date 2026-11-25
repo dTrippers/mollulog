@@ -9,7 +9,7 @@ import {
   type WalkthroughUnit,
 } from "~/domain/walkthrough-timeline";
 import { cn } from "~/lib/utils";
-import { PartySlotGroups } from "../raid-records/PartySlotGroups";
+import { EmptyPartySlot, PartySlotGroups } from "../raid-records/PartySlotGroups";
 import { formatRaidStudentName, type RaidPartyStudent } from "../raid-records/raid-party-student";
 import { RoundStudentImage } from "../students/RoundStudentImage";
 import { StudentThumb } from "../students/StudentThumb";
@@ -77,7 +77,7 @@ function startingSkillOrderOf(party: Pick<WalkthroughParty, "startingSkillStuden
 // ---------------------------------------------------------------------------------------------------------------------
 
 // A party's students as portraits with their star tier and starting skill order: strikers, a gap, then specials. Empty
-// slots are left out. With `onSelect`, each portrait is a toggle (the starting skill order editor).
+// slots keep their place. With `onSelect`, each portrait is a toggle (the starting skill order editor).
 export function WalkthroughPartyThumbs({
   party,
   partySize,
@@ -96,21 +96,20 @@ export function WalkthroughPartyThumbs({
   onSelect?: (studentUid: string) => void;
   label: string;
 }) {
-  const units = [...party.units]
-    .filter((unit): unit is WalkthroughUnit & { studentUid: string } => Boolean(unit.studentUid))
-    .sort((left, right) => left.slot - right.slot);
-  const strikers = units.filter((unit) => isWalkthroughStrikerSlot(unit.slot, partySize));
-  const specials = units.filter((unit) => !isWalkthroughStrikerSlot(unit.slot, partySize));
+  const unitsBySlot = new Map(
+    party.units.flatMap((unit) =>
+      unit.studentUid ? [[unit.slot, { ...unit, studentUid: unit.studentUid }] as const] : [],
+    ),
+  );
+  const slots = Array.from({ length: partySize }, (_, slot) => slot);
+  const thumbWidth = size === "small" ? "w-12" : groupLabels ? "w-10 sm:w-16" : "w-11 sm:w-16";
   const renderThumb = (unit: WalkthroughUnit & { studentUid: string }) => {
     const student = studentsByUid.get(unit.studentUid);
     const { name, variant } = splitVisibleStudentName(student?.name ?? UNKNOWN_STUDENT_NAME);
     const order = startingSkillOrderOf(party, unit.studentUid);
     const tier = unit.snapshot?.tier;
     return (
-      <li
-        key={unit.slot}
-        className={cn("relative shrink-0", size === "small" ? "w-12" : groupLabels ? "w-10 sm:w-16" : "w-11 sm:w-16")}
-      >
+      <li key={unit.slot} className={cn("relative shrink-0", thumbWidth)}>
         <StudentThumb
           studentUid={unit.studentUid}
           name={student ? name : UNKNOWN_STUDENT_NAME}
@@ -127,17 +126,23 @@ export function WalkthroughPartyThumbs({
       </li>
     );
   };
+  const renderSlot = (slot: number) => {
+    const unit = unitsBySlot.get(slot);
+    return unit ? renderThumb(unit) : <EmptyPartySlot key={slot} className={thumbWidth} />;
+  };
+  const strikers = slots.filter((slot) => isWalkthroughStrikerSlot(slot, partySize)).map(renderSlot);
+  const specials = slots.filter((slot) => !isWalkthroughStrikerSlot(slot, partySize)).map(renderSlot);
   if (groupLabels) {
     return (
       <fieldset aria-label={label} className="m-0 min-w-0 border-0 p-0">
-        <PartySlotGroups strikers={strikers.map(renderThumb)} specials={specials.map(renderThumb)} />
+        <PartySlotGroups strikers={strikers} specials={specials} />
       </fieldset>
     );
   }
   return (
     <fieldset aria-label={label} className="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-3 sm:gap-x-4">
-      {strikers.length > 0 ? <ul className="flex flex-wrap gap-1.5 sm:gap-2">{strikers.map(renderThumb)}</ul> : null}
-      {specials.length > 0 ? <ul className="flex flex-wrap gap-1.5 sm:gap-2">{specials.map(renderThumb)}</ul> : null}
+      <ul className="flex flex-wrap gap-1.5 sm:gap-2">{strikers}</ul>
+      <ul className="flex flex-wrap gap-1.5 sm:gap-2">{specials}</ul>
     </fieldset>
   );
 }
