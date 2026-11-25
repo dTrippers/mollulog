@@ -9,7 +9,8 @@ export type DialogProps = {
   onClose: () => void;
   title: string;
   children: ReactNode;
-  size?: "sm";
+  // "fit" sizes the panel to its content, for an image whose shape varies: the content sets its own maximum size.
+  size?: "sm" | "fit";
   // For an image that needs no caption: the title stays the panel's accessible name, and the close button floats over the content's corner.
   titleHidden?: boolean;
 };
@@ -23,8 +24,8 @@ export function Dialog({ open, onClose, title, children, size, titleHidden = fal
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel
           className={cn(
-            "relative flex max-h-full w-full flex-col gap-v2-block-gap overflow-hidden rounded-lg bg-v2-surface p-v2-block-p ring-1 ring-v2-divider shadow-xl",
-            size === "sm" ? "max-w-md" : "max-w-4xl",
+            "relative flex max-h-full flex-col gap-v2-block-gap overflow-hidden rounded-lg bg-v2-surface p-v2-block-p ring-1 ring-v2-divider shadow-xl",
+            size === "fit" ? "w-fit max-w-full" : size === "sm" ? "w-full max-w-md" : "w-full max-w-4xl",
           )}
         >
           {titleHidden ? (

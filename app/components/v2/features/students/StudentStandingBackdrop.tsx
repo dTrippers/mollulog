@@ -8,7 +8,8 @@ import { studentStandingImageUrl } from "~/models/assets";
 
 export type StudentStandingImage = ReturnType<typeof useStudentStandingImage>;
 
-// One load state for the backdrop and its expand button, so a failed illustration leaves out both.
+// One load state for the backdrop and its expand button: a failed illustration leaves out both, and the button waits for the
+// illustration it opens, so it never opens an empty dialog.
 export function useStudentStandingImage(uid: string | null) {
   const src = uid ? studentStandingImageUrl(uid) : null;
   return { src, ...useImageFailure(src) };
@@ -20,15 +21,16 @@ export function StudentStandingBackdrop({ image, className }: { image: StudentSt
   if (!image.src || image.failed) return null;
   return (
     <div aria-hidden="true" className={cn("pointer-events-none flex justify-center overflow-hidden mask-l-from-55% mask-b-from-75%", className)}>
-      <img ref={image.ref} src={image.src} alt="" onError={image.onError} className="mt-2 h-[150%] w-auto max-w-none shrink-0" />
+      <img ref={image.ref} src={image.src} alt="" onError={image.onError} onLoad={image.onLoad} className="mt-2 h-[150%] w-auto max-w-none shrink-0" />
     </div>
   );
 }
 
-// Opens the whole illustration in a dialog. It floats over the backdrop on a faint surface, so the illustration shows through it.
+// Opens the whole illustration in a dialog sized to it, since some illustrations are portrait and others wide.
+// The button floats over the backdrop on a faint surface, so the illustration shows through it.
 export function StudentStandingExpandButton({ image, name, className }: { image: StudentStandingImage; name: string; className?: string }) {
   const [open, setOpen] = useState(false);
-  if (!image.src || image.failed) return null;
+  if (!image.src || !image.loaded) return null;
   return (
     <>
       <IconButton
@@ -37,9 +39,9 @@ export function StudentStandingExpandButton({ image, name, className }: { image:
         onClick={() => setOpen(true)}
         className={cn("bg-v2-surface/40 text-v2-fg-secondary backdrop-blur-sm hover:bg-v2-surface/70 hover:text-v2-fg", className)}
       />
-      <Dialog open={open} title={`${name} 일러스트`} onClose={() => setOpen(false)} size="sm" titleHidden>
+      <Dialog open={open} title={`${name} 일러스트`} onClose={() => setOpen(false)} size="fit" titleHidden>
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-md bg-v2-inset">
-          <img src={image.src} alt={`${name} 스탠딩 일러스트`} className="max-h-[calc(100dvh-4.5rem)] w-auto max-w-full object-contain" />
+          <img src={image.src} alt={`${name} 스탠딩 일러스트`} className="max-h-[calc(100dvh-4.5rem)] w-auto max-w-[calc(100vw-4.5rem)] object-contain" />
         </div>
       </Dialog>
     </>
