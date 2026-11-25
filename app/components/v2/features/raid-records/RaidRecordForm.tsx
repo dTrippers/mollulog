@@ -631,7 +631,8 @@ function ScorePreview({ score, season }: { score: number | null; season: RaidSco
   const [difficulty, time] = text.split(" · ");
   return (
     <p className="mt-1 text-sm text-v2-fg-secondary tabular-nums">
-      <span className="font-semibold text-v2-fg">{difficulty}</span> · {time}
+      <span className="font-semibold text-v2-fg">{difficulty}</span>
+      {time === undefined ? null : ` · ${time}`}
     </p>
   );
 }

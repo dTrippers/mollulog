@@ -282,7 +282,8 @@ export function isScoreOnlyRaidRecord(
 
 export type RaidClearResult = {
   difficulty: Difficulty;
-  clearTimeMs: number;
+  // Null when the score does not tell the time: see computeRaidClearResult.
+  clearTimeMs: number | null;
 };
 
 // The in-game score formula: score = difficulty score + boss HP score + time score. The time score falls by a fixed
@@ -377,7 +378,8 @@ function raidDifficultyScoring(
 
 // The difficulty and clear time a score means. Null for a boss or season the formula does not know, and for a score
 // no difficulty can produce (below the lowest one, or between two). The difficulty ranges do not overlap, so a score
-// has at most one. A score whose time score is zero shows the time limit, the earliest time that gives it.
+// has at most one. A time score of zero under the earlier formula has no clear time: every clear from the time limit
+// to the end of the one-hour room gave that score. Under the current formula the time limit is the end of the room.
 export function computeRaidClearResult(season: RaidScoreSeason, score: number): RaidClearResult | null {
   const formula = raidScoreFormula(season);
   const boss = normalizeBossUid(season.boss.uid);
@@ -388,6 +390,7 @@ export function computeRaidClearResult(season: RaidScoreSeason, score: number): 
     if (scoring === null) continue;
     const timeScore = score - scoring.floorScore;
     if (timeScore < 0 || timeScore > scoring.scorePerSecond * scoring.timeLimitSec) continue;
+    if (timeScore === 0 && scoring.timeLimitSec < RAID_ROOM_TIME_SEC) return { difficulty, clearTimeMs: null };
     return {
       difficulty,
       clearTimeMs: Math.round(scoring.timeLimitSec * 1000 - (timeScore * 1000) / scoring.scorePerSecond),

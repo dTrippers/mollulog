@@ -47,6 +47,7 @@ export type RaidRecordScoreView = {
   // From the score and the season's boss; null without a score, for a boss the formula does not know, or for a score
   // no difficulty produces.
   difficulty: string | null;
+  // Also null when the difficulty is known but the score does not tell the time.
   clearTimeMs: number | null;
 };
 

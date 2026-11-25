@@ -195,7 +195,8 @@ function ClearResult({ difficulty, clearTimeMs }: { difficulty: string | null; c
   const [label, time] = text.split(" · ");
   return (
     <span className="text-sm text-v2-fg-secondary tabular-nums">
-      <span className="font-semibold text-v2-fg">{label}</span> · {time}
+      <span className="font-semibold text-v2-fg">{label}</span>
+      {time === undefined ? null : ` · ${time}`}
     </span>
   );
 }

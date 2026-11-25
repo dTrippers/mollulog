@@ -185,10 +185,19 @@ describe("raid record score → difficulty and clear time", () => {
       difficulty: "torment",
       clearTimeMs: 27_188,
     });
-    // A time score of zero is the time limit.
+    // A time score of zero has no clear time: every clear from 12 minutes to the end of the one-hour room gave it.
     expect(computeRaidClearResult(totalAssault("kr", 13, "binah"), 9_968_000)).toEqual({
       difficulty: "extreme",
-      clearTimeMs: 720_000,
+      clearTimeMs: null,
+    });
+    expect(computeRaidClearResult(totalAssault("jp", 49, "binah"), 30_500_000)).toEqual({
+      difficulty: "torment",
+      clearTimeMs: null,
+    });
+    // One second faster is a time again.
+    expect(computeRaidClearResult(totalAssault("jp", 49, "binah"), 30_512_800)).toEqual({
+      difficulty: "torment",
+      clearTimeMs: 719_000,
     });
     // The season maximums did not change: above extreme's 14,576,000 and below insane's floor, no difficulty fits.
     expect(computeRaidClearResult(totalAssault("kr", 13, "binah"), 14_576_000)).toEqual({
