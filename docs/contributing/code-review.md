@@ -88,6 +88,14 @@ single owner for commands and claim-to-evidence mapping.
   domain parse functions rather than restated bounds? A value the screen accepts
   but the save rejects fails with an error the screen may not show, such as on
   a field that is hidden.
+- Does a screen or save reject a user's value by comparing it with catalog data
+  that can be wrong, such as a season's difficulty list from BAQL? Validation
+  against inaccurate data blocks real records. Check only what the value itself
+  rules out, such as its range.
+- Does a value derived from what the user entered claim only what the input
+  tells? Where a formula stops changing, such as a time score that bottoms out
+  at zero, one score stands for many clear times, so the screen omits the
+  derived value rather than showing the boundary as exact.
 - Does one user action that saves several parts write them in one update or
   transaction, so a failure cannot keep some parts and drop the others?
 - Does a save write only what the user changed? A combined save, such as a
