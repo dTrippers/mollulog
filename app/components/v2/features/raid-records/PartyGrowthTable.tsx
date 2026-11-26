@@ -137,15 +137,27 @@ function GrowthTableFrame({
         <tbody>
           {rows.map((row) => (
             <tr key={row.key}>
-              <th
-                scope="row"
-                className={cn(stickyColumn, "w-28 max-w-28 py-1.5 pr-1 text-left font-normal sm:w-36 sm:max-w-36")}
-              >
+              <th scope="row" className={cn(stickyColumn, "py-1.5 pr-1 text-left font-normal sm:w-36 sm:max-w-36")}>
+                {/* On a phone the column is the portrait alone, to leave the width to the values: the name is read
+                    only by assistive technology, and an assist is an A on the portrait's corner, as the ranking's
+                    party cards mark it. */}
                 <span className="flex min-w-0 items-center gap-2">
-                  <RoundStudentImage studentUid={row.studentUid} size="sm" />
-                  <span className="min-w-0 truncate text-sm font-semibold text-v2-fg">{row.name}</span>
+                  <span className="relative shrink-0">
+                    <RoundStudentImage studentUid={row.studentUid} size="md" className="sm:size-6" />
+                    {row.assist ? (
+                      <span
+                        aria-hidden="true"
+                        className="absolute -right-1 -bottom-0.5 rounded-sm bg-v2-accent-solid px-1 text-[0.625rem] leading-3.5 font-bold text-v2-on-accent-solid sm:hidden"
+                      >
+                        A
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="sr-only sm:not-sr-only sm:min-w-0">
+                    <span className="block truncate text-sm font-semibold text-v2-fg">{row.name}</span>
+                  </span>
                   {row.assist ? (
-                    <span className="inline-flex min-h-[1.125rem] shrink-0 items-center rounded bg-v2-inset px-1.5 text-[0.6875rem] font-semibold text-v2-fg-secondary">
+                    <span className="sr-only shrink-0 items-center rounded bg-v2-inset text-[0.6875rem] font-semibold text-v2-fg-secondary sm:not-sr-only sm:inline-flex sm:min-h-[1.125rem] sm:px-1.5">
                       조력자
                     </span>
                   ) : null}
