@@ -5,22 +5,30 @@ export type TooltipPosition = { top: number; left: number; placement: TooltipPla
 const ARROW_EDGE_INSET = 8;
 
 // Places a fixed tooltip against its trigger, as the 1.x HoverTooltip does. It is centered above the trigger with a gap,
-// flips below when it does not fit above, and keeps its edges inside the viewport. `arrowLeft` is the arrow's x offset
-// inside the tooltip, so the arrow points at the trigger's center even when the tooltip is pushed in from an edge.
+// flips below when it does not fit above, and keeps its edges inside the viewport. With `prefer: "below"` it sits below
+// the trigger instead, for a trigger at the top of the screen, and flips above when it does not fit below. `arrowLeft`
+// is the arrow's x offset inside the tooltip, so the arrow points at the trigger's center even when the tooltip is
+// pushed in from an edge.
 export function getTooltipPosition({
   anchor,
   tooltip,
   viewport,
   gap = 8,
   margin = 8,
+  prefer = "above",
 }: {
   anchor: { top: number; bottom: number; left: number; width: number };
   tooltip: { width: number; height: number };
-  viewport: { width: number };
+  // The height is needed only with `prefer: "below"`.
+  viewport: { width: number; height?: number };
   gap?: number;
   margin?: number;
+  prefer?: TooltipPlacement;
 }): TooltipPosition {
-  const placement: TooltipPlacement = anchor.top - gap - tooltip.height < margin ? "below" : "above";
+  const fitsAbove = anchor.top - gap - tooltip.height >= margin;
+  const fitsBelow = viewport.height === undefined || anchor.bottom + gap + tooltip.height <= viewport.height - margin;
+  const placement: TooltipPlacement =
+    prefer === "below" ? (fitsBelow || !fitsAbove ? "below" : "above") : fitsAbove ? "above" : "below";
   const top = placement === "above" ? anchor.top - gap - tooltip.height : anchor.bottom + gap;
   const center = anchor.left + anchor.width / 2;
   const maxLeft = Math.max(margin, viewport.width - margin - tooltip.width);

@@ -21,10 +21,12 @@ export function formatRaidDifficulty(difficulty: string): string {
   return difficultyLocale[difficulty] ?? difficulty;
 }
 
-// "루나틱 · 5:50.125", or null when the score has no computed result.
+// "루나틱 · 5:50.125", the difficulty alone when the score does not tell the clear time, or null when the score has no
+// computed result.
 export function formatRaidClearResult(difficulty: string | null, clearTimeMs: number | null): string | null {
-  if (difficulty === null || clearTimeMs === null) return null;
-  return `${formatRaidDifficulty(difficulty)} · ${formatRaidClearTime(clearTimeMs)}`;
+  if (difficulty === null) return null;
+  const label = formatRaidDifficulty(difficulty);
+  return clearTimeMs === null ? label : `${label} · ${formatRaidClearTime(clearTimeMs)}`;
 }
 
 // "2023/08/29 ~ 09/05": the end carries its year only when it differs, as in "2023/12/26 ~ 2024/01/02".

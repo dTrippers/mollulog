@@ -3,6 +3,7 @@ import { getPyroxeneGameDayStartAt, isPyroxeneOneOffGainSource } from "~/domain/
 import { buildTimeline, type PickupResources, type PyroxeneTimelineEventData } from "~/domain/pyroxene-timeline";
 import { isRecordedRecruitmentResult } from "~/domain/recruitment-result";
 import { getInstantTime, isInstantAfter, nowUtcIso } from "~/lib/date-time";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 import { countUnregisteredActiveCoupons } from "~/models/coupon";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getPyroxeneUserState, type PyroxeneEventData } from "~/models/pyroxene-planner";
@@ -10,12 +11,18 @@ import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResults, getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import type { Sensei } from "~/models/sensei";
-import { getNavigationBarContents } from "~/views/navigation";
+import { getAllStudentsMap } from "~/models/student";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
 
-export type MoreCurrentUser = {
+// The signed-in account. It comes from the session, so it shows even when the summary below fails to load.
+export type MoreAccount = {
   username: string;
   profileStudentId: string | null;
+};
+
+// The account's numbers and plans. Null when it fails to load: the screen then shows a failure in the account block
+// instead of zeros, and the menus keep working.
+export type MoreSummary = {
   recruitedStudentCount: number;
   pickupHistoryCount: number;
   availableCouponCount: number;
@@ -24,7 +31,8 @@ export type MoreCurrentUser = {
     oneTimeTicket: number;
     tenTimeTicket: number;
     favoritedRecruitmentCount: number;
-    nextStudents: { uid: string; name: string }[];
+    // `uid` is the favorite key; `imageUid` is the catalog student, null for a pickup not in the catalog yet.
+    nextStudents: { uid: string; imageUid: string | null; name: string }[];
     nextTimelineLabel: string | null;
     expectedPyroxene: number | null;
     expectedTicketTrialCount: number | null;
@@ -34,35 +42,38 @@ export type MoreCurrentUser = {
     targetStudentCount: number;
     targetStudents: {
       uid: string;
+      // Null when the student is missing from the student list, so the image has no name to read.
+      name: string | null;
       currentLevel: number | null;
     }[];
   };
 };
 
-export async function getMoreViewData(env: Env, ctx: ExecutionContext, sensei: Sensei | null) {
-  const publicReadEnv = env;
-  const [navigationBarContents, personalSummary] = await Promise.all([
-    getNavigationBarContents(env, false, undefined, ctx, publicReadEnv),
-    sensei ? getMorePersonalSummary(env, sensei.id, ctx, publicReadEnv) : Promise.resolve(null),
-  ]);
-  const currentUser = sensei && personalSummary ? buildCurrentUserSummary(sensei, personalSummary) : null;
+export type MoreViewData = {
+  account: MoreAccount | null;
+  summary: MoreSummary | null;
+};
 
-  return {
-    currentUser,
-    upcomingEvent: navigationBarContents.upcomingEvent,
-    hasRecentNews: navigationBarContents.hasRecentNews,
-    hasOngoingRaid: navigationBarContents.hasOngoingRaid,
-    hasUnconsumedCoupons: currentUser
-      ? currentUser.availableCouponCount > 0
-      : navigationBarContents.hasUnconsumedCoupons,
-    hasUnreadFeedbackReplies: navigationBarContents.hasUnreadFeedbackReplies,
-  };
+// The menus and the bottom-tab pinning read the navigation data that the root loader already provides, so this loader
+// reads only the account summary.
+export async function getMoreViewData(env: Env, ctx: ExecutionContext, sensei: Sensei | null): Promise<MoreViewData> {
+  if (!sensei) {
+    return { account: null, summary: null };
+  }
+  const account = { username: sensei.username, profileStudentId: sensei.profileStudentId };
+  try {
+    const rows = await getMorePersonalSummaryRows(env, sensei.id, ctx);
+    return { account, summary: buildSummary(rows) };
+  } catch (error) {
+    console.error("Failed to load the more screen's account summary.", sanitizeErrorForLogging(error));
+    return { account, summary: null };
+  }
 }
 
-type MorePersonalSummary = Awaited<ReturnType<typeof getMorePersonalSummary>>;
+type MorePersonalSummaryRows = Awaited<ReturnType<typeof getMorePersonalSummaryRows>>;
 
-function getMorePersonalSummary(env: Env, senseiId: number, ctx?: ExecutionContext, publicReadEnv: Env = env) {
-  const pyroxeneContentsPromise = getPyroxenePlannerContents(publicReadEnv, false, ctx);
+function getMorePersonalSummaryRows(env: Env, senseiId: number, ctx?: ExecutionContext) {
+  const pyroxeneContentsPromise = getPyroxenePlannerContents(env, false, ctx);
   const recruitmentResultsPromise = pyroxeneContentsPromise.then((pyroxeneContents) => {
     const recruitmentGroupUids = pyroxeneContents.flatMap((content) =>
       content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
@@ -79,10 +90,12 @@ function getMorePersonalSummary(env: Env, senseiId: number, ctx?: ExecutionConte
     getRelationshipLevels(env, senseiId),
     countUnregisteredActiveCoupons(env, senseiId, { ctx }),
     recruitmentResultsPromise,
+    // The relationship calculator also lists unreleased students, so their names come from the same list.
+    getAllStudentsMap(env, true),
   ]);
 }
 
-function buildCurrentUserSummary(sensei: Sensei, personalSummary: MorePersonalSummary): MoreCurrentUser {
+function buildSummary(rows: MorePersonalSummaryRows): MoreSummary {
   const now = nowUtcIso();
   const [
     recruitedStudents,
@@ -93,7 +106,8 @@ function buildCurrentUserSummary(sensei: Sensei, personalSummary: MorePersonalSu
     relationshipLevels,
     availableCouponCount,
     recruitmentResults,
-  ] = personalSummary;
+    studentsByUid,
+  ] = rows;
   const latestPyroxeneResources = pyroxeneState.latestResources;
   const pyroxeneOptions = pyroxeneState.options;
   const pyroxeneEventData = pyroxeneState.eventData;
@@ -153,12 +167,11 @@ function buildCurrentUserSummary(sensei: Sensei, personalSummary: MorePersonalSu
     .sort((a, b) => (b.currentLevel ?? 0) - (a.currentLevel ?? 0) || (b.targetLevel ?? 0) - (a.targetLevel ?? 0));
   const relationshipTargetStudents = relationshipTargets.slice(0, 3).map(({ studentId, currentLevel }) => ({
     uid: studentId,
+    name: studentsByUid[studentId]?.name ?? null,
     currentLevel,
   }));
 
   return {
-    username: sensei.username,
-    profileStudentId: sensei.profileStudentId,
     recruitedStudentCount: recruitedStudents.length,
     pickupHistoryCount: allRecruitmentResults.filter(isRecordedRecruitmentResult).length,
     availableCouponCount,
@@ -243,7 +256,7 @@ function getFavoritedRecruitments(
           since: content.since,
           until: content.until,
           students: favoritedRecruitments.flatMap(({ student }) =>
-            student ? [{ uid: student.uid, name: student.name }] : [],
+            student ? [{ uid: student.uid, imageUid: student.imageUid, name: student.name }] : [],
           ),
         },
       ];

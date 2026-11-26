@@ -25,9 +25,7 @@ import {
   deleteRaidRecord,
   getRaidRecordSeasons,
   getRaidRecordStudentInfo,
-  RaidRecordScoreAboveMaxError,
   RaidRecordSeasonConflictError,
-  RaidRecordTotalScoreAboveMaxError,
   raidRecordSeasonRules,
   updateRaidRecord,
 } from "~/models/raid-record";
@@ -159,14 +157,12 @@ export async function handleRaidRecordFormAction({
   };
   try {
     if (existing) {
-      const updated = await updateRaidRecord(env, userId, existing.uid, season, values, { ctx });
+      const updated = await updateRaidRecord(env, userId, existing.uid, values, { ctx });
       if (!updated) return failure("form", "기록을 찾을 수 없어요. 목록에서 다시 열어 주세요.", 404);
     } else {
       await createRaidRecord(env, userId, season, values, { ctx });
     }
   } catch (error) {
-    if (error instanceof RaidRecordScoreAboveMaxError) return failure("score", error.message, 400, error.defenseType);
-    if (error instanceof RaidRecordTotalScoreAboveMaxError) return failure("totalScore", error.message);
     if (error instanceof RaidRecordSeasonConflictError) return failure("season", error.message, 409);
     if (error instanceof InvalidRaidRecordError) return failure("form", error.message);
     logger.error("Raid record save failed", error, { server, raidType, seasonIndex });

@@ -2,8 +2,6 @@ import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useStat
 import { Link, useBlocker, useFetcher, useNavigate } from "react-router";
 import {
   computeRaidClearResult,
-  getRaidMaxScore,
-  getRaidMaxTotalScore,
   type RaidRecordDefenseType,
   type RaidRecordRaidType,
   type RaidRecordScoreMode,
@@ -107,8 +105,6 @@ type RowModel = {
   changed: boolean;
   errors: RaidTableCellError[];
   status: RaidTableRowStatus;
-  maxScores: Partial<Record<RaidRecordDefenseType, number | null>>;
-  maxTotalScore: number | null;
 };
 
 function cellError(model: RowModel, field: "score" | "totalScore" | "rank", defenseType?: RaidRecordDefenseType) {
@@ -209,18 +205,13 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
       rows.map((row): RowModel => {
         const draft = drafts[row.season.seasonIndex] ?? initialRaidTableDraft(row);
         const changed = isRaidTableRowChanged(row, draft);
-        const maxScores: Partial<Record<RaidRecordDefenseType, number | null>> = {};
-        for (const { defenseType, maxDifficulty } of row.season.scoreDefenseTypes) {
-          maxScores[defenseType] = getRaidMaxScore(row.season.boss.uid, maxDifficulty);
-        }
-        const maxTotalScore = getRaidMaxTotalScore(row.season.boss.uid, row.season.scoreDefenseTypes);
         const errors = [
-          ...raidTableRowErrors(row, draft, maxScores, maxTotalScore),
+          ...raidTableRowErrors(row, draft),
           ...serverErrors
             .filter((error) => error.seasonIndex === row.season.seasonIndex)
             .map(({ field, defenseType, message }) => ({ field, defenseType, message })),
         ];
-        return { row, draft, changed, errors, status: raidTableRowStatus(row, draft, now), maxScores, maxTotalScore };
+        return { row, draft, changed, errors, status: raidTableRowStatus(row, draft, now) };
       }),
     [rows, drafts, serverErrors, now],
   );
@@ -279,7 +270,7 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
     );
     fetcher.submit(
       { server, raidType, rows: changedModels.map((model) =>
-          toRaidTableSubmissionRow(model.row, model.draft, model.maxScores, model.maxTotalScore),
+          toRaidTableSubmissionRow(model.row, model.draft),
         ) },
       { method: "post", encType: "application/json" },
     );
@@ -651,7 +642,7 @@ function ClearResult({ model }: { model: RowModel }) {
   if (!defenseType) return <span className="text-v2-fg-tertiary">–</span>;
   const score = draft.scores[defenseType] ?? null;
   if (score === null) return <span className="text-v2-fg-tertiary">–</span>;
-  const result = computeRaidClearResult(row.season.boss.uid, score);
+  const result = computeRaidClearResult(row.season, score);
   return <span>{result ? formatRaidClearResult(result.difficulty, result.clearTimeMs) : "–"}</span>;
 }
 

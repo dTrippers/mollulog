@@ -1,5 +1,16 @@
 import { describe, expect, it } from "@jest/globals";
-import { formatRaidSeasonPeriod } from "~/components/v2/features/raid-records/raid-record-format";
+import {
+  formatRaidClearResult,
+  formatRaidSeasonPeriod,
+} from "~/components/v2/features/raid-records/raid-record-format";
+
+describe("formatRaidClearResult", () => {
+  it("shows the difficulty and the clear time, or the difficulty alone when the time is unknown", () => {
+    expect(formatRaidClearResult("torment", 145_000)).toBe("토먼트 · 2:25.000");
+    expect(formatRaidClearResult("torment", null)).toBe("토먼트");
+    expect(formatRaidClearResult(null, null)).toBeNull();
+  });
+});
 
 describe("formatRaidSeasonPeriod", () => {
   it("puts the year on the start, and on the end only when it differs", () => {

@@ -56,6 +56,13 @@ single owner for commands and claim-to-evidence mapping.
   names its route action explicitly. Without one, React Router posts it to
   whichever page is current when it is sent, so a Sensei who leaves the page
   first loses the edit.
+- Does a screen that shows records saved on another screen, such as
+  relationship targets or favorited pickups, resolve them through the same
+  source as that screen, so no saved record loses its name or image? The
+  relationship calculator lists unreleased students too, so a summary of its
+  targets reads the student list with them. A pickup student's image comes
+  from its `imageUid`, with the `unlisted` image when it is null, never from
+  its favorite key.
 - Does a component that copies loader data into state still show revalidated
   data? Copy only what the screen edits locally, and refresh the copy whenever
   the loader data changes, not only when its list of keys does.
@@ -81,6 +88,14 @@ single owner for commands and claim-to-evidence mapping.
   domain parse functions rather than restated bounds? A value the screen accepts
   but the save rejects fails with an error the screen may not show, such as on
   a field that is hidden.
+- Does a screen or save reject a user's value by comparing it with catalog data
+  that can be wrong, such as a season's difficulty list from BAQL? Validation
+  against inaccurate data blocks real records. Check only what the value itself
+  rules out, such as its range.
+- Does a value derived from what the user entered claim only what the input
+  tells? Where a formula stops changing, such as a time score that bottoms out
+  at zero, one score stands for many clear times, so the screen omits the
+  derived value rather than showing the boundary as exact.
 - Does one user action that saves several parts write them in one update or
   transaction, so a failure cannot keep some parts and drop the others?
 - Does a save write only what the user changed? A combined save, such as a
@@ -122,6 +137,13 @@ single owner for commands and claim-to-evidence mapping.
   frame (`absolute inset-0`) instead of relying on `height: 100%`? Inside a
   table cell, WebKit resolves that percentage to the image's natural height, and
   `object-cover` then shows a magnified crop.
+- Does a control that opens content appear only once that content can be
+  shown? An expand button offered while its illustration was still loading
+  opened an empty dialog, and a later load failure removed the open dialog
+  with the button.
+- Is a viewer for images of different shapes sized to the image, and checked
+  with both a portrait and a wide one? A dialog sized for portrait
+  illustrations drew a wide one at a fraction of the screen.
 - Is a visually hidden table, such as a chart's text equivalent, hidden by
   `sr-only` on a wrapping element instead of on the `<table>`? Firefox applies a
   table's `overflow` and `clip-path` to the table box, which does not contain

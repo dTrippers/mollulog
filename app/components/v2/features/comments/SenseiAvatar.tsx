@@ -15,7 +15,8 @@ export function SenseiAvatar({
 }: {
   profileStudentId: string | null;
   labels?: readonly AccountLabel[] | readonly string[];
-  size?: "default" | "compact" | "post" | "header";
+  // "account" is the 더보기 account summary (48px).
+  size?: "default" | "compact" | "post" | "account" | "header";
 }) {
   const primary = getPrimaryAccountLabel(labels);
   const presentation = primary ? ACCOUNT_LABEL_PRESENTATIONS[primary] : null;
@@ -31,7 +32,15 @@ export function SenseiAvatar({
       <span
         className={cn(
           "flex items-center justify-center overflow-hidden rounded-full bg-v2-inset text-v2-fg-tertiary",
-          size === "compact" ? "size-6" : size === "post" ? "size-10" : size === "header" ? "size-14" : "size-8",
+          size === "compact"
+            ? "size-6"
+            : size === "post"
+              ? "size-10"
+              : size === "account"
+                ? "size-12"
+                : size === "header"
+                  ? "size-14"
+                  : "size-8",
         )}
       >
         {presentation?.profileImageUrl && showImage ? (
@@ -57,7 +66,13 @@ export function SenseiAvatar({
         ) : (
           <UserIcon
             className={
-              size === "compact" ? "size-3.5" : size === "post" ? "size-5" : size === "header" ? "size-6" : "size-4"
+              size === "compact"
+                ? "size-3.5"
+                : size === "post"
+                  ? "size-5"
+                  : size === "account" || size === "header"
+                    ? "size-6"
+                    : "size-4"
             }
             aria-hidden="true"
           />

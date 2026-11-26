@@ -47,6 +47,7 @@ export type RaidRecordScoreView = {
   // From the score and the season's boss; null without a score, for a boss the formula does not know, or for a score
   // no difficulty produces.
   difficulty: string | null;
+  // Also null when the difficulty is known but the score does not tell the time.
   clearTimeMs: number | null;
 };
 
@@ -92,7 +93,7 @@ export function toRaidRecordRowView(
   const scoreByDefenseType = new Map(shown.map((entry) => [entry.defenseType, entry]));
   const scores = season.scoreDefenseTypes.map(({ defenseType }): RaidRecordScoreView => {
     const entry = scoreByDefenseType.get(defenseType);
-    const result = entry ? computeRaidClearResult(season.boss.uid, entry.score) : null;
+    const result = entry ? computeRaidClearResult(season, entry.score) : null;
     return {
       defenseType,
       score: entry?.score ?? null,

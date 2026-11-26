@@ -6,11 +6,21 @@ import { RoundStudentImage } from "./RoundStudentImage";
 import { ResourceThumb } from "../resources/ResourceThumb";
 import { TooltipButton } from "../../primitives/TooltipButton";
 import { v2FocusRing } from "../../layout/styles";
-import { StudentStandingBackdrop } from "./StudentStandingBackdrop";
+import { StudentStandingBackdrop, StudentStandingExpandButton, useStudentStandingImage } from "./StudentStandingBackdrop";
 
 type Student = Pick<NonNullable<StudentHeaderQuery["student"]>, "club" | "catalog" | "character" | "studentVariant" | "interactionFurnitures">;
 
-export function StudentProfileFacts({ student, compact = false, standingUid }: { student: Student; compact?: boolean; standingUid?: string }) {
+export function StudentProfileFacts({
+  student,
+  compact = false,
+  standing,
+}: {
+  student: Student;
+  compact?: boolean;
+  // The student whose standing illustration sits beside the facts, with the name the expanded view is titled with.
+  standing?: { uid: string; name: string };
+}) {
+  const standingImage = useStudentStandingImage(standing?.uid ?? null);
   const profile = student.catalog?.profile;
   const facts = [
     ["동아리", student.club?.name],
@@ -23,9 +33,9 @@ export function StudentProfileFacts({ student, compact = false, standingUid }: {
   return (
     <section aria-label="프로필" className={cn("relative min-w-0 overflow-hidden rounded-lg bg-v2-surface p-v2-block-p", compact && "mt-0.5 -mb-1 px-v2-block-p py-3")}>
       {/* The compact panel is short, so the illustration spans its full height instead of only the facts. */}
-      {standingUid && compact ? <StudentStandingBackdrop uid={standingUid} className="absolute inset-y-0 right-0 w-[38%]" /> : null}
+      {compact ? <StudentStandingBackdrop image={standingImage} className="absolute inset-y-0 right-0 w-[38%]" /> : null}
       <div className="relative">
-        {standingUid && !compact ? <StudentStandingBackdrop uid={standingUid} className="absolute -top-v2-block-p right-[calc(-1*var(--spacing-v2-block-p))] bottom-0 w-[45%]" /> : null}
+        {!compact ? <StudentStandingBackdrop image={standingImage} className="absolute -top-v2-block-p right-[calc(-1*var(--spacing-v2-block-p))] bottom-0 w-[45%]" /> : null}
         <dl className={cn("relative w-[62%]", compact ? "grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-[13px] leading-5" : "flex flex-col gap-2.5 text-sm leading-[1.43]")}>
           {facts.map(([label, value]) => (
             <div key={label} className={compact ? "contents" : "min-w-0"}>
@@ -34,6 +44,10 @@ export function StudentProfileFacts({ student, compact = false, standingUid }: {
             </div>
           ))}
         </dl>
+        {/* In the bottom-right corner of the illustration, where it fades out, so the button never covers the halo above the head. */}
+        {standing && !compact ? (
+          <StudentStandingExpandButton image={standingImage} name={standing.name} className="absolute right-[calc(0.5rem-var(--spacing-v2-block-p))] bottom-0" />
+        ) : null}
       </div>
 
       {outfits.length > 0 || student.interactionFurnitures.length > 0 ? (
@@ -83,6 +97,10 @@ export function StudentProfileFacts({ student, compact = false, standingUid }: {
         </div>
       ) : null}
       </div>
+      ) : null}
+
+      {standing && compact ? (
+        <StudentStandingExpandButton image={standingImage} name={standing.name} className="absolute right-2 bottom-2" />
       ) : null}
     </section>
   );
