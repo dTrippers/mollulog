@@ -9,7 +9,7 @@ import {
   type WalkthroughUnit,
 } from "~/domain/walkthrough-timeline";
 import { cn } from "~/lib/utils";
-import { EmptyPartySlot, PartySlotGroups } from "../raid-records/PartySlotGroups";
+import { EmptyPartySlot, PartySlotGroups, partySlotWidthClassName } from "../raid-records/PartySlotGroups";
 import { formatRaidStudentName, type RaidPartyStudent } from "../raid-records/raid-party-student";
 import { RoundStudentImage } from "../students/RoundStudentImage";
 import { StudentThumb } from "../students/StudentThumb";
@@ -102,7 +102,7 @@ export function WalkthroughPartyThumbs({
     ),
   );
   const slots = Array.from({ length: partySize }, (_, slot) => slot);
-  const thumbWidth = size === "small" ? "w-12" : groupLabels ? "w-10 sm:w-16" : "w-11 sm:w-16";
+  const thumbWidth = size === "small" ? "w-12" : groupLabels ? partySlotWidthClassName : "w-11 sm:w-16";
   const renderThumb = (unit: WalkthroughUnit & { studentUid: string }) => {
     const student = studentsByUid.get(unit.studentUid);
     const { name, variant } = splitVisibleStudentName(student?.name ?? UNKNOWN_STUDENT_NAME);

@@ -2,7 +2,7 @@ import { RAID_RECORD_LIMITS, type RaidRecordParty } from "~/domain/raid-record";
 import { StudentThumb } from "../students/StudentThumb";
 import { splitVisibleStudentName } from "../students/split-student-name";
 import { PartyGrowthReadOnlyTable } from "./PartyGrowthTable";
-import { EmptyPartySlot, PartySlotGroups } from "./PartySlotGroups";
+import { EmptyPartySlot, PartySlotGroups, partySlotWidthClassName } from "./PartySlotGroups";
 import type { RaidPartyStudent } from "./raid-party-student";
 
 // A saved party, read-only: its slots and the growth values recorded with it.
@@ -21,7 +21,7 @@ export function RaidPartyView({
     const student = studentsByUid.get(unit.studentUid);
     const { name, variant } = splitVisibleStudentName(student?.name ?? "알 수 없는 학생");
     return (
-      <li key={unit.slot} className="w-10 sm:w-16">
+      <li key={unit.slot} className={partySlotWidthClassName}>
         <StudentThumb
           studentUid={unit.studentUid}
           name={name}
@@ -34,7 +34,7 @@ export function RaidPartyView({
   };
   const renderSlot = (slot: number) => {
     const unit = unitsBySlot.get(slot);
-    return unit ? renderThumb(unit) : <EmptyPartySlot key={slot} className="w-10 sm:w-16" />;
+    return unit ? renderThumb(unit) : <EmptyPartySlot key={slot} className={partySlotWidthClassName} />;
   };
   return (
     <section aria-label={title} className="flex min-w-0 flex-col gap-3 rounded-lg border border-v2-divider p-3.5">

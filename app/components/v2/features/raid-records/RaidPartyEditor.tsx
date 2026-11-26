@@ -18,7 +18,7 @@ import { RoundStudentImage } from "../students/RoundStudentImage";
 import { StudentThumb } from "../students/StudentThumb";
 import { splitVisibleStudentName } from "../students/split-student-name";
 import { PartyGrowthTable } from "./PartyGrowthTable";
-import { PartySlotGroups } from "./PartySlotGroups";
+import { PartySlotGroups, partySlotWidthClassName } from "./PartySlotGroups";
 import { formatRaidStudentName, type RaidPartyStudent } from "./raid-party-student";
 import {
   fillRaidFormUnit,
@@ -354,7 +354,7 @@ export function PartySlots<P extends Pick<RaidFormParty, "slots">>({
     const studentName = unit ? (student ? formatRaidStudentName(student.name) : "알 수 없는 학생") : null;
     return (
       // Narrower portraits on a phone, so a six-student party fits one row inside a card.
-      <li key={slot} className="relative flex w-10 flex-col sm:w-16">
+      <li key={slot} className={cn("relative flex flex-col", partySlotWidthClassName)}>
         <button
           ref={(element) => {
             slotRefs.current[slot] = element;
