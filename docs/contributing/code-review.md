@@ -42,6 +42,13 @@ single owner for commands and claim-to-evidence mapping.
 - Are sort/display fields such as `createdAt` and `updatedAt` present where the
   behavior requires them?
 - Are retry, draft, and save states preserved according to the changed flow?
+  A failed save keeps the draft it started from. A draft keeps every value the
+  editor can hold, including what the save still refuses (an unfinished step, a
+  text over its limit), so reading it back never drops the whole draft. The
+  server validator accepts every structure the editor can produce.
+- Does text cut to a length, such as a preview, cut by code point
+  (`Array.from`), not by UTF-16 index? An emoji split at the cut leaves a lone
+  surrogate, which PostgreSQL's `jsonb` rejects.
 - Can a save overwrite a newer value? A screen that saves values it read earlier
   checks that the record has not changed since, not only that it still exists.
   An autosave compares a new value with the newest one already sent or waiting,
