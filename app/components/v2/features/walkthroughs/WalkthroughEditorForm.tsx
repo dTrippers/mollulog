@@ -17,7 +17,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useBlocker, useNavigation, useSubmit } from "react-router";
+import { useBlocker, useLocation, useNavigation, useSubmit } from "react-router";
 import { type GuideBody, InvalidGuideBodyError, isGuideBodyEmpty, parseGuideBody } from "~/domain/guide-body";
 import type { RaidRecordSnapshot } from "~/domain/raid-record";
 import {
@@ -198,6 +198,7 @@ export function WalkthroughEditorForm({
   const id = useId();
   const submit = useSubmit();
   const navigation = useNavigation();
+  const editorPathname = useLocation().pathname;
   const [title, setTitle] = useState(initialValue.title);
   const [body, setBody] = useState<GuideBody | null>(initialValue.body);
   // The editor takes its content once; a restored draft remounts it with the draft's body.
@@ -269,6 +270,21 @@ export function WalkthroughEditorForm({
   useEffect(() => {
     if (navigation.state === "idle") savingRef.current = false;
   }, [navigation.state]);
+
+  // The draft stays while a save is in flight and goes only once the save has left this page for the guide. A save
+  // that fails keeps the page, or shows the error screen on the same path, and the draft with it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the cleanup runs once, when the editor unmounts
+  useEffect(
+    () => () => {
+      if (!savingRef.current || window.location.pathname === editorPathname) return;
+      try {
+        localStorage.removeItem(draftStorageKey);
+      } catch {
+        // Storage can be unavailable; there is no draft to clear then.
+      }
+    },
+    [],
+  );
 
   // A save that comes back to this page failed, so the draft it cleared is written again: the effect also runs when the
   // navigation turns idle.
@@ -393,7 +409,10 @@ export function WalkthroughEditorForm({
     }
     savingRef.current = true;
     try {
-      localStorage.removeItem(draftStorageKey);
+      localStorage.setItem(
+        draftStorageKey,
+        JSON.stringify({ version: DRAFT_VERSION, savedAt: Date.now(), ...current }),
+      );
     } catch {
       // The save goes on without the draft storage.
     }

@@ -132,6 +132,7 @@ describe("parseGuideBody", () => {
       list = { type: "bulletList", content: [{ type: "listItem", content: [paragraph("x"), list] }] };
     }
     expect(() => parseGuideBody(doc(list))).toThrow(InvalidGuideBodyError);
+    expect(parseGuideBody(doc(list), { limits: false })).toEqual(doc(list));
   });
 
   it("accepts any block after a list item's first paragraph, as the editor's list item does", () => {

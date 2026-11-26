@@ -1,5 +1,5 @@
 import { BoldIcon, LinkIcon, ListBulletIcon, MinusIcon, NumberedListIcon, PlayIcon } from "@heroicons/react/16/solid";
-import { mergeAttributes, Node } from "@tiptap/core";
+import { Extension, mergeAttributes, Node } from "@tiptap/core";
 import Mention from "@tiptap/extension-mention";
 import {
   EditorContent,
@@ -97,6 +97,25 @@ function YouTubeView({ node, selected }: ReactNodeViewProps) {
     </NodeViewWrapper>
   );
 }
+
+// Tab nests a list item one level deeper, up to the list depth a saved body allows. Past it, Tab does nothing rather
+// than build a list the save refuses.
+const ListDepthLimit = Extension.create({
+  name: "listDepthLimit",
+  priority: 1000,
+  addKeyboardShortcuts() {
+    return {
+      Tab: ({ editor }) => {
+        const { $from } = editor.state.selection;
+        let depth = 0;
+        for (let level = $from.depth; level > 0; level -= 1) {
+          if ($from.node(level).type.name === "listItem") depth += 1;
+        }
+        return depth >= GUIDE_BODY_LIMITS.listDepth;
+      },
+    };
+  },
+});
 
 const YouTube = Node.create({
   name: "youtube",
@@ -453,6 +472,7 @@ export default function GuideBodyEditor({
           HTMLAttributes: { target: "_blank", rel: "nofollow noopener noreferrer" },
         },
       }),
+      ListDepthLimit,
       YouTube,
       GuideMention.configure({
         renderText: ({ node }) => {

@@ -93,7 +93,8 @@ export function parseYouTubeVideoId(value: string): string | null {
   return id && YOUTUBE_VIDEO_ID.test(id) ? id : null;
 }
 
-// `limited` is false for a local draft, which keeps a body over the limits so the Sensei can shorten it.
+// `limited` is false for a local draft, which keeps a body over the limits, list depth included, so the Sensei can fix
+// it.
 type ParseState = { characters: number; nodes: number; limited: boolean };
 
 function countNode(state: ParseState) {
@@ -178,7 +179,7 @@ function parseParagraph(value: Record<string, unknown>, state: ParseState): Guid
 }
 
 function parseList(value: Record<string, unknown>, state: ParseState, depth: number): GuideBodyList {
-  if (depth > GUIDE_BODY_LIMITS.listDepth) unsupported();
+  if (state.limited && depth > GUIDE_BODY_LIMITS.listDepth) unsupported();
   if (!Array.isArray(value.content) || value.content.length === 0) unsupported();
   const items = value.content.map((item): GuideBodyListItem => {
     if (!isObject(item) || item.type !== "listItem") unsupported();
