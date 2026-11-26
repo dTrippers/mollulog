@@ -97,6 +97,16 @@ describe("parseWalkthroughTimelineDocument", () => {
     }
   });
 
+  it("reads a draft with a step whose skill is not chosen or written yet", () => {
+    const document = validDocument();
+    document.parties[0].steps = [
+      { uid: "step-empty", order: 0, kind: "actions", actions: [] },
+      { uid: "step-text", order: 1, kind: "actions", actions: [{ kind: "free_text", text: "" }] },
+    ];
+    expect(() => parseWalkthroughTimelineDocument(document)).toThrow(InvalidWalkthroughTimelineDocumentError);
+    expect(parseWalkthroughTimelineDocument(document, { draft: true })).toEqual(document);
+  });
+
   it("rejects unknown schema versions instead of applying a fallback", () => {
     expect(() => parseWalkthroughTimelineDocument({ ...validDocument(), schemaVersion: 999 })).toThrow(
       InvalidWalkthroughTimelineDocumentError,

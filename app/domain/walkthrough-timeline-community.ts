@@ -24,11 +24,12 @@ type WalkthroughTimelineCommunityPostBlocks = Array<
 // The feed shows the start of the body as plain text, as it showed the description before.
 export const WALKTHROUGH_COMMUNITY_TEXT_LENGTH = 300;
 
+// Cuts by code point, so an emoji is never split into a lone surrogate, which PostgreSQL's jsonb rejects.
 export function walkthroughCommunityText(bodyText: string): string {
-  const text = bodyText.trim();
-  return text.length > WALKTHROUGH_COMMUNITY_TEXT_LENGTH
-    ? `${text.slice(0, WALKTHROUGH_COMMUNITY_TEXT_LENGTH).trimEnd()}…`
-    : text;
+  const characters = Array.from(bodyText.trim());
+  return characters.length > WALKTHROUGH_COMMUNITY_TEXT_LENGTH
+    ? `${characters.slice(0, WALKTHROUGH_COMMUNITY_TEXT_LENGTH).join("").trimEnd()}…`
+    : characters.join("");
 }
 
 export function createWalkthroughTimelineCommunityPostBlocks({

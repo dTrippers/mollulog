@@ -147,7 +147,7 @@ function assertMarker(value: unknown, path: string): asserts value is TimelineMa
   }
 }
 
-function assertAction(value: unknown, path: string): asserts value is TimelineAction {
+function assertAction(value: unknown, path: string, draft: boolean): asserts value is TimelineAction {
   if (!isObject(value)) {
     throw new InvalidWalkthroughTimelineDocumentError(`${path} 값이 올바른 action이 아니에요.`);
   }
@@ -165,12 +165,12 @@ function assertAction(value: unknown, path: string): asserts value is TimelineAc
   if ((value.kind === "student_ex" || value.kind === "normal_skill") && !value.studentUid) {
     throw new InvalidWalkthroughTimelineDocumentError(`${path}.studentUid 값이 필요해요.`);
   }
-  if ((value.kind === "free_text" || value.kind === "boss_gimmick") && !value.text) {
+  if (!draft && (value.kind === "free_text" || value.kind === "boss_gimmick") && !value.text) {
     throw new InvalidWalkthroughTimelineDocumentError(`${path}.text 값이 필요해요.`);
   }
 }
 
-function assertStep(value: unknown, path: string): asserts value is TimelineStep {
+function assertStep(value: unknown, path: string, draft: boolean): asserts value is TimelineStep {
   if (!isObject(value)) {
     throw new InvalidWalkthroughTimelineDocumentError(`${path} 값이 올바른 step이 아니에요.`);
   }
@@ -191,9 +191,9 @@ function assertStep(value: unknown, path: string): asserts value is TimelineStep
     );
   }
   value.actions.forEach((action, index) => {
-    assertAction(action, `${path}.actions[${index}]`);
+    assertAction(action, `${path}.actions[${index}]`, draft);
   });
-  if (value.kind === "actions" && value.actions.length === 0) {
+  if (!draft && value.kind === "actions" && value.actions.length === 0) {
     throw new InvalidWalkthroughTimelineDocumentError(`${path}.actions에 실행 내용이 필요해요.`);
   }
   if (value.note !== undefined && typeof value.note !== "string") {
@@ -209,6 +209,7 @@ function assertParty(
   path: string,
   partySize: 6 | 10,
   schemaVersion: typeof LEGACY_WALKTHROUGH_TIMELINE_SCHEMA_VERSION | typeof WALKTHROUGH_TIMELINE_SCHEMA_VERSION,
+  draft: boolean,
 ): asserts value is WalkthroughParty {
   if (!isObject(value)) {
     throw new InvalidWalkthroughTimelineDocumentError(`${path} 값이 올바른 party가 아니에요.`);
@@ -280,11 +281,16 @@ function assertParty(
     );
   }
   value.steps.forEach((step, index) => {
-    assertStep(step, `${path}.steps[${index}]`);
+    assertStep(step, `${path}.steps[${index}]`, draft);
   });
 }
 
-export function parseWalkthroughTimelineDocument(value: unknown): WalkthroughTimelineDocument {
+// `draft: true` reads a local draft: it keeps a step whose skill is not chosen yet and a skill whose text is not written
+// yet, which the save rules then report. Stored documents and save requests are read without it.
+export function parseWalkthroughTimelineDocument(
+  value: unknown,
+  { draft = false }: { draft?: boolean } = {},
+): WalkthroughTimelineDocument {
   if (!isObject(value) || value.type !== "walkthrough_timeline") {
     throw new InvalidWalkthroughTimelineDocumentError("walkthrough_timeline 문서가 아니에요.");
   }
@@ -322,7 +328,7 @@ export function parseWalkthroughTimelineDocument(value: unknown): WalkthroughTim
     );
   }
   value.parties.forEach((party, index) => {
-    assertParty(party, `parties[${index}]`, partySize, value.schemaVersion as 1 | 2);
+    assertParty(party, `parties[${index}]`, partySize, value.schemaVersion as 1 | 2, draft);
   });
 
   if (value.schemaVersion === LEGACY_WALKTHROUGH_TIMELINE_SCHEMA_VERSION) {

@@ -1,4 +1,4 @@
-import type { GuideBody, GuideBodyInline, GuideBodyListItemBlock } from "~/domain/guide-body";
+import type { GuideBody, GuideBodyInline } from "~/domain/guide-body";
 import type {
   WalkthroughStudentNameLookup,
   WalkthroughTimelineWriteInput,
@@ -53,7 +53,7 @@ function inlineStudentUids(content: GuideBodyInline[] | undefined): string[] {
   );
 }
 
-function blockStudentUids(block: GuideBody["content"][number] | GuideBodyListItemBlock): string[] {
+function blockStudentUids(block: GuideBody["content"][number]): string[] {
   if (block.type === "paragraph" || block.type === "heading") return inlineStudentUids(block.content);
   if (block.type === "bulletList" || block.type === "orderedList") {
     return block.content.flatMap((item) => item.content.flatMap(blockStudentUids));
@@ -158,6 +158,9 @@ export function walkthroughStudentNameLookup(
 
 // The write and edit form's fields as the repository takes them. A malformed field is a validation error, not a crash.
 export function parseWalkthroughFormData(formData: FormData): WalkthroughTimelineWriteInput {
+  // A page opened before this version sends a plain-text description and no body. Saving it would empty the body, so
+  // the Sensei reloads into the current editor, which restores the draft that page kept.
+  if (!formData.has("body")) throw new ActionValidationError("페이지를 새로고침한 뒤 다시 저장해 주세요.");
   let document: WalkthroughTimelineDocument;
   let body: unknown;
   try {

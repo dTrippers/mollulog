@@ -92,14 +92,7 @@ function renderList(list: GuideBodyList, context: GuideMentionContext, key: numb
   const items = list.content.map((item, itemIndex) => (
     // biome-ignore lint/suspicious/noArrayIndexKey: list items have no ids and keep their order
     <li key={itemIndex}>
-      {item.content.map((block: GuideBodyListItemBlock, blockIndex) =>
-        block.type === "paragraph" ? (
-          // biome-ignore lint/suspicious/noArrayIndexKey: blocks have no ids and keep their order
-          <p key={blockIndex}>{renderInline(block.content, context)}</p>
-        ) : (
-          renderList(block, context, blockIndex)
-        ),
-      )}
+      {item.content.map((block: GuideBodyListItemBlock, blockIndex) => renderBlock(block, context, blockIndex))}
     </li>
   ));
   return list.type === "bulletList" ? (

@@ -24,12 +24,13 @@ export type GuideBodyInline =
   | { type: "hardBreak" }
   | { type: "mention"; attrs: { kind: GuideMentionKind; id: string } };
 
+// A list item starts with a paragraph and may hold any block after it, as the editor's list item does.
 export type GuideBodyListItem = { type: "listItem"; content: GuideBodyListItemBlock[] };
 export type GuideBodyList =
   | { type: "bulletList"; content: GuideBodyListItem[] }
   | { type: "orderedList"; attrs?: { start: number }; content: GuideBodyListItem[] };
 export type GuideBodyParagraph = { type: "paragraph"; content?: GuideBodyInline[] };
-export type GuideBodyListItemBlock = GuideBodyParagraph | GuideBodyList;
+export type GuideBodyListItemBlock = GuideBodyBlock;
 
 export type GuideBodyBlock =
   | GuideBodyParagraph
@@ -92,18 +93,19 @@ export function parseYouTubeVideoId(value: string): string | null {
   return id && YOUTUBE_VIDEO_ID.test(id) ? id : null;
 }
 
-type ParseState = { characters: number; nodes: number };
+// `limited` is false for a local draft, which keeps a body over the limits so the Sensei can shorten it.
+type ParseState = { characters: number; nodes: number; limited: boolean };
 
 function countNode(state: ParseState) {
   state.nodes += 1;
-  if (state.nodes > GUIDE_BODY_LIMITS.nodes) {
+  if (state.limited && state.nodes > GUIDE_BODY_LIMITS.nodes) {
     throw new InvalidGuideBodyError("본문이 너무 길어요.");
   }
 }
 
 function countCharacters(state: ParseState, count: number) {
   state.characters += count;
-  if (state.characters > GUIDE_BODY_LIMITS.characters) {
+  if (state.limited && state.characters > GUIDE_BODY_LIMITS.characters) {
     throw new InvalidGuideBodyError(
       `본문은 ${GUIDE_BODY_LIMITS.characters.toLocaleString("ko-KR")}자까지 쓸 수 있어요.`,
     );
@@ -182,12 +184,9 @@ function parseList(value: Record<string, unknown>, state: ParseState, depth: num
     if (!isObject(item) || item.type !== "listItem") unsupported();
     countNode(state);
     if (!Array.isArray(item.content) || item.content.length === 0) unsupported();
-    const content = item.content.map((block): GuideBodyListItemBlock => {
-      if (!isObject(block)) unsupported();
-      countNode(state);
-      if (block.type === "paragraph") return parseParagraph(block, state);
-      if (block.type === "bulletList" || block.type === "orderedList") return parseList(block, state, depth + 1);
-      return unsupported();
+    const content = item.content.map((block, index): GuideBodyListItemBlock => {
+      if (index === 0 && (!isObject(block) || block.type !== "paragraph")) unsupported();
+      return parseBlock(block, state, depth);
     });
     return { type: "listItem", content };
   });
@@ -199,7 +198,8 @@ function parseList(value: Record<string, unknown>, state: ParseState, depth: num
     : { type: "orderedList", content: items };
 }
 
-function parseBlock(value: unknown, state: ParseState): GuideBodyBlock {
+// `depth` is the number of lists around the block.
+function parseBlock(value: unknown, state: ParseState, depth = 0): GuideBodyBlock {
   if (!isObject(value)) unsupported();
   countNode(state);
   switch (value.type) {
@@ -212,7 +212,7 @@ function parseBlock(value: unknown, state: ParseState): GuideBodyBlock {
     }
     case "bulletList":
     case "orderedList":
-      return parseList(value, state, 1);
+      return parseList(value, state, depth + 1);
     case "horizontalRule":
       return { type: "horizontalRule" };
     case "youtube": {
@@ -229,17 +229,18 @@ function parseBlock(value: unknown, state: ParseState): GuideBodyBlock {
 }
 
 // Checks a body against the allowlist and returns a copy with only the allowlisted fields. Returns null for a body
-// with no content, so an empty editor stores nothing.
-export function parseGuideBody(value: unknown): GuideBody | null {
+// with no content, so an empty editor stores nothing. A local draft is read with `limits: false`: it keeps a body the
+// Sensei has not shortened yet, and the save checks the limits.
+export function parseGuideBody(value: unknown, { limits = true }: { limits?: boolean } = {}): GuideBody | null {
   if (value === null || value === undefined) return null;
   if (!isObject(value) || value.type !== "doc" || !Array.isArray(value.content)) unsupported();
-  const state: ParseState = { characters: 0, nodes: 0 };
+  const state: ParseState = { characters: 0, nodes: 0, limited: limits };
   const content = value.content.map((block) => parseBlock(block, state));
   const body: GuideBody = { type: "doc", content };
   return isGuideBodyEmpty(body) ? null : body;
 }
 
-function isBlockEmpty(block: GuideBodyBlock | GuideBodyListItemBlock): boolean {
+function isBlockEmpty(block: GuideBodyBlock): boolean {
   if (block.type === "paragraph" || block.type === "heading") return !block.content?.length;
   return false;
 }
@@ -260,10 +261,12 @@ function inlinePlainText(content: GuideBodyInline[] | undefined, label: GuideMen
     .join("");
 }
 
-function listPlainText(list: GuideBodyList, label: GuideMentionLabelResolver): string[] {
-  return list.content.flatMap((item) =>
-    item.content.flatMap((block) => (block.type === "paragraph" ? [inlinePlainText(block.content, label)] : listPlainText(block, label))),
-  );
+function blockPlainText(block: GuideBodyBlock, label: GuideMentionLabelResolver): string[] {
+  if (block.type === "paragraph" || block.type === "heading") return [inlinePlainText(block.content, label)];
+  if (block.type === "bulletList" || block.type === "orderedList") {
+    return block.content.flatMap((item) => item.content.flatMap((child) => blockPlainText(child, label)));
+  }
+  return [];
 }
 
 // The body as plain text, one line per paragraph, heading, or list item, with mentions as their current names. Videos and
@@ -271,11 +274,7 @@ function listPlainText(list: GuideBodyList, label: GuideMentionLabelResolver): s
 export function guideBodyPlainText(body: GuideBody | null, label: GuideMentionLabelResolver): string {
   if (!body) return "";
   return body.content
-    .flatMap((block) => {
-      if (block.type === "paragraph" || block.type === "heading") return [inlinePlainText(block.content, label)];
-      if (block.type === "bulletList" || block.type === "orderedList") return listPlainText(block, label);
-      return [];
-    })
+    .flatMap((block) => blockPlainText(block, label))
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .join("\n");

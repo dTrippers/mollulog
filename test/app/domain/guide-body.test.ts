@@ -134,6 +134,32 @@ describe("parseGuideBody", () => {
     expect(() => parseGuideBody(doc(list))).toThrow(InvalidGuideBodyError);
   });
 
+  it("accepts any block after a list item's first paragraph, as the editor's list item does", () => {
+    const item = {
+      type: "listItem",
+      content: [
+        paragraph("영상"),
+        { type: "youtube", attrs: { videoId: "dQw4w9WgXcQ" } },
+        { type: "horizontalRule" },
+        { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "소제목" }] },
+      ],
+    };
+    const body = parseGuideBody(doc({ type: "bulletList", content: [item] }));
+    expect(body).toEqual(doc({ type: "bulletList", content: [item] }));
+    expect(guideBodyPlainText(body, () => "")).toBe("영상\n소제목");
+    expect(() =>
+      parseGuideBody(
+        doc({ type: "bulletList", content: [{ type: "listItem", content: [{ type: "horizontalRule" }] }] }),
+      ),
+    ).toThrow(InvalidGuideBodyError);
+  });
+
+  it("keeps a draft body over the limits", () => {
+    const body = doc(paragraph("가".repeat(GUIDE_BODY_LIMITS.characters + 1)));
+    expect(() => parseGuideBody(body)).toThrow(InvalidGuideBodyError);
+    expect(parseGuideBody(body, { limits: false })).toEqual(body);
+  });
+
   it("accepts the shape the description backfill writes", () => {
     // The one-off description copy writes one paragraph per line, an empty line as an empty paragraph, and each
     // http(s) URL as a link on its own text node.

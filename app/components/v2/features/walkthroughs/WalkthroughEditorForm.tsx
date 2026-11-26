@@ -99,7 +99,8 @@ function plainTextBody(text: string): GuideBody | null {
   return isGuideBodyEmpty(body) ? null : body;
 }
 
-// Reads a saved draft back. A draft that no longer parses is dropped.
+// Reads a saved draft back. A draft keeps what the save would still refuse, such as a step with no skill yet or a body
+// over the limits, so the Sensei can finish it. A draft that no longer parses at all is dropped.
 function readDraft(key: string, fallback: WalkthroughEditorValue): WalkthroughEditorValue | null {
   const stored = localStorage.getItem(key);
   if (!stored) return null;
@@ -108,13 +109,13 @@ function readDraft(key: string, fallback: WalkthroughEditorValue): WalkthroughEd
   if (typeof draft.title !== "string" || !isWalkthroughTimelineVisibility(draft.visibility)) {
     throw new Error("invalid timeline draft");
   }
-  const document = parseWalkthroughTimelineDocument(draft.document);
+  const document = parseWalkthroughTimelineDocument(draft.document, { draft: true });
   const body =
     draft.version === 1
       ? typeof draft.description === "string"
         ? plainTextBody(draft.description)
         : fallback.body
-      : parseGuideBody(draft.body);
+      : parseGuideBody(draft.body, { limits: false });
   return {
     title: draft.title.slice(0, TITLE_MAX_LENGTH),
     body,
@@ -269,8 +270,10 @@ export function WalkthroughEditorForm({
     if (navigation.state === "idle") savingRef.current = false;
   }, [navigation.state]);
 
+  // A save that comes back to this page failed, so the draft it cleared is written again: the effect also runs when the
+  // navigation turns idle.
   useEffect(() => {
-    if (!draftReady || savingRef.current) return;
+    if (!draftReady || savingRef.current || navigation.state !== "idle") return;
     const timeout = window.setTimeout(() => {
       try {
         if (!hasChanges) localStorage.removeItem(draftStorageKey);
@@ -284,7 +287,7 @@ export function WalkthroughEditorForm({
       }
     }, 300);
     return () => window.clearTimeout(timeout);
-  }, [current, draftReady, draftStorageKey, hasChanges]);
+  }, [current, draftReady, draftStorageKey, hasChanges, navigation.state]);
 
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
