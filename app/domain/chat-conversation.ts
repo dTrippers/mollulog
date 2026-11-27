@@ -13,8 +13,9 @@ import {
 // The conversation list shows conversations with a message in this many days. Older conversations stay stored.
 export const CHAT_CONVERSATION_LIST_DAYS = 30;
 export const CHAT_TITLE_CODE_POINTS = 100;
-// AL-1S stops a run after 45 seconds. A message still pending after this window lost its request and is interrupted.
-export const CHAT_PENDING_STALE_MS = 2 * 60 * 1000;
+// AL-1S stops a run after 120 seconds (the claude-haiku-5-5 run budget). A message still pending after this window
+// lost its request and is interrupted.
+export const CHAT_PENDING_STALE_MS = 3 * 60 * 1000;
 
 // Error codes the chat action can return. Every code from `rate_limited` down to `consent_required` can also be
 // stored on a message; `network` exists only on the client.
