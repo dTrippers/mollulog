@@ -314,10 +314,9 @@ export const pgTimelineContentForecastStudentsTable = pgTable(
     rerun: boolean().notNull().default(false),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
-    timelineContentRecruitmentGroupId: integer("timeline_content_recruitment_group_id").references(
-      () => pgTimelineContentRecruitmentGroupsTable.id,
-      { onDelete: "cascade" },
-    ),
+    // The `id` of a `timeline_content_recruitment_groups` row, without a foreign key: the code that deletes a group
+    // deletes its forecast students.
+    timelineContentRecruitmentGroupId: integer("timeline_content_recruitment_group_id"),
     pickup: boolean().notNull().default(true),
   },
   (table) => [
