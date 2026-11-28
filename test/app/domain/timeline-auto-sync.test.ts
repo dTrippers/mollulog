@@ -34,6 +34,7 @@ function row(overrides: Partial<TimelineAutoSyncExistingRow> = {}): TimelineAuto
     endless: false,
     raidType: null,
     jpRaidSeasonIndex: null,
+    glRaidSeasonIndex: null,
     ...overrides,
   };
 }
@@ -46,6 +47,7 @@ function raidCandidate(overrides: Partial<TimelineAutoSyncCandidate> = {}): Time
     contentEndAt: toUtcIso("2027-01-11T19:00:00Z"),
     create: { uid: "gl_unlimit_30", nameI18n: { ko: "호크마" }, confirmed: false },
     jpRaidSeason: { raidType: "unlimit", seasonIndex: 30 },
+    glRaidSeasonIndex: 30,
     ...overrides,
   });
 }
@@ -59,6 +61,7 @@ function raidRow(overrides: Partial<TimelineAutoSyncExistingRow> = {}): Timeline
     endAt: toUtcIso("2027-01-11T19:00:00Z"),
     raidType: "unlimit",
     jpRaidSeasonIndex: 30,
+    glRaidSeasonIndex: 30,
     ...overrides,
   });
 }
@@ -91,6 +94,7 @@ describe("planTimelineAutoSync", () => {
         endless: false,
         raidType: null,
         jpRaidSeasonIndex: null,
+        glRaidSeasonIndex: null,
       },
     ]);
     expect(plan.updates).toEqual([]);
@@ -397,8 +401,57 @@ describe("planTimelineAutoSync", () => {
           endless: false,
           raidType: "unlimit",
           jpRaidSeasonIndex: 30,
+          glRaidSeasonIndex: 30,
         },
       ]);
+    });
+
+    it("copies the GL season number into a future row whose number differs or is missing, and only then", () => {
+      const update = (glRaidSeasonIndex: number | null) =>
+        planTimelineAutoSync("raid", [raidCandidate()], [raidRow({ glRaidSeasonIndex })], NOW, RAID_POLICY).updates;
+
+      expect(update(null)).toEqual([
+        {
+          uid: "unlimit_30",
+          match: { kind: "jpRaidSeason", contentType: "raid", raidType: "unlimit", seasonIndex: 30 },
+          readSchedule: {
+            startAt: toUtcIso("2026-12-16T02:00:00Z"),
+            endAt: toUtcIso("2027-01-11T19:00:00Z"),
+            endless: false,
+          },
+          startAt: toUtcIso("2026-12-16T02:00:00Z"),
+          endAt: toUtcIso("2027-01-11T19:00:00Z"),
+          endless: false,
+          glRaidSeasonIndex: 30,
+        },
+      ]);
+      expect(update(29)).toEqual([expect.objectContaining({ uid: "unlimit_30", glRaidSeasonIndex: 30 })]);
+      expect(update(30)).toEqual([]);
+    });
+
+    it("never writes the GL season number into a started row", () => {
+      const plan = planTimelineAutoSync(
+        "raid",
+        [raidCandidate({ startAt: toUtcIso("2026-10-01T02:00:00Z") })],
+        [raidRow({ startAt: toUtcIso("2026-10-01T02:00:00Z"), glRaidSeasonIndex: null })],
+        NOW,
+        RAID_POLICY,
+      );
+
+      expect(plan.updates).toEqual([]);
+    });
+
+    it("leaves the GL season number alone for a candidate that carries none", () => {
+      const { glRaidSeasonIndex: _omitted, ...withoutNumber } = raidCandidate();
+      const plan = planTimelineAutoSync(
+        "raid",
+        [withoutNumber],
+        [raidRow({ glRaidSeasonIndex: null })],
+        NOW,
+        RAID_POLICY,
+      );
+
+      expect(plan.updates).toEqual([]);
     });
 
     it("creates nothing while a future raid row has no JP season, but still updates matched rows", () => {

@@ -39,7 +39,8 @@ jest.mock("~/models/raid", () => ({
 jest.mock("~/models/timeline-content.server", () => ({
   getTimelineContentsByContentTypes: jest.fn(),
   // Empty stubs for other exports imported from the same module by content.ts.
-  getFutureRaidContents: jest.fn(),
+  // No raid row has a forecast season, so the Korean-server season list is BAQL's gl list.
+  getFutureRaidRows: jest.fn(async () => []),
   getTimelineContents: jest.fn(),
 }));
 

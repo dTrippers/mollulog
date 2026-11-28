@@ -42,6 +42,7 @@ function raidCreate(overrides: Partial<TimelineAutoSyncCreate> = {}): TimelineAu
     endless: false,
     raidType: "unlimit",
     jpRaidSeasonIndex: 32,
+    glRaidSeasonIndex: 32,
     ...overrides,
   };
 }
@@ -91,6 +92,71 @@ describe("applyPostgresTimelineAutoSyncPlan", () => {
       false,
     ]);
     expect(update?.text).not.toContain("confirmed");
+  });
+
+  it("writes a raid row's GL season number only when the plan carries one", async () => {
+    const { options, statements } = recordingClient();
+    const update = {
+      uid: "unlimit_30",
+      startAt: toUtcIso("2099-12-16T02:00:00Z"),
+      endAt: toUtcIso("2100-01-11T19:00:00Z"),
+      endless: false,
+      match: { kind: "jpRaidSeason", contentType: "raid", raidType: "unlimit", seasonIndex: 30 },
+      readSchedule: {
+        startAt: toUtcIso("2099-12-16T02:00:00Z"),
+        endAt: toUtcIso("2100-01-11T19:00:00Z"),
+        endless: false,
+      },
+    } as const;
+
+    await applyPostgresTimelineAutoSyncPlan(
+      env,
+      {
+        updateStartedRows: false,
+        matchBy: "jpRaidSeason",
+        creates: [],
+        updates: [
+          { ...update, glRaidSeasonIndex: 30 },
+          { ...update, uid: "unlimit_31" },
+        ],
+      },
+      NOW,
+      options,
+    );
+
+    const updates = statements().filter((statement) => statement.text.startsWith("update"));
+    expect(updates[0]?.text).toContain(
+      `set "start_at" = $1, "end_at" = $2, "endless" = $3, "synced_at" = $4, "gl_raid_season_index" = $5,`,
+    );
+    expect(updates[0]?.values[4]).toBe(30);
+    expect(updates[1]?.text).not.toContain("gl_raid_season_index");
+  });
+
+  it("creates a raid row with its GL season number", async () => {
+    const { options, statements } = recordingClient();
+
+    await applyPostgresTimelineAutoSyncPlan(
+      env,
+      { updateStartedRows: false, matchBy: "content", creates: [raidCreate()], updates: [] },
+      NOW,
+      options,
+    );
+
+    const [insert] = statements().filter((statement) => statement.text.startsWith('insert into "timeline_contents"'));
+    expect(insert?.text).toContain('"gl_raid_season_index"');
+    // Map each column to its placeholder; columns without a value are written as `default`.
+    const [, columnList = "", placeholderList = ""] = insert?.text.match(/\(([^)]*)\) values \(([^)]*)\)/) ?? [];
+    const columns = columnList.split(", ");
+    const placeholders = placeholderList.split(", ");
+    const insertedValue = (column: string) => {
+      const placeholder = placeholders[columns.indexOf(`"${column}"`)] ?? "";
+      return insert?.values[Number(placeholder.slice(1)) - 1];
+    };
+    expect([
+      insertedValue("raid_type"),
+      insertedValue("jp_raid_season_index"),
+      insertedValue("gl_raid_season_index"),
+    ]).toEqual(["unlimit", 32, 32]);
   });
 
   it("updates a content-key row only while it still has the matched content, comparing a null occurrence", async () => {

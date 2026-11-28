@@ -15,14 +15,14 @@ import {
   type MainStoryPart,
   type MainStoryVolume,
 } from "~/models/main-story";
-import { getRaidSchedule } from "~/models/raid";
+import { getRaidRowScheduleDetail, loadRaidRowResolver } from "~/models/raid-season.server";
 import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents, type RecruitmentGroup } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
 import { getStudentDirectoryStudents } from "~/models/student-directory";
 import type { TimelineContent, TimelineContentType } from "~/models/timeline-content";
 import {
   findEventsForRecruitmentStudent,
-  getFutureRaidContents,
+  getFutureRaidRows,
   getTimelineContent,
   getTimelineContents,
   groupTimelineContentsByRecruitmentGroupUid,
@@ -196,7 +196,7 @@ export async function getPyroxenePlannerContents(
   // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
   const [eventContents, raidContents, mainStories, callChargeAnchor] = await Promise.all([
     getTimelineContents(env, undefined, { ctx }),
-    getFutureRaidContents(env, ["raid"], { ctx }),
+    getFutureRaidRows(env, { ctx }),
     getMainStories(env, forceRefresh),
     getTimelineContent(env, CALL_CHARGE_ANCHOR_TIMELINE_UID, { ctx }),
   ]);
@@ -204,6 +204,7 @@ export async function getPyroxenePlannerContents(
     throw new Error(`call-charge anchor timeline is missing: ${CALL_CHARGE_ANCHOR_TIMELINE_UID}`);
   }
   const raidUids = new Set(raidContents.map((c) => c.uid));
+  const raidRowsByUid = new Map(raidContents.map((row) => [row.uid, row]));
   const mainStoryRewardContents = buildMainStoryRewardContents(mainStories);
   const allContents: (TimelineContent | PyroxenePlannerContent)[] = [
     ...eventContents.filter((c) => !raidUids.has(c.uid)),
@@ -212,12 +213,14 @@ export async function getPyroxenePlannerContents(
   ].sort((a, b) => compareInstantAsc(getContentStartAt(a), getContentStartAt(b)));
 
   const recruitmentGroupUids = allContents.map(getContentRecruitmentGroupUid).filter((uid) => uid !== null) as string[];
-  const [recruitmentGroups, studentsMap, recruitmentPoolStudents, directoryStudents] = await Promise.all([
-    getRecruitmentGroupsByUids(env, recruitmentGroupUids, forceRefresh),
-    getAllStudentsMap(env, true),
-    getRecruitmentPoolStudents(env, forceRefresh),
-    getStudentDirectoryStudents(env, true),
-  ]);
+  const [recruitmentGroups, studentsMap, recruitmentPoolStudents, directoryStudents, { resolve: resolveRaidRow }] =
+    await Promise.all([
+      getRecruitmentGroupsByUids(env, recruitmentGroupUids, forceRefresh),
+      getAllStudentsMap(env, true),
+      getRecruitmentPoolStudents(env, forceRefresh),
+      getStudentDirectoryStudents(env, true),
+      loadRaidRowResolver(env, raidContents, { forceRefresh }),
+    ]);
   const acquisitionTypes = new Map(directoryStudents.map((student) => [student.uid, student.acquisitionType]));
 
   const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
@@ -334,15 +337,15 @@ export async function getPyroxenePlannerContents(
         let until: UtcIsoString | null = content.endAt;
         let raidBossImageUrl: string | null = null;
 
-        if (content.contentUid) {
-          const schedule = await getRaidSchedule(env, content.contentUid, forceRefresh);
-          if (schedule) {
-            raidName = schedule.raidBoss.name;
-            raidType = schedule.raidType as RaidType;
-            seasonIndex = schedule.seasonIndex ?? null;
-            until = until ?? schedule.endAt;
-            raidBossImageUrl = bossImageUrl(schedule.raidBoss.uid);
-          }
+        // A raid row read with its raid columns resolves by its JP season; any other keeps the content uid lookup.
+        const raidRow = raidRowsByUid.get(content.uid) ?? content;
+        const schedule = await getRaidRowScheduleDetail(env, raidRow, resolveRaidRow(raidRow), forceRefresh);
+        if (schedule) {
+          raidName = schedule.raidBoss.name;
+          raidType = schedule.raidType as RaidType;
+          seasonIndex = schedule.seasonIndex ?? null;
+          until = until ?? schedule.endAt;
+          raidBossImageUrl = bossImageUrl(schedule.raidBoss.uid);
         }
 
         if (!until) return [];

@@ -203,6 +203,7 @@ const timelineAutoSyncRaidSchedulesQuery = graphql(`
         uid
         region
         raidType
+        seasonIndex
         startAt
         endAt
         raidBoss {
@@ -278,6 +279,8 @@ const raidSource: TimelineAutoSyncSource = {
         jpRaidSeason: schedule.jpSchedule
           ? { raidType: schedule.jpSchedule.raidType, seasonIndex: schedule.jpSchedule.seasonIndex }
           : null,
+        // Kept on the row so screens can show the season number once BAQL no longer lists a forecast GL schedule.
+        glRaidSeasonIndex: schedule.seasonIndex,
       });
     }
     return result;

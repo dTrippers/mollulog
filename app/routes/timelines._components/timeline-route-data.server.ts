@@ -13,7 +13,7 @@ import {
   type WalkthroughTimelineDocument,
   type WalkthroughTimelineTerrain,
 } from "~/domain/walkthrough-timeline";
-import { getAllRaidSchedules } from "~/models/raid";
+import { getKoreanRaidSchedules } from "~/models/raid-season.server";
 import { getRaidRecordRecruitedSnapshots } from "~/models/raid-record";
 import { ActionValidationError } from "~/lib/action-errors";
 import { getAllStudents, type Student } from "~/models/student";
@@ -84,7 +84,7 @@ export function walkthroughReferencedStudentUids(
 export async function loadTimelineEditorOptions(env: Env, userId: number) {
   const [students, raids, recruitedSnapshots] = await Promise.all([
     getAllStudents(env, true),
-    getAllRaidSchedules(env),
+    getKoreanRaidSchedules(env),
     getRaidRecordRecruitedSnapshots(env, userId),
   ]);
   const bossesByUid = new Map<
@@ -117,7 +117,8 @@ export async function loadTimelineEditorOptions(env: Env, userId: number) {
     const terrain = raid.terrain as WalkthroughTimelineTerrain;
     boss.terrains.add(terrain);
     boss.partySizes.add(raid.raidType === "unlimit" ? 10 : 6);
-    boss.schedules.push({ key: `${raid.raidType}:${raid.seasonIndex}`, terrain });
+    // A forecast season without a Korean-server season number it owns has no key to be picked by.
+    if (raid.seasonIndex !== null) boss.schedules.push({ key: `${raid.raidType}:${raid.seasonIndex}`, terrain });
     bossesByUid.set(boss.uid, boss);
   }
   return {

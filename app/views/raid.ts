@@ -1,6 +1,10 @@
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { raidTypeFromParam } from "~/domain/raid";
-import { getAllRaidSchedules, getRaidScheduleByTypeAndSeason } from "~/models/raid";
+import {
+  getKoreanRaidScheduleByTypeAndSeason,
+  getNumberedKoreanRaidSchedules,
+  loadKoreanRaidSeasons,
+} from "~/models/raid-season.server";
 
 function raidKey(raid: { raidType: string; seasonIndex: number }) {
   return `${raid.raidType}:${raid.seasonIndex}`;
@@ -8,10 +12,11 @@ function raidKey(raid: { raidType: string; seasonIndex: number }) {
 
 export async function loadRaidSeasonPage(env: Env, request: Request, raidTypeParam: string, seasonIndex: number) {
   const raidType = raidTypeFromParam(raidTypeParam);
-  const [currentRaid, allRaidSchedules, sensei] = await Promise.all([
-    getRaidScheduleByTypeAndSeason(env, raidType, seasonIndex),
-    getAllRaidSchedules(env),
-    getActiveSensei(env, request),
+  const [seasons, sensei] = await Promise.all([loadKoreanRaidSeasons(env), getActiveSensei(env, request)]);
+  const [currentRaid, allRaidSchedules] = await Promise.all([
+    getKoreanRaidScheduleByTypeAndSeason(env, raidType, seasonIndex, { seasons }),
+    // A forecast season without a Korean-server season number has no season page, so the selectors leave it out.
+    getNumberedKoreanRaidSchedules(env, { seasons }),
   ]);
 
   const mergedRaids = new Map(allRaidSchedules.map((raid) => [raidKey(raid), raid]));

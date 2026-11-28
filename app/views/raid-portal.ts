@@ -5,7 +5,8 @@ import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { fetchRaidOverviewStudentUsage } from "~/lib/ranks/overview-student-usage";
 import { fetchRaidVideos } from "~/lib/ranks/videos";
 import type { RaidType } from "~/models/content.d";
-import { getAllRaidSchedules, type RaidScheduleListItem } from "~/models/raid";
+import type { RaidScheduleListItem } from "~/models/raid";
+import { getNumberedKoreanRaidSchedules } from "~/models/raid-season.server";
 import { getRaidVideoParties, getVideoDateRange, type RaidVideoItem } from "~/models/raid-videos";
 import { getAllStudentsMap, getStudentForms, type Student, type StudentForm } from "~/models/student";
 
@@ -167,7 +168,8 @@ export async function getRaidPortalData(
 ): Promise<RaidPortalData> {
   const now = nowUtcIso();
   const [allSchedules, rawAllStudents, studentForms] = await Promise.all([
-    getAllRaidSchedules(env, forceRefresh),
+    // Every season here links to its season page, so a forecast season without a season number is left out.
+    getNumberedKoreanRaidSchedules(env, { forceRefresh, ctx }),
     getAllStudentsMap(env, forceRefresh),
     getStudentForms(env),
   ]);

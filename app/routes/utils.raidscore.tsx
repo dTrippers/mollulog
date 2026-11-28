@@ -18,7 +18,7 @@ import {
 import { canonicalLink, socialMeta } from "~/lib/seo";
 import { trackGoogleAnalyticsEventOncePerPage } from "~/lib/google-analytics-events.client";
 import { difficultyLocale } from "~/locales/ko";
-import { getAllRaidSchedules } from "~/models/raid";
+import { getKoreanRaidSchedules } from "~/models/raid-season.server";
 
 const STORAGE_KEY_TIME_TO_SCORE = "raid-score-util-timeToScore";
 const STORAGE_KEY_SCORE_TO_TIME = "raid-score-util-scoreToTime";
@@ -30,7 +30,7 @@ type RaidScoreBossOption = {
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const allRaids = await getAllRaidSchedules(env);
+  const allRaids = await getKoreanRaidSchedules(env);
   const bossNameByUid = new Map(allRaids.map((raid) => [raid.raidBoss.uid, raid.raidBoss.name]));
 
   return {

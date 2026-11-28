@@ -59,6 +59,8 @@ jest.mock("~/models/student-grading-tag.server", () => ({
 
 jest.mock("~/models/timeline-content.server", () => ({
   getTimelineContentsByRecruitmentGroupUids: mockGetTimelineContentsByRecruitmentGroupUids,
+  // No raid row has a forecast season, so the Korean-server season list is BAQL's gl list.
+  getFutureRaidRows: jest.fn(async () => []),
 }));
 
 jest.mock("~/views/student-detail-content.server", () => ({

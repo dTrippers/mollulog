@@ -65,7 +65,7 @@ import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
-import { getAllRaidSchedules } from "~/models/raid";
+import { getNumberedKoreanRaidSchedules } from "~/models/raid-season.server";
 import { getSenseiById, isSenseiProfileVisibleTo } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
 import {
@@ -108,7 +108,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   }
   const [students, raids, engagementByUid, canLike] = await Promise.all([
     getAllStudentsMap(env, true),
-    getAllRaidSchedules(env),
+    getNumberedKoreanRaidSchedules(env, { ctx }),
     storedTimeline
       ? getPostgresWalkthroughTimelineLikeSummaries(env, [storedTimeline.uid], currentUser?.id, { ctx })
       : Promise.resolve<Record<string, { liked: boolean; likeCount: number }>>({}),

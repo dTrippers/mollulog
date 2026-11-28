@@ -7,6 +7,7 @@ import type {
   TimelineAutoSyncSchedule,
   TimelineAutoSyncUpdateMatch,
 } from "~/domain/timeline-auto-sync";
+import type { RaidRowSeason } from "~/domain/raid-season-resolution";
 import {
   type RunType,
   type TimelineContent,
@@ -25,6 +26,9 @@ export type PostgresTimelineContentsOptions = {
 };
 
 type TimelineDates = { startAt: UtcIsoString; endAt: UtcIsoString | null };
+
+/** A raid row with its raid columns, which the general row shape leaves out. */
+export type TimelineRaidRow = TimelineContent & { raidSeason: RaidRowSeason };
 
 function normalizePostgresInstant(value: string | Date): UtcIsoString {
   return normalizeInstant(value instanceof Date ? value.toISOString() : value);
@@ -168,31 +172,35 @@ export async function getPostgresTimelineContentsByUids(
   );
 }
 
-export async function getPostgresFutureRaidContents(
+/** Raid rows with their raid columns. With `endAfter`, only rows that have not ended by then, as the futures read. */
+export async function getPostgresRaidRows(
   env: Pick<Env, "HYPERDRIVE">,
-  contentTypes: TimelineContentType[],
-  now: UtcIsoString,
+  endAfter: UtcIsoString | null,
   options: PostgresTimelineContentsOptions = {},
-): Promise<TimelineContent[]> {
-  if (contentTypes.length === 0) return [];
-  return mapRows(
-    await selectRows(
-      env,
-      "get_future_by_content_types",
-      (db) =>
-        db
-          .select()
-          .from(pgTimelineContentsTable)
-          .where(
-            and(
-              inArray(pgTimelineContentsTable.contentType, contentTypes),
-              or(isNull(pgTimelineContentsTable.endAt), gte(pgTimelineContentsTable.endAt, new Date(now))),
-            ),
-          )
-          .orderBy(asc(pgTimelineContentsTable.startAt), asc(pgTimelineContentsTable.uid)),
-      options,
-    ),
+): Promise<TimelineRaidRow[]> {
+  const table = pgTimelineContentsTable;
+  const isRaid = eq(table.contentType, "raid");
+  const rows = await selectRows(
+    env,
+    endAfter === null ? "get_raid_rows" : "get_future_raid_rows",
+    (db) =>
+      db
+        .select()
+        .from(table)
+        .where(
+          endAfter === null ? isRaid : and(isRaid, or(isNull(table.endAt), gte(table.endAt, new Date(endAfter)))),
+        )
+        .orderBy(asc(table.startAt), asc(table.uid)),
+    options,
   );
+  return rows.map((row) => ({
+    ...toDomain(row),
+    raidSeason: {
+      raidType: row.raidType,
+      jpRaidSeasonIndex: row.jpRaidSeasonIndex,
+      glRaidSeasonIndex: row.glRaidSeasonIndex,
+    },
+  }));
 }
 
 export async function getPostgresHomeMainStoryContent(
@@ -394,6 +402,7 @@ export async function getPostgresTimelineAutoSyncRows(
           endless: pgTimelineContentsTable.endless,
           raidType: pgTimelineContentsTable.raidType,
           jpRaidSeasonIndex: pgTimelineContentsTable.jpRaidSeasonIndex,
+          glRaidSeasonIndex: pgTimelineContentsTable.glRaidSeasonIndex,
         })
         .from(pgTimelineContentsTable)
         .where(uids.length > 0 ? or(ofType, inArray(pgTimelineContentsTable.uid, [...uids])) : ofType),
@@ -506,6 +515,7 @@ export async function applyPostgresTimelineAutoSyncPlan(
                 confirmed: row.confirmed,
                 raidType: row.raidType,
                 jpRaidSeasonIndex: row.jpRaidSeasonIndex,
+                glRaidSeasonIndex: row.glRaidSeasonIndex,
                 syncedAt,
                 createdAt: syncedAt,
                 updatedAt: syncedAt,
@@ -533,6 +543,7 @@ export async function applyPostgresTimelineAutoSyncPlan(
               endAt: row.endAt ? new Date(row.endAt) : null,
               endless: row.endless,
               ...(row.contentUid !== undefined ? { contentUid: row.contentUid } : {}),
+              ...(row.glRaidSeasonIndex !== undefined ? { glRaidSeasonIndex: row.glRaidSeasonIndex } : {}),
               syncedAt,
               updatedAt: syncedAt,
             })

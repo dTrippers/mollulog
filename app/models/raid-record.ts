@@ -32,6 +32,7 @@ import {
 } from "~/domain/raid-record";
 import { compareInstantDesc, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { getAllRaidSchedules, type RaidScheduleListItem } from "~/models/raid";
+import { getNumberedKoreanRaidSchedules } from "~/models/raid-season.server";
 import { getRecruitedStudents, type RecruitedStudent } from "~/models/recruited-student";
 import { getAllStudents, getStudentGrowthVisualsBatch, getStudentWeaponAvailability } from "~/models/student";
 
@@ -95,10 +96,22 @@ function toRecordSeason(
 
 // Every 총력전 and 대결전 season of the server that has a start time, newest first. Seasons that have not started yet
 // are included; the screens filter them with `isRaidSeasonStarted`.
-export async function getRaidRecordSeasons(env: Env, server: RaidRecordServer): Promise<RaidRecordSeason[]> {
+//
+// A record is keyed by its server, raid type and season number, so the seasons are BAQL's own: a Korean season is a
+// `gl` schedule, never a forecast season whose number is only predicted. `forecastCounterparts` lets a screen show a JP
+// season's Korean number from a numbered forecast season as well; that number is display only and is never stored.
+export async function getRaidRecordSeasons(
+  env: Env,
+  server: RaidRecordServer,
+  { forecastCounterparts = false }: { forecastCounterparts?: boolean } = {},
+): Promise<RaidRecordSeason[]> {
   const [schedules, krSchedules] = await Promise.all([
     getAllRaidSchedules(env, false, { region: raidRecordServerRegion(server) }),
-    server === "jp" ? getAllRaidSchedules(env) : Promise.resolve(null),
+    server === "jp"
+      ? forecastCounterparts
+        ? getNumberedKoreanRaidSchedules(env)
+        : getAllRaidSchedules(env)
+      : Promise.resolve(null),
   ]);
   const krSeasonByJpSeason = new Map<string, number>();
   for (const schedule of krSchedules ?? []) {

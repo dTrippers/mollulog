@@ -1,7 +1,7 @@
 import {
   getPostgresAllTimelineContentsMeta,
   getPostgresContentUidsByRecruitmentGroup,
-  getPostgresFutureRaidContents,
+  getPostgresRaidRows,
   getPostgresHomeMainStoryContent,
   getPostgresTimelineContent,
   getPostgresTimelineContentDatesByContentUids,
@@ -16,6 +16,7 @@ import type { TimelineContentType } from "~/domain/timeline-content";
 import { cacheKey, fetchSourceCached } from "~/lib/cache";
 import { nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 
+export type { TimelineRaidRow } from "~/db/postgres/timeline-contents";
 export type { RunType, TimelineContent, TimelineContentType, TimelineContentVideo } from "~/domain/timeline-content";
 export { findEventsForRecruitmentStudent, groupTimelineContentsByRecruitmentGroupUid } from "~/models/timeline-content";
 
@@ -41,12 +42,14 @@ export function getTimelineContentsByUids(env: Env, uids: string[], options: Tim
   return getPostgresTimelineContentsByUids(env, uids, { ctx: options.ctx });
 }
 
-export function getFutureRaidContents(
-  env: Env,
-  contentTypes: TimelineContentType[],
-  options: TimelineContentReadOptions = {},
-) {
-  return getPostgresFutureRaidContents(env, contentTypes, nowUtcIso(), { ctx: options.ctx });
+/** Raid rows that have not ended, with their raid columns. */
+export function getFutureRaidRows(env: Env, options: TimelineContentReadOptions = {}) {
+  return getPostgresRaidRows(env, nowUtcIso(), { ctx: options.ctx });
+}
+
+/** Every raid row, with its raid columns. */
+export function getAllRaidRows(env: Env, options: TimelineContentReadOptions = {}) {
+  return getPostgresRaidRows(env, null, { ctx: options.ctx });
 }
 
 export function getHomeMainStoryContent(env: Env, now = nowUtcIso(), options: TimelineContentReadOptions = {}) {

@@ -2,7 +2,8 @@ import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { raidTypeFromParam } from "~/domain/raid";
 import { routeError } from "~/lib/http-errors";
-import { getRaidDefenseTypeSetByQuery, getRaidScheduleByTypeAndSeason } from "~/models/raid";
+import { getRaidDefenseTypeSetByQuery } from "~/models/raid";
+import { getKoreanRaidScheduleByTypeAndSeason } from "~/models/raid-season.server";
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const raidType = params.raidType ? raidTypeFromParam(params.raidType) : null;
@@ -10,7 +11,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   if (!raidType || Number.isNaN(seasonIndex)) {
     throw routeError(404, "raid.not_found", "레이드 정보를 찾을 수 없어요.");
   }
-  const raid = await getRaidScheduleByTypeAndSeason(context.cloudflare.env, raidType, seasonIndex);
+  const raid = await getKoreanRaidScheduleByTypeAndSeason(context.cloudflare.env, raidType, seasonIndex);
   if (!raid) throw routeError(404, "raid.not_found", "레이드 정보를 찾을 수 없어요.");
 
   const currentSearchParams = new URL(request.url).searchParams;

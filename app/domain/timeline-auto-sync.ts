@@ -28,6 +28,8 @@ export type TimelineAutoSyncCandidate = TimelineAutoSyncContentKey & {
   create: TimelineAutoSyncCreateFields | null;
   /** The JP season a GL raid schedule corresponds to. Undefined for other contents; null when the source has none. */
   jpRaidSeason?: TimelineAutoSyncJpRaidSeason | null;
+  /** A GL raid schedule's own season number at the source, which a raid row keeps. Undefined for other contents. */
+  glRaidSeasonIndex?: number;
 };
 
 /**
@@ -48,6 +50,7 @@ export type TimelineAutoSyncExistingRow = {
   endless: boolean;
   raidType: string | null;
   jpRaidSeasonIndex: number | null;
+  glRaidSeasonIndex: number | null;
 };
 
 export type TimelineAutoSyncSchedule = {
@@ -58,7 +61,11 @@ export type TimelineAutoSyncSchedule = {
 
 export type TimelineAutoSyncCreate = TimelineAutoSyncContentKey &
   TimelineAutoSyncCreateFields &
-  TimelineAutoSyncSchedule & { raidType: string | null; jpRaidSeasonIndex: number | null };
+  TimelineAutoSyncSchedule & {
+    raidType: string | null;
+    jpRaidSeasonIndex: number | null;
+    glRaidSeasonIndex: number | null;
+  };
 /**
  * The key the row was found by. The write changes the row only while it still has this key, because an admin may
  * change the row between the read and the write.
@@ -74,6 +81,11 @@ export type TimelineAutoSyncUpdate = TimelineAutoSyncSchedule & {
   readSchedule: TimelineAutoSyncSchedule;
   /** A raid row's GL schedule uid as BAQL issued it, set when it differs. Never used to find the row. */
   contentUid?: string;
+  /**
+   * A raid row's GL season number as BAQL issued it, set when it differs, including when the row has none. Screens
+   * show this number for the row once BAQL no longer lists the GL schedule.
+   */
+  glRaidSeasonIndex?: number;
 };
 
 /** How a source's existing rows are updated. Every source added after campaigns and drills uses the defaults. */
@@ -301,13 +313,20 @@ export function planTimelineAutoSync(
       // A raid row found by its JP season takes the GL schedule uid BAQL issued; other rows were found by it.
       const contentUid =
         matchBy === "jpRaidSeason" && candidate.contentUid !== existing.contentUid ? candidate.contentUid : undefined;
-      if (!isSameSchedule(existing, schedule) || contentUid !== undefined) {
+      const glRaidSeasonIndex =
+        matchBy === "jpRaidSeason" &&
+        candidate.glRaidSeasonIndex !== undefined &&
+        candidate.glRaidSeasonIndex !== existing.glRaidSeasonIndex
+          ? candidate.glRaidSeasonIndex
+          : undefined;
+      if (!isSameSchedule(existing, schedule) || contentUid !== undefined || glRaidSeasonIndex !== undefined) {
         plan.updates.push({
           uid: existing.uid,
           ...schedule,
           match: updateMatch(candidate, matchBy),
           readSchedule: { startAt: existing.startAt, endAt: existing.endAt, endless: existing.endless },
           ...(contentUid !== undefined ? { contentUid } : {}),
+          ...(glRaidSeasonIndex !== undefined ? { glRaidSeasonIndex } : {}),
         });
       }
       continue;
@@ -328,6 +347,7 @@ export function planTimelineAutoSync(
       ...toCreatedSchedule(candidate),
       raidType: candidate.jpRaidSeason?.raidType ?? null,
       jpRaidSeasonIndex: candidate.jpRaidSeason?.seasonIndex ?? null,
+      glRaidSeasonIndex: candidate.glRaidSeasonIndex ?? null,
     });
   }
 

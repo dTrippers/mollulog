@@ -2,7 +2,8 @@ import type { LoaderFunctionArgs } from "react-router";
 import { raidTypeFromParam } from "~/domain/raid";
 import { getFilterableRaidDifficulties, getRaidDifficultyScoreRange, parseDifficulty } from "~/domain/raid-score";
 import { fetchRaidVideos } from "~/lib/ranks";
-import { getRaidDefenseTypeSetByQuery, getRaidScheduleByTypeAndSeason } from "~/models/raid";
+import { getRaidDefenseTypeSetByQuery } from "~/models/raid";
+import { getKoreanRaidScheduleByTypeAndSeason } from "~/models/raid-season.server";
 import { parseVideoSort, RAID_VIDEOS_PAGE_SIZE, type RaidVideosData } from "~/models/raid-videos";
 
 export type { RaidVideosData };
@@ -26,7 +27,7 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     throw createErrorResponse("총력전/대결전 정보를 찾을 수 없어요", 404);
   }
 
-  const currentRaid = await getRaidScheduleByTypeAndSeason(env, raidTypeFromParam(raidType), parsedSeasonIndex);
+  const currentRaid = await getKoreanRaidScheduleByTypeAndSeason(env, raidTypeFromParam(raidType), parsedSeasonIndex);
   if (!currentRaid) {
     throw createErrorResponse("총력전/대결전 정보를 찾을 수 없어요", 404);
   }

@@ -22,6 +22,7 @@ import {
   listRaidRecords,
   type RaidRecordSeason,
 } from "~/models/raid-record";
+import { findNumberedForecastRaidSeason } from "~/models/raid-season.server";
 import { getAllStudents } from "~/models/student";
 
 // What a list row, a table row, and the detail header show about a season.
@@ -146,7 +147,7 @@ export async function loadRaidRecordList(
   const now = nowUtcIso();
   const [records, seasons] = await Promise.all([
     listRaidRecords(env, userId, { ctx }),
-    getRaidRecordSeasons(env, server),
+    getRaidRecordSeasons(env, server, { forecastCounterparts: true }),
   ]);
   const seasonByKey = new Map(seasons.map((season) => [seasonKey(season.raidType, season.seasonIndex), season]));
   const serverRecords = records.filter((record) => record.server === server);
@@ -222,7 +223,7 @@ export async function loadRaidRecordFormData(
   const now = nowUtcIso();
   const [records, seasonLists, students, recruited] = await Promise.all([
     listRaidRecords(env, userId, { ctx }),
-    Promise.all(servers.map((server) => getRaidRecordSeasons(env, server))),
+    Promise.all(servers.map((server) => getRaidRecordSeasons(env, server, { forecastCounterparts: true }))),
     getAllStudents(env, true),
     getRaidRecordRecruitedSnapshots(env, userId),
   ]);
@@ -298,7 +299,7 @@ export async function loadRaidRecordTable(
   const now = nowUtcIso();
   const [records, seasons] = await Promise.all([
     listRaidRecords(env, userId, { ctx }),
-    getRaidRecordSeasons(env, server),
+    getRaidRecordSeasons(env, server, { forecastCounterparts: true }),
   ]);
   const recordByKey = new Map(
     records
@@ -416,7 +417,11 @@ export async function loadRaidChartRecordContext(
     ? toRaidChartSeasonView(krSeason, recordOf("kr", krSeasonIndex), now)
     : { server: "kr", seasonIndex: krSeasonIndex, started: false, scoreDefenseTypes: [], record: null };
 
-  const jpSeasonIndex = krSeason?.counterpartSeasonIndex ?? null;
+  // A season page shown from a forecast season has no Korean season to record, but its JP season is the forecast's JP
+  // schedule, so the Sensei's JP record of that season still shows.
+  const jpSeasonIndex = krSeason
+    ? krSeason.counterpartSeasonIndex
+    : ((await findNumberedForecastRaidSeason(env, raidType, krSeasonIndex, { ctx }))?.jpSchedule.seasonIndex ?? null);
   const jpRecord = jpSeasonIndex === null ? null : recordOf("jp", jpSeasonIndex);
   let jp: RaidChartSeasonView | null = null;
   if (jpRecord) {

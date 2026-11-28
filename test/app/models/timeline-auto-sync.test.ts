@@ -97,6 +97,7 @@ function existingRow(overrides: Partial<TimelineAutoSyncExistingRow>): TimelineA
     endless: false,
     raidType: null,
     jpRaidSeasonIndex: null,
+    glRaidSeasonIndex: null,
     ...overrides,
   };
 }
@@ -111,6 +112,7 @@ function mockRows(rowsByType: Record<string, TimelineAutoSyncExistingRow[]>) {
 function raidSchedule(
   uid: string,
   raidType: string,
+  seasonIndex: number,
   overrides: Partial<{
     startAt: string | null;
     endAt: string | null;
@@ -121,11 +123,12 @@ function raidSchedule(
     uid,
     region: "gl",
     raidType,
+    seasonIndex,
     startAt: "2099-12-16T02:00:00Z",
     endAt: "2099-12-22T19:00:00Z",
     raidBoss: { name: "호크마" },
-    // The JP season is three seasons ahead of the GL uid's number, as BAQL maps total assaults today.
-    jpSchedule: { raidType, seasonIndex: Number(uid.split("_").at(-1)) + 3 },
+    // The JP season is three seasons ahead of the GL season, as BAQL maps total assaults today.
+    jpSchedule: { raidType, seasonIndex: seasonIndex + 3 },
     ...overrides,
   };
 }
@@ -177,6 +180,7 @@ describe("syncTimelineContentsFromSources", () => {
         confirmed: true,
         raidType: null,
         jpRaidSeasonIndex: null,
+        glRaidSeasonIndex: null,
       },
     ]);
   });
@@ -230,6 +234,7 @@ describe("syncTimelineContentsFromSources", () => {
         confirmed: false,
         raidType: null,
         jpRaidSeasonIndex: null,
+        glRaidSeasonIndex: null,
       },
     ]);
   });
@@ -318,10 +323,11 @@ describe("syncTimelineContentsFromSources", () => {
     it("asks BAQL for GL raid schedules and creates unconfirmed rows named after the boss, only for three types", async () => {
       mockBaql({
         raidSchedules: raidSchedules([
-          raidSchedule("gl_total_assault_93", "total_assault"),
-          raidSchedule("gl_elimination_39", "elimination"),
-          raidSchedule("gl_unlimit_32", "unlimit"),
-          raidSchedule("gl_allied_5", "allied"),
+          raidSchedule("gl_total_assault_93", "total_assault", 93),
+          raidSchedule("gl_elimination_39", "elimination", 39),
+          // The uid's number is not BAQL's season index: the sync stores BAQL's `seasonIndex` field.
+          raidSchedule("gl_unlimit_32", "unlimit", 33),
+          raidSchedule("gl_allied_5", "allied", 5),
         ]),
       });
 
@@ -339,17 +345,28 @@ describe("syncTimelineContentsFromSources", () => {
           confirmed: false,
           raidType: "total_assault",
           jpRaidSeasonIndex: 96,
+          glRaidSeasonIndex: 93,
         }),
-        expect.objectContaining({ contentUid: "gl_elimination_39", raidType: "elimination", jpRaidSeasonIndex: 42 }),
-        expect.objectContaining({ contentUid: "gl_unlimit_32", raidType: "unlimit", jpRaidSeasonIndex: 35 }),
+        expect.objectContaining({
+          contentUid: "gl_elimination_39",
+          raidType: "elimination",
+          jpRaidSeasonIndex: 42,
+          glRaidSeasonIndex: 39,
+        }),
+        expect.objectContaining({
+          contentUid: "gl_unlimit_32",
+          raidType: "unlimit",
+          jpRaidSeasonIndex: 36,
+          glRaidSeasonIndex: 33,
+        }),
       ]);
     });
 
-    it("updates the row of the same JP season and copies BAQL's GL uid into it", async () => {
+    it("updates the row of the same JP season and copies BAQL's GL uid and GL season number into it", async () => {
       mockRows({
         raid: [raidRow({ uid: "allied_5", contentUid: "gl_allied_4", raidType: "allied", jpRaidSeasonIndex: 8 })],
       });
-      mockBaql({ raidSchedules: raidSchedules([raidSchedule("gl_allied_5", "allied")]) });
+      mockBaql({ raidSchedules: raidSchedules([raidSchedule("gl_allied_5", "allied", 5)]) });
 
       await syncTimelineContentsFromSources(env);
 
@@ -365,11 +382,51 @@ describe("syncTimelineContentsFromSources", () => {
               endAt: toUtcIso("2099-12-22T19:00:00Z"),
               endless: false,
               contentUid: "gl_allied_5",
+              glRaidSeasonIndex: 5,
             },
           ],
           missingUids: [],
         }),
       );
+    });
+
+    it("fills in only the GL season number of a future row whose schedule already matches", async () => {
+      mockRows({
+        raid: [
+          raidRow({
+            uid: "allied_5",
+            contentUid: "gl_allied_5",
+            startAt: toUtcIso("2099-12-16T02:00:00Z"),
+            endAt: toUtcIso("2099-12-22T19:00:00Z"),
+            raidType: "allied",
+            jpRaidSeasonIndex: 8,
+          }),
+        ],
+      });
+      mockBaql({ raidSchedules: raidSchedules([raidSchedule("gl_allied_5", "allied", 5)]) });
+
+      await syncTimelineContentsFromSources(env);
+      expect(planFor("raid")?.updates).toEqual([
+        expect.objectContaining({ uid: "allied_5", glRaidSeasonIndex: 5, startAt: toUtcIso("2099-12-16T02:00:00Z") }),
+      ]);
+      expect(planFor("raid")?.updates[0]).not.toHaveProperty("contentUid");
+
+      appliedPlans.clear();
+      mockRows({
+        raid: [
+          raidRow({
+            uid: "allied_5",
+            contentUid: "gl_allied_5",
+            startAt: toUtcIso("2099-12-16T02:00:00Z"),
+            endAt: toUtcIso("2099-12-22T19:00:00Z"),
+            raidType: "allied",
+            jpRaidSeasonIndex: 8,
+            glRaidSeasonIndex: 5,
+          }),
+        ],
+      });
+      await syncTimelineContentsFromSources(env);
+      expect(planFor("raid")?.updates).toEqual([]);
     });
 
     it("creates no row while a future raid row has no JP season, and reports it", async () => {
@@ -381,8 +438,8 @@ describe("syncTimelineContentsFromSources", () => {
       });
       mockBaql({
         raidSchedules: raidSchedules([
-          raidSchedule("gl_total_assault_93", "total_assault"),
-          raidSchedule("gl_elimination_39", "elimination"),
+          raidSchedule("gl_total_assault_93", "total_assault", 93),
+          raidSchedule("gl_elimination_39", "elimination", 39),
         ]),
       });
 
@@ -405,8 +462,8 @@ describe("syncTimelineContentsFromSources", () => {
       });
       mockBaql({
         raidSchedules: raidSchedules([
-          raidSchedule("gl_unlimit_30", "unlimit"),
-          raidSchedule("gl_unlimit_31", "unlimit", {
+          raidSchedule("gl_unlimit_30", "unlimit", 30),
+          raidSchedule("gl_unlimit_31", "unlimit", 31, {
             startAt: null,
             jpSchedule: { raidType: "unlimit", seasonIndex: 33 },
           }),
@@ -431,7 +488,7 @@ describe("syncTimelineContentsFromSources", () => {
     });
 
     it("reports the rows that blocked creation at write time with the unlinked rows of the read", async () => {
-      mockBaql({ raidSchedules: raidSchedules([raidSchedule("gl_total_assault_93", "total_assault")]) });
+      mockBaql({ raidSchedules: raidSchedules([raidSchedule("gl_total_assault_93", "total_assault", 93)]) });
       mockedApply.mockResolvedValue({ createdUids: [], updatedUids: [], creationBlockedByUids: ["added-by-admin"] });
 
       await syncTimelineContentsFromSources(env);
@@ -449,7 +506,7 @@ describe("syncTimelineContentsFromSources", () => {
 
     it("writes nothing for a GL schedule without a JP schedule and reports it", async () => {
       mockBaql({
-        raidSchedules: raidSchedules([raidSchedule("gl_total_assault_93", "total_assault", { jpSchedule: null })]),
+        raidSchedules: raidSchedules([raidSchedule("gl_total_assault_93", "total_assault", 93, { jpSchedule: null })]),
       });
 
       await syncTimelineContentsFromSources(env);
@@ -473,8 +530,13 @@ describe("syncTimelineContentsFromSources", () => {
       });
       mockBaql({
         raidSchedules: raidSchedules([
-          raidSchedule("gl_unlimit_30", "unlimit", { startAt: "2000-11-01T02:00:00Z", endAt: "2099-12-01T19:00:00Z" }),
-          raidSchedule("gl_elimination_39", "elimination", { startAt: "2000-11-01T02:00:00Z" }),
+          // The uid's number is not BAQL's season index: the sync copies BAQL's `seasonIndex` field.
+          raidSchedule("gl_unlimit_30", "unlimit", 31, {
+            startAt: "2000-11-01T02:00:00Z",
+            endAt: "2099-12-01T19:00:00Z",
+            jpSchedule: { raidType: "unlimit", seasonIndex: 33 },
+          }),
+          raidSchedule("gl_elimination_39", "elimination", 39, { startAt: "2000-11-01T02:00:00Z" }),
         ]),
       });
 
@@ -495,6 +557,7 @@ describe("syncTimelineContentsFromSources", () => {
                 endAt: toUtcIso("2099-12-21T19:00:00Z"),
                 endless: false,
               },
+              glRaidSeasonIndex: 31,
             },
           ],
         }),
@@ -502,7 +565,7 @@ describe("syncTimelineContentsFromSources", () => {
     });
 
     it("gives a created raid row a random uid that does not carry the GL uid", async () => {
-      mockBaql({ raidSchedules: raidSchedules([raidSchedule("gl_total_assault_93", "total_assault")]) });
+      mockBaql({ raidSchedules: raidSchedules([raidSchedule("gl_total_assault_93", "total_assault", 93)]) });
 
       await syncTimelineContentsFromSources(env);
 
@@ -515,8 +578,8 @@ describe("syncTimelineContentsFromSources", () => {
     it("creates no row for a started schedule and ignores other regions", async () => {
       mockBaql({
         raidSchedules: raidSchedules([
-          raidSchedule("gl_total_assault_92", "total_assault", { startAt: "2000-01-01T02:00:00Z" }),
-          { ...raidSchedule("jp_total_assault_99", "total_assault"), region: "jp" },
+          raidSchedule("gl_total_assault_92", "total_assault", 92, { startAt: "2000-01-01T02:00:00Z" }),
+          { ...raidSchedule("jp_total_assault_99", "total_assault", 99), region: "jp" },
         ]),
       });
 
@@ -526,7 +589,7 @@ describe("syncTimelineContentsFromSources", () => {
     });
 
     it("fails the run instead of reporting the rest as missing when BAQL pages the list", async () => {
-      mockBaql({ raidSchedules: raidSchedules([raidSchedule("gl_total_assault_93", "total_assault")], true) });
+      mockBaql({ raidSchedules: raidSchedules([raidSchedule("gl_total_assault_93", "total_assault", 93)], true) });
 
       await expect(syncTimelineContentsFromSources(env)).rejects.toThrow(AggregateError);
 
@@ -536,8 +599,8 @@ describe("syncTimelineContentsFromSources", () => {
     it("rejects a schedule that cannot become a row and still syncs the others", async () => {
       mockBaql({
         raidSchedules: raidSchedules([
-          raidSchedule("gl_total_assault_93", "total_assault"),
-          { ...raidSchedule("gl_elimination_39", "elimination"), raidBoss: { name: " " } },
+          raidSchedule("gl_total_assault_93", "total_assault", 93),
+          { ...raidSchedule("gl_elimination_39", "elimination", 39), raidBoss: { name: " " } },
         ]),
       });
 

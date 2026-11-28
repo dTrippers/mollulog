@@ -10,7 +10,8 @@ import { fetchRaidOverview } from "~/lib/ranks/overview";
 import { fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import { type defenseTypeColor, defenseTypeLocale, difficultyLocale, type raidTypeLocale } from "~/locales/ko";
 import type { RaidType } from "~/models/content.d";
-import { getRaidDefenseTypeSetKey, getRaidSchedule, getRaidScheduleByTypeAndSeason } from "~/models/raid";
+import { getRaidDefenseTypeSetKey } from "~/models/raid";
+import { getKoreanRaidScheduleByTypeAndSeason, getKoreanRaidScheduleByUid } from "~/models/raid-season.server";
 import { getAllStudentsMap } from "~/models/student";
 import RaidComparisonHeader from "./raids.$raidType.$seasonIndex._components/RaidComparisonHeader";
 
@@ -52,8 +53,8 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   }
 
   const [toSchedule, fromSchedule, rawAllStudents] = await Promise.all([
-    getRaidScheduleByTypeAndSeason(env, raidTypeFromParam(raidType), parsedSeasonIndex),
-    getRaidSchedule(env, fromRaidUid),
+    getKoreanRaidScheduleByTypeAndSeason(env, raidTypeFromParam(raidType), parsedSeasonIndex),
+    getKoreanRaidScheduleByUid(env, fromRaidUid),
     getAllStudentsMap(env, true),
   ]);
 

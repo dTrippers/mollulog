@@ -5,7 +5,7 @@ import { getStudentGearData, getStudentSkillCosts } from "~/models/growth-resour
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
 import { publishPendingOcrOutbox, reconcileOcrJobs } from "~/models/ocr-job";
-import { warmRaidCache } from "~/models/raid";
+import { warmKoreanRaidCache } from "~/models/raid-season.server";
 import { getRecruitTicketSource } from "~/models/recruit-ticket";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
@@ -85,8 +85,8 @@ jest.mock("~/models/recruitment", () => ({
   warmRecruitmentCache: jest.fn(),
 }));
 
-jest.mock("~/models/raid", () => ({
-  warmRaidCache: jest.fn(),
+jest.mock("~/models/raid-season.server", () => ({
+  warmKoreanRaidCache: jest.fn(),
 }));
 
 jest.mock("~/lib/observability.server", () => ({
@@ -137,7 +137,7 @@ const mockedGetRecruitTicketSource = getRecruitTicketSource as jest.MockedFuncti
 const mockedGetStudentGearData = getStudentGearData as jest.MockedFunction<typeof getStudentGearData>;
 const mockedGetStudentSkillCosts = getStudentSkillCosts as jest.MockedFunction<typeof getStudentSkillCosts>;
 const mockedWarmRecruitmentCache = warmRecruitmentCache as jest.MockedFunction<typeof warmRecruitmentCache>;
-const mockedWarmRaidCache = warmRaidCache as jest.MockedFunction<typeof warmRaidCache>;
+const mockedWarmRaidCache = warmKoreanRaidCache as jest.MockedFunction<typeof warmKoreanRaidCache>;
 
 function createEnv(markers: Record<string, string | null> = {}) {
   const kv = {
@@ -211,7 +211,7 @@ describe("runScheduledJobs", () => {
     expect(mockedSyncRawStudents).toHaveBeenCalledWith(env, true);
     expect(mockedSyncStudentDirectory).toHaveBeenCalledWith(env, true);
     expect(mockedWarmRecruitmentCache).toHaveBeenCalledWith(env, true);
-    expect(mockedWarmRaidCache).toHaveBeenCalledWith(env, true);
+    expect(mockedWarmRaidCache).toHaveBeenCalledWith(env, true, ctx);
     expect(mockedGetMainStories).toHaveBeenCalledWith(env, true);
     expect(mockedGetAllStudentsFavoriteItems).toHaveBeenCalledWith(env, true);
     expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledWith(env, true, { ctx });

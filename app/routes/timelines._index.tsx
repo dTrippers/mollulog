@@ -39,7 +39,7 @@ import { canonicalLink, socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { defenseTypeShortLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { getUserParties } from "~/models/party.server";
-import { getAllRaidSchedules } from "~/models/raid";
+import { getKoreanRaidSchedules } from "~/models/raid-season.server";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getVisibleSenseisById } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
@@ -97,7 +97,7 @@ function toCardData(
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const [raids, rawStudents, sensei] = await Promise.all([
-    getAllRaidSchedules(env),
+    getKoreanRaidSchedules(env, { ctx }),
     getAllStudentsMap(env, true),
     getActiveSensei(env, request, ctx),
   ]);

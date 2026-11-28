@@ -13,7 +13,7 @@ import { fetchRaidStatisticsByStudent, type RaidStatistics } from "~/lib/ranks/s
 import { fetchStudentAnalysis, type StudentAnalysisSynergyPartner } from "~/lib/ranks/student-analysis";
 import { canonicalLink, socialMeta } from "~/lib/seo";
 import type { RaidType, Terrain } from "~/models/content.d";
-import { getAllRaidSchedules } from "~/models/raid";
+import { getNumberedKoreanRaidSchedules } from "~/models/raid-season.server";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getAllStudentsMap, getStudentForms } from "~/models/student";
 import { formatStudentFullName } from "~/models/student-name";
@@ -63,7 +63,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const env = context.cloudflare.env;
   const currentUserPromise = getActiveSensei(env, request);
   const allStudentsPromise = getAllStudentsMap(env, true);
-  const allRaidsPromise = getAllRaidSchedules(env);
+  const allRaidsPromise = getNumberedKoreanRaidSchedules(env);
   const studentFormsPromise = getStudentForms(env);
   const [currentUser, rawAllStudents, allRaids, studentForms] = await Promise.all([
     currentUserPromise,

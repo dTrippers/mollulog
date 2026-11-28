@@ -2,7 +2,7 @@ import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import type { LoaderFunctionArgs } from "react-router";
 import { raidTypeToParam } from "~/domain/raid";
-import { getAllRaidSchedules } from "~/models/raid";
+import { getRaidRowSeasonPages } from "~/models/raid-season.server";
 import { getAllStudents } from "~/models/student";
 import { getAllTimelineContentsMeta } from "~/models/timeline-content.server";
 
@@ -49,19 +49,18 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
   ];
 
   const now = dayjs();
-  const [contents, students, raidSchedules] = await Promise.all([
+  const [contents, students] = await Promise.all([
     getAllTimelineContentsMeta(publicReadEnv, { ctx }),
     getAllStudents(env),
-    getAllRaidSchedules(env),
   ]);
-  const raidScheduleMap = new Map(raidSchedules.map((schedule) => [schedule.uid, schedule]));
+  const raidSeasonPages = await getRaidRowSeasonPages(env, contents, { ctx });
 
   for (const content of contents) {
     let link: string | null = null;
-    if (content.contentType === "raid" && content.contentUid) {
-      const schedule = raidScheduleMap.get(content.contentUid);
-      if (schedule) {
-        link = `${HOST}/raids/${raidTypeToParam(schedule.raidType)}/${schedule.seasonIndex}`;
+    if (content.contentType === "raid") {
+      const seasonPage = raidSeasonPages.get(content.uid);
+      if (seasonPage) {
+        link = `${HOST}/raids/${raidTypeToParam(seasonPage.raidType)}/${seasonPage.seasonIndex}`;
       }
     } else if (content.contentType === "live") {
       link = `${HOST}/lives/${content.uid}`;

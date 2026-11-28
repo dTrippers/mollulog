@@ -1,14 +1,22 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { bossImageUrl } from "~/models/assets";
 import type { MainStoryVolume } from "~/models/main-story";
-import type { TimelineContent } from "~/models/timeline-content.server";
+import type { RaidScheduleListItem } from "~/models/raid";
+import type { TimelineContent, TimelineRaidRow } from "~/models/timeline-content.server";
 import { buildMainStoryRewardContents, getPyroxenePlannerContents } from "~/views/pyroxene";
+import {
+  JP_TOTAL_ASSAULT_94,
+  OFFICIAL_GL_TOTAL_ASSAULT_89_OF_JP_95,
+  raidDetail,
+  raidListItem,
+  raidRow,
+} from "../../helpers/raid-season-fixtures";
 
 jest.mock("~/models/recruitment", () => ({
   getRecruitmentGroupsByUids: jest.fn(),
   getRecruitmentPoolStudents: jest.fn(),
 }));
-jest.mock("~/models/raid", () => ({ getRaidSchedule: jest.fn() }));
+jest.mock("~/models/raid", () => ({ getAllRaidSchedules: jest.fn(), getRaidSchedule: jest.fn() }));
 jest.mock("~/models/student", () => ({ getAllStudentsMap: jest.fn() }));
 jest.mock("~/models/student-directory", () => ({
   getStudentDirectoryStudents: jest.fn(() => Promise.resolve([])),
@@ -19,7 +27,7 @@ jest.mock("~/models/main-story", () => ({
 }));
 jest.mock("~/models/timeline-content.server", () => ({
   ...jest.requireActual<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
-  getFutureRaidContents: jest.fn(),
+  getFutureRaidRows: jest.fn(),
   getTimelineContent: jest.fn(),
   getTimelineContents: jest.fn(),
 }));
@@ -116,7 +124,7 @@ describe("getPyroxenePlannerContents main story rewards", () => {
       jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
     const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
     const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
-    const { getFutureRaidContents, getTimelineContent, getTimelineContents } = jest.requireMock<
+    const { getFutureRaidRows, getTimelineContent, getTimelineContents } = jest.requireMock<
       typeof import("~/models/timeline-content.server")
     >("~/models/timeline-content.server");
     const endAt = "2026-09-29T02:00:00.000Z";
@@ -137,7 +145,7 @@ describe("getPyroxenePlannerContents main story rewards", () => {
         earnablePyroxene: null,
       }),
     ]);
-    (getFutureRaidContents as jest.MockedFunction<typeof getFutureRaidContents>).mockResolvedValue([]);
+    (getFutureRaidRows as jest.MockedFunction<typeof getFutureRaidRows>).mockResolvedValue([]);
     (getTimelineContent as jest.MockedFunction<typeof getTimelineContent>).mockResolvedValue(
       timelineContent({ uid: "pandemonium-cruise" }),
     );
@@ -180,6 +188,14 @@ describe("getPyroxenePlannerContents main story rewards", () => {
     expect(contentReward?.uid).not.toBe(readingReward?.uid);
   });
 });
+
+/** A raid row without a JP season, which keeps the lookup by its `content_uid`. */
+function unlinkedRaidRow(overrides: Partial<TimelineContent> & { uid: string }): TimelineRaidRow {
+  return {
+    ...timelineContent(overrides),
+    raidSeason: { raidType: null, jpRaidSeasonIndex: null, glRaidSeasonIndex: null },
+  };
+}
 
 function timelineContent(overrides: Partial<TimelineContent> & { uid: string }): TimelineContent {
   return {
@@ -226,7 +242,7 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
       jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
     const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
     const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
-    const { getFutureRaidContents, getTimelineContent, getTimelineContents } = jest.requireMock<
+    const { getFutureRaidRows, getTimelineContent, getTimelineContents } = jest.requireMock<
       typeof import("~/models/timeline-content.server")
     >("~/models/timeline-content.server");
 
@@ -253,7 +269,7 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
     });
 
     (getTimelineContents as jest.MockedFunction<typeof getTimelineContents>).mockResolvedValue([eventA, eventB]);
-    (getFutureRaidContents as jest.MockedFunction<typeof getFutureRaidContents>).mockResolvedValue([]);
+    (getFutureRaidRows as jest.MockedFunction<typeof getFutureRaidRows>).mockResolvedValue([]);
     (getTimelineContent as jest.MockedFunction<typeof getTimelineContent>).mockResolvedValue(
       timelineContent({
         uid: "pandemonium-cruise",
@@ -333,14 +349,14 @@ describe("getPyroxenePlannerContents raid season identity", () => {
       jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
     const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
     const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
-    const { getFutureRaidContents, getRaidSchedule, getTimelineContent, getTimelineContents } = {
+    const { getFutureRaidRows, getRaidSchedule, getTimelineContent, getTimelineContents } = {
       ...jest.requireMock<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
       ...jest.requireMock<typeof import("~/models/raid")>("~/models/raid"),
     };
 
     (getTimelineContents as jest.MockedFunction<typeof getTimelineContents>).mockResolvedValue([]);
-    (getFutureRaidContents as jest.MockedFunction<typeof getFutureRaidContents>).mockResolvedValue([
-      timelineContent({
+    (getFutureRaidRows as jest.MockedFunction<typeof getFutureRaidRows>).mockResolvedValue([
+      unlinkedRaidRow({
         uid: "raid-content-uid",
         contentType: "raid",
         contentUid: "raid-schedule-uid",
@@ -379,14 +395,14 @@ describe("getPyroxenePlannerContents raid season identity", () => {
       jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
     const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
     const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
-    const { getFutureRaidContents, getRaidSchedule, getTimelineContent, getTimelineContents } = {
+    const { getFutureRaidRows, getRaidSchedule, getTimelineContent, getTimelineContents } = {
       ...jest.requireMock<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
       ...jest.requireMock<typeof import("~/models/raid")>("~/models/raid"),
     };
 
     (getTimelineContents as jest.MockedFunction<typeof getTimelineContents>).mockResolvedValue([]);
-    (getFutureRaidContents as jest.MockedFunction<typeof getFutureRaidContents>).mockResolvedValue([
-      timelineContent({
+    (getFutureRaidRows as jest.MockedFunction<typeof getFutureRaidRows>).mockResolvedValue([
+      unlinkedRaidRow({
         uid: "raid-content-uid-2",
         contentType: "raid",
         contentUid: null,
@@ -413,13 +429,121 @@ describe("getPyroxenePlannerContents raid season identity", () => {
   });
 });
 
+describe("getPyroxenePlannerContents forecast raid seasons", () => {
+  async function plannerRaidEntries(
+    glRaidSeasonIndex: number | null,
+    glSchedules: RaidScheduleListItem[] = [],
+    beforeRead: () => void = () => {},
+  ) {
+    const { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } =
+      jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
+    const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
+    const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
+    const { getFutureRaidRows, getAllRaidSchedules, getRaidSchedule, getTimelineContent, getTimelineContents } = {
+      ...jest.requireMock<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
+      ...jest.requireMock<typeof import("~/models/raid")>("~/models/raid"),
+    };
+
+    (getTimelineContents as jest.MockedFunction<typeof getTimelineContents>).mockResolvedValue([]);
+    (getFutureRaidRows as jest.MockedFunction<typeof getFutureRaidRows>).mockResolvedValue([
+      raidRow({
+        uid: "raid-nightmare",
+        contentUid: "gl_total_assault_91",
+        startAt: "2027-02-23T02:00:00Z",
+        endAt: "2027-03-01T19:00:00Z",
+        raidSeason: { raidType: "total_assault", jpRaidSeasonIndex: 94, glRaidSeasonIndex },
+      }),
+    ]);
+    (getTimelineContent as jest.MockedFunction<typeof getTimelineContent>).mockResolvedValue(
+      timelineContent({ uid: "pandemonium-cruise" }),
+    );
+    (getMainStories as jest.MockedFunction<typeof getMainStories>).mockResolvedValue([]);
+    (getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>).mockResolvedValue({});
+    (getRecruitmentPoolStudents as jest.MockedFunction<typeof getRecruitmentPoolStudents>).mockResolvedValue([]);
+    (getRecruitmentGroupsByUids as jest.MockedFunction<typeof getRecruitmentGroupsByUids>).mockResolvedValue([]);
+    // BAQL once the forecast gl schedule is deleted: only the JP season is left.
+    (getAllRaidSchedules as jest.MockedFunction<typeof getAllRaidSchedules>).mockImplementation(
+      async (_env, _forceRefresh, options) =>
+        options?.region === "jp" ? [raidListItem(JP_TOTAL_ASSAULT_94)] : glSchedules,
+    );
+    (getRaidSchedule as jest.MockedFunction<typeof getRaidSchedule>).mockImplementation(async (_env, uid) =>
+      uid === "jp_total_assault_94" ? raidDetail(JP_TOTAL_ASSAULT_94) : null,
+    );
+
+    beforeRead();
+    const contents = await getPyroxenePlannerContents({} as Env);
+    return contents.filter((content) => content.kind === "raid");
+  }
+
+  it("shows a forecast raid from its JP schedule with the row's dates and Korean-server season number", async () => {
+    expect(await plannerRaidEntries(91)).toEqual([
+      {
+        kind: "raid",
+        uid: "raid-nightmare",
+        name: "악몽 열차",
+        imageUrl: bossImageUrl("nightmare"),
+        type: "total_assault",
+        seasonIndex: 91,
+        since: "2027-02-23T02:00:00.000Z",
+        until: "2027-03-01T19:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("gives a forecast raid no number, and so no season link, when BAQL gives its number to another season", async () => {
+    // A hypothetical official #91 of JP season 95, while the row of JP season 94 still predicts #91.
+    const official91 = {
+      ...raidListItem(OFFICIAL_GL_TOTAL_ASSAULT_89_OF_JP_95),
+      uid: "gl_total_assault_91",
+      seasonIndex: 91,
+    };
+
+    expect(await plannerRaidEntries(91, [official91])).toEqual([
+      expect.objectContaining({ uid: "raid-nightmare", name: "악몽 열차", seasonIndex: null }),
+    ]);
+  });
+
+  it("starts reading the raid lists together with the recruitment and student reads", async () => {
+    const { getRecruitmentGroupsByUids } =
+      jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
+    const { getAllRaidSchedules } = jest.requireMock<typeof import("~/models/raid")>("~/models/raid");
+    let releaseRecruitments: (() => void) | undefined;
+    let raidListsReadBeforeRecruitments = false;
+
+    const entries = plannerRaidEntries(91, [], () => {
+      (getAllRaidSchedules as jest.Mock).mockClear();
+      (getRecruitmentGroupsByUids as jest.MockedFunction<typeof getRecruitmentGroupsByUids>).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            releaseRecruitments = () => {
+              raidListsReadBeforeRecruitments = (getAllRaidSchedules as jest.Mock).mock.calls.length > 0;
+              resolve([]);
+            };
+          }),
+      );
+    });
+    // Let every read that does not wait for the recruitments start, then let the recruitments answer.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releaseRecruitments?.();
+
+    await expect(entries).resolves.toEqual([expect.objectContaining({ uid: "raid-nightmare", seasonIndex: 91 })]);
+    expect(raidListsReadBeforeRecruitments).toBe(true);
+  });
+
+  it("gives a forecast raid without a Korean-server season number no number", async () => {
+    expect(await plannerRaidEntries(null)).toEqual([
+      expect.objectContaining({ uid: "raid-nightmare", seasonIndex: null }),
+    ]);
+  });
+});
+
 describe("getPyroxenePlannerContents with an unregistered pickup student", () => {
   it("leaves the tier unconfirmed, keeps the provisional three-star pool, and switches rules at the anchor event", async () => {
     const { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } =
       jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
     const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
     const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
-    const { getFutureRaidContents, getTimelineContent, getTimelineContents } = jest.requireMock<
+    const { getFutureRaidRows, getTimelineContent, getTimelineContents } = jest.requireMock<
       typeof import("~/models/timeline-content.server")
     >("~/models/timeline-content.server");
     const event = timelineContent({
@@ -431,7 +555,7 @@ describe("getPyroxenePlannerContents with an unregistered pickup student", () =>
     });
 
     (getTimelineContents as jest.MockedFunction<typeof getTimelineContents>).mockResolvedValue([event]);
-    (getFutureRaidContents as jest.MockedFunction<typeof getFutureRaidContents>).mockResolvedValue([]);
+    (getFutureRaidRows as jest.MockedFunction<typeof getFutureRaidRows>).mockResolvedValue([]);
     (getTimelineContent as jest.MockedFunction<typeof getTimelineContent>).mockResolvedValue(
       timelineContent({
         uid: "pandemonium-cruise",

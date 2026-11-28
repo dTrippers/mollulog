@@ -7,7 +7,8 @@ import { buildRaidPartyStudentMap, getMaxLevelAt, RaidVideosScreen } from "~/com
 import { raidTypeFromParam, raidTypeToParam } from "~/domain/raid";
 import { getFilterableRaidDifficulties, getRaidDifficultyScoreRange, parseDifficulty } from "~/domain/raid-score";
 import { fetchRaidVideos } from "~/lib/ranks";
-import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey, getRaidScheduleByTypeAndSeason } from "~/models/raid";
+import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey } from "~/models/raid";
+import { getKoreanRaidScheduleByTypeAndSeason } from "~/models/raid-season.server";
 import { getRaidVideoParties, parseVideoSort, RAID_VIDEOS_PAGE_SIZE } from "~/models/raid-videos";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
@@ -35,7 +36,7 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     throw createErrorResponse("총력전/대결전 정보를 찾을 수 없어요", 404);
   }
 
-  const currentRaid = await getRaidScheduleByTypeAndSeason(env, raidTypeFromParam(raidType), parsedSeasonIndex);
+  const currentRaid = await getKoreanRaidScheduleByTypeAndSeason(env, raidTypeFromParam(raidType), parsedSeasonIndex);
   if (!currentRaid) {
     throw createErrorResponse("총력전/대결전 정보를 찾을 수 없어요", 404);
   }

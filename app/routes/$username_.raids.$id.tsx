@@ -45,7 +45,10 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   // The owner reads and changes a record on the edit screen.
   if (currentUser?.id === sensei.id) throw redirect(`/@${sensei.username}/raids/${record.uid}/edit`);
 
-  const [seasons, students] = await Promise.all([getRaidRecordSeasons(env, record.server), getAllStudents(env, true)]);
+  const [seasons, students] = await Promise.all([
+    getRaidRecordSeasons(env, record.server, { forecastCounterparts: true }),
+    getAllStudents(env, true),
+  ]);
   const season = seasons.find(
     (candidate) => candidate.raidType === record.raidType && candidate.seasonIndex === record.seasonIndex,
   );

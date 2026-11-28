@@ -99,7 +99,7 @@ describe("getFutureContents recruitment periods", () => {
     expect(mockedFetchRouteCached).toHaveBeenCalledWith(
       env,
       undefined,
-      "route::futures::v5::all",
+      "route::futures::v6::all",
       expect.any(Function),
       false,
     );

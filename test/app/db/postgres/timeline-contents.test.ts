@@ -4,8 +4,8 @@ import { pgTimelineContentsTable } from "~/db/postgres/schema";
 import {
   getPostgresAllTimelineContentsMeta,
   getPostgresContentUidsByRecruitmentGroup,
-  getPostgresFutureRaidContents,
   getPostgresHomeMainStoryContent,
+  getPostgresRaidRows,
   getPostgresTimelineContent,
   getPostgresTimelineContentDatesByContentUids,
   getPostgresTimelineContents,
@@ -44,6 +44,7 @@ const defaultTimelineContentRow = {
   featuredUntil: new Date("2026-08-01T00:00:00.000Z"),
   raidType: null,
   jpRaidSeasonIndex: null,
+  glRaidSeasonIndex: null,
   createdAt: new Date("2026-07-13T00:00:00.000Z"),
   updatedAt: new Date("2026-07-13T00:00:00.000Z"),
 } satisfies TimelineContentRow;
@@ -117,6 +118,46 @@ describe("PostgreSQL timeline contents read", () => {
     expect(setAttribute).toHaveBeenCalledWith("db.response.returned_rows", 1);
   });
 
+  it("reads raid rows with their raid columns, only those not ended by the given time when one is given", async () => {
+    const query = jest.fn(async (_query: unknown, _values: unknown[]) => ({
+      rows: [
+        postgresRow({
+          uid: "raid-row",
+          contentType: "raid",
+          contentUid: "gl_total_assault_89",
+          raidType: "total_assault",
+          jpRaidSeasonIndex: 92,
+          glRaidSeasonIndex: 89,
+        }),
+      ],
+      rowCount: 1,
+    }));
+    const client = { connect: jest.fn(async () => undefined), end: jest.fn(async () => undefined), query };
+    const options = { createClient: () => client as unknown as Client };
+    const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive };
+    const now = "2099-08-01T00:00:00.000Z";
+
+    const [row] = await getPostgresRaidRows(env, now, options);
+    expect(row).toMatchObject({ uid: "raid-row", contentType: "raid", contentUid: "gl_total_assault_89" });
+    expect(row?.raidSeason).toEqual({ raidType: "total_assault", jpRaidSeasonIndex: 92, glRaidSeasonIndex: 89 });
+    expect(query).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining(
+          'where ("timeline_contents"."content_type" = $1 and ("timeline_contents"."end_at" is null or "timeline_contents"."end_at" >= $2))',
+        ),
+      }),
+      ["raid", now],
+    );
+
+    await getPostgresRaidRows(env, null, options);
+    expect(query).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining('where "timeline_contents"."content_type" = $1 order by'),
+      }),
+      ["raid"],
+    );
+  });
+
   it("covers every Phase 3.5 lookup shape with deterministic PostgreSQL queries", async () => {
     const connect = jest.fn(async () => undefined);
     const end = jest.fn(async () => undefined);
@@ -142,7 +183,8 @@ describe("PostgreSQL timeline contents read", () => {
     });
     await expect(getPostgresUpcomingEvent(env, now, options)).resolves.toMatchObject({ uid: "future-event" });
     await expect(getPostgresTimelineContentsByUids(env, ["future-event"], options)).resolves.toHaveLength(1);
-    await expect(getPostgresFutureRaidContents(env, ["raid"], now, options)).resolves.toHaveLength(1);
+    await expect(getPostgresRaidRows(env, now, options)).resolves.toHaveLength(1);
+    await expect(getPostgresRaidRows(env, null, options)).resolves.toHaveLength(1);
     await expect(getPostgresTimelineContentsByContentTypes(env, ["event"], now, options)).resolves.toHaveLength(1);
     await expect(getPostgresTimelineContentsByContentUids(env, ["event-1"], options)).resolves.toHaveLength(1);
     await expect(getPostgresTimelineContentsByRecruitmentGroupUids(env, ["group-1"], options)).resolves.toHaveLength(1);
@@ -166,8 +208,8 @@ describe("PostgreSQL timeline contents read", () => {
         expect.stringContaining('"timeline_contents"."recruitment_group_uid" is not null'),
       ]),
     );
-    expect(connect).toHaveBeenCalledTimes(10);
-    expect(end).toHaveBeenCalledTimes(10);
+    expect(connect).toHaveBeenCalledTimes(11);
+    expect(end).toHaveBeenCalledTimes(11);
   });
 
   it("merges split date ranges and preserves an open-ended range", async () => {

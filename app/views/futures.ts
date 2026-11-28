@@ -1,4 +1,5 @@
 import type { MinigameConfig } from "~/domain/event-shop";
+import { getRaidSeasonIdentityUid } from "~/domain/raid-season-resolution";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import type { RecruitmentPeriod } from "~/domain/recruitment-period-notice";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
@@ -38,6 +39,11 @@ export type FutureContent = TimelineContent & {
   recruitments: RecruitmentInfo[];
   recruitmentPeriod: RecruitmentPeriod | null;
   raidInfo?: RaidInfo;
+  /**
+   * The uid of a raid row's season, the same whether BAQL lists its `gl` schedule or not; the season page checks a
+   * return from futures against it. Null for a raid row without a season page.
+   */
+  raidSeasonUid?: string | null;
 };
 
 function normalizeInstantValue(value: string | Date | null | undefined): string | null {
@@ -105,7 +111,7 @@ export async function getFutureContents(
   const allEnriched = await fetchRouteCached(
     env,
     ctx,
-    cacheKey("route", "futures", 5, "all"),
+    cacheKey("route", "futures", 6, "all"),
     async () => {
       const [contents, upcomingRaidContents] = await Promise.all([
         getTimelineContents(env, nowUtcIso(), { ctx }),
@@ -129,12 +135,14 @@ export async function getFutureContents(
         const recruitmentPeriod = group ? normalizeRecruitmentGroupPeriod(group) : null;
 
         if (content.contentType === "raid") {
+          const raidSchedule = upcomingRaidMap.get(content.uid)?.raidSchedule;
           return {
             ...content,
             minigameType: null,
             recruitments: [],
             recruitmentPeriod,
             raidInfo: upcomingRaidMap.get(content.uid)?.raidInfo,
+            raidSeasonUid: raidSchedule ? getRaidSeasonIdentityUid(raidSchedule) : null,
           };
         }
 

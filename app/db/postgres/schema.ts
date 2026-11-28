@@ -242,6 +242,7 @@ export const pgTimelineContentsTable = pgTable(
     featuredUntil: timestamptz("featured_until"),
     raidType: text("raid_type"),
     jpRaidSeasonIndex: integer("jp_raid_season_index"),
+    glRaidSeasonIndex: integer("gl_raid_season_index"),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },

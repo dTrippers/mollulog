@@ -19,7 +19,7 @@ import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { fetchRaidStatisticsByStudent, type RaidStatistics } from "~/lib/ranks/stats";
-import { getAllRaidSchedules } from "~/models/raid";
+import { getNumberedKoreanRaidSchedules } from "~/models/raid-season.server";
 import { getRecruitedStudents, type RecruitedStudentCurrentStateInput } from "~/models/recruited-student";
 import { getRelationshipLevels, getStudentStateWriteMode } from "~/models/relationship-level";
 import { getStudentDetailData } from "~/models/student";
@@ -115,7 +115,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     studentUid: uid,
   });
   const currentUserPromise = getActiveSensei(env, request);
-  const allRaidsPromise = getAllRaidSchedules(env);
+  const allRaidsPromise = getNumberedKoreanRaidSchedules(env);
   currentUserPromise.catch(() => {});
   allRaidsPromise.catch(() => {});
 

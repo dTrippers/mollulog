@@ -97,7 +97,7 @@ import {
   type FavoritedCountEntry,
   syncFavoriteCounts,
 } from "./futures._components/favorited-counts";
-import { createFutureDetailNavigationState } from "./futures._components/futures-navigation";
+import { createFutureDetailNavigationState, getFutureDetailContentUid } from "./futures._components/futures-navigation";
 import { useFuturesViewState } from "./futures._components/futures-view-state";
 import { useRecruitmentOpinionSetting } from "./futures._components/recruitment-opinion-setting";
 import {
@@ -204,6 +204,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       minigameType: content.minigameType,
       recruitments: content.recruitments.map(normalizeFutureRecruitment),
       raidInfo: content.raidInfo,
+      raidSeasonUid: content.raidSeasonUid ?? null,
     }));
 
     const allStudentUids = contents
@@ -368,7 +369,8 @@ type FutureContentForView = Pick<
   | "recruitmentPeriod"
   | "raidInfo"
 >;
-type FutureContentsLoaderContent = FutureContentForView & Pick<FutureContent, "contentUid" | "recruitmentGroupUid">;
+type FutureContentsLoaderContent = FutureContentForView &
+  Pick<FutureContent, "contentUid" | "recruitmentGroupUid" | "raidSeasonUid">;
 type RecruitmentResultState = {
   uid: string;
   recruitmentGroupUid: string;
@@ -1228,8 +1230,7 @@ function FutureContentsScreen({
   const getContentNavigationState = useCallback(
     (contentUid: string) => {
       const sourceContent = contents.find((content) => content.uid === contentUid);
-      const detailContentUid =
-        sourceContent?.contentType === "raid" ? (sourceContent.contentUid ?? contentUid) : contentUid;
+      const detailContentUid = sourceContent ? getFutureDetailContentUid(sourceContent) : contentUid;
       return createFutureDetailNavigationState(location.key, detailContentUid);
     },
     [contents, location.key],

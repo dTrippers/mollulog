@@ -106,6 +106,49 @@ is a data result and should remain distinct from an upstream failure.
 - Cron and background work that needs a forced refresh uses the `forceRefresh`
   pattern.
 
+## Korean-server raid seasons
+
+BAQL names Korean-server raid schedules `gl`. A `gl` schedule that BAQL forecast
+from a JP season links that season through `jpSchedule`, and BAQL can drop such a
+forecast. Raid timeline rows therefore carry their own link to the season:
+`raid_type`, `jp_raid_season_index`, and `gl_raid_season_index` (the Korean
+season number, nullable). Timeline auto sync copies BAQL's `gl` season number into
+`gl_raid_season_index` when it creates a row and when it updates a future row.
+
+A row with `raid_type` and `jp_raid_season_index` shows, in this order:
+
+1. the `gl` schedule whose `jpSchedule` is that JP season of that raid type;
+2. otherwise the JP schedule of that season, with the row's start and end, the
+   row's `gl_raid_season_index` as its season number, the `gl` spelling of the
+   boss uid, and the JP schedule's uid;
+3. otherwise no schedule data.
+
+The rule lives in `app/domain/raid-season-resolution.ts`, without I/O. A match
+that more than one schedule claims resolves to no schedule. Never choose the
+schedule of such a row by `content_uid`, and never build or parse a schedule uid;
+the `content_uid` lookup is only for rows without those two columns.
+
+A forecast season (rule 2) owns its number only when its row has not ended, no
+`gl` schedule of its raid type has that number, and no other unfinished row's
+forecast season claims it. The resolver decides this, so a forecast season that
+does not own its number reaches every reader with no number, exactly like a row
+whose `gl_raid_season_index` is null. A season without a number has no season
+page, so screens that link to or print a season number leave it out.
+
+Readers that list or open Korean-server seasons go through
+`app/models/raid-season.server.ts`, which joins BAQL's `gl` seasons with the
+forecast seasons of unfinished raid rows. A request that needs several of them
+reads the rows and BAQL's lists once and passes the result on (`seasons`).
+A season is identified across that change by `getRaidSeasonIdentityUid`: the
+uid of its JP schedule as BAQL returned it (the schedule's own uid when a `gl`
+schedule has no JP schedule). It is the same whether BAQL lists the `gl`
+schedule or the season is shown as a forecast.
+
+A raid record is keyed by server, raid type and season number, so the seasons a
+record can be saved to are BAQL's own schedules only. A predicted Korean season
+number never becomes part of a stored record; record screens may show it only as
+a JP season's Korean counterpart.
+
 ## Background work
 
 - Worker cron branches in `workers/app.ts`.

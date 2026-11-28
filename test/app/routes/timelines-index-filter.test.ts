@@ -29,6 +29,8 @@ jest.mock("~/db/postgres/walkthrough-timeline-likes", () => ({
 jest.mock("~/db/postgres/walkthrough-timelines", () => ({ listPostgresVisibleWalkthroughTimelines: jest.fn() }));
 jest.mock("~/models/party.server", () => ({ getUserParties: jest.fn() }));
 jest.mock("~/models/raid", () => ({ getAllRaidSchedules: jest.fn() }));
+// No raid row has a forecast season, so the Korean-server season list is BAQL's gl list.
+jest.mock("~/models/timeline-content.server", () => ({ getFutureRaidRows: jest.fn(async () => []) }));
 jest.mock("~/models/recruited-student", () => ({ getRecruitedStudentTiers: jest.fn() }));
 jest.mock("~/models/sensei", () => ({ getVisibleSenseisById: jest.fn() }));
 jest.mock("~/models/student", () => ({ getAllStudentsMap: jest.fn() }));

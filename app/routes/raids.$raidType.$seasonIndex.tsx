@@ -15,13 +15,14 @@ import { FilterButtons } from "~/components/primitives";
 import { findCurrentOrClosestRaidSchedule, raidTypeToParam } from "~/domain/raid";
 import { WALKTHROUGH_TIMELINE_DIFFICULTIES } from "~/domain/walkthrough-timeline";
 import type { Defense } from "~/graphql/graphql";
-import { routeError } from "~/lib/http-errors";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { routeError } from "~/lib/http-errors";
 import { canonicalLink, socialMeta } from "~/lib/seo";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale } from "~/locales/ko";
 import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey, type RaidDefenseTypeSet } from "~/models/raid";
 import { buildRaidYoutubeSearchUrl, getVideoDateRange } from "~/models/raid-videos";
 import { loadRaidSeasonPage } from "~/views/raid";
+import { getRaidSeasonReturnUid, readFutureDetailNavigationState } from "./futures._components/futures-navigation";
 import { useFutureDetailReturn } from "./futures._components/use-futures-navigation";
 
 function getDefenseTypeSetLabel(defenseTypeSet: RaidDefenseTypeSet) {
@@ -120,7 +121,7 @@ export default function RaidPage() {
     : null;
   const showCurrentOrClosestRaidLink = currentOrClosestRaidPath !== null && currentOrClosestRaidPath !== raidPath;
   const { navigationState, verifiedFutureReturn, returnToFutures } = useFutureDetailReturn(
-    currentRaid.uid,
+    getRaidSeasonReturnUid(readFutureDetailNavigationState(location.state), currentRaid),
     location.state,
     (delta) => navigate(delta),
   );

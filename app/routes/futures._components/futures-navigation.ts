@@ -3,6 +3,7 @@ import {
   defaultContentFilterState,
   normalizeContentFilterState,
 } from "~/domain/futures/content-filter-state";
+import { getRaidSeasonIdentityUid } from "~/domain/raid-season-resolution";
 
 export type FutureContentView = "timeline" | "table" | "compact";
 export type MobileFutureContentView = Exclude<FutureContentView, "table">;
@@ -212,6 +213,18 @@ export function saveFutureVisitState(storage: StorageLike | null, nextState: Fut
   }
 }
 
+/**
+ * The uid a detail page checks a return from futures against. A raid row's season page checks its season's identity
+ * uid (`getRaidSeasonIdentityUid`); a raid row without a season page and every other row use the row's uid.
+ */
+export function getFutureDetailContentUid(content: {
+  uid: string;
+  contentType: string;
+  raidSeasonUid?: string | null;
+}): string {
+  return content.contentType === "raid" ? (content.raidSeasonUid ?? content.uid) : content.uid;
+}
+
 export function createFutureDetailNavigationState(entryKey: string, contentUid: string): FutureDetailNavigationState {
   const sourceHistoryIndex = getBrowserHistoryIndex();
   return {
@@ -254,6 +267,17 @@ export function readFutureDetailNavigationState(value: unknown): FutureDetailNav
   }
 
   return marker as FutureDetailNavigationState["__mllg"];
+}
+
+/**
+ * The uid a raid season page checks a return from futures against: the season's identity uid. A state stored with the
+ * schedule's own uid still verifies; a tab opened from futures before the identity uid was introduced holds one.
+ */
+export function getRaidSeasonReturnUid(
+  navigationState: FutureDetailNavigationState["__mllg"] | null,
+  schedule: { uid: string; jpSchedule: { uid: string } | null },
+): string {
+  return navigationState?.contentUid === schedule.uid ? schedule.uid : getRaidSeasonIdentityUid(schedule);
 }
 
 export function isVerifiedFutureDetailReturn(

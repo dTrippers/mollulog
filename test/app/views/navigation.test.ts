@@ -22,7 +22,11 @@ jest.mock("~/models/personal-navigation", () => ({ getPersonalNavigationState: j
 jest.mock("~/models/post", () => ({ getLatestPostTime: jest.fn() }));
 jest.mock("~/models/raid", () => ({ getAllRaidSchedules: jest.fn() }));
 jest.mock("~/models/navigation-menu-badges", () => ({ getNavigationMenuBadges: jest.fn() }));
-jest.mock("~/models/timeline-content.server", () => ({ getTimelineContentsByContentTypes: jest.fn() }));
+jest.mock("~/models/timeline-content.server", () => ({
+  getTimelineContentsByContentTypes: jest.fn(),
+  // No raid row has a forecast season, so the Korean-server season list is BAQL's gl list.
+  getFutureRaidRows: jest.fn(async () => []),
+}));
 
 const env = {} as Env;
 const ctx = {} as ExecutionContext;

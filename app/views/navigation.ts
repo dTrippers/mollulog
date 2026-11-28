@@ -11,7 +11,7 @@ import {
 import { getAllCoupons } from "~/models/coupon";
 import { getPersonalNavigationState } from "~/models/personal-navigation";
 import { getLatestPostTime } from "~/models/post";
-import { getAllRaidSchedules } from "~/models/raid";
+import { getKoreanRaidSchedules } from "~/models/raid-season.server";
 import { getNavigationMenuBadges } from "~/models/navigation-menu-badges";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getTimelineContentsByContentTypes } from "~/models/timeline-content.server";
@@ -108,7 +108,7 @@ export async function getNavigationBarContentsRaw(
         // Main stories can own an event shop, so include those as calculator candidates too.
         getTimelineContentsByContentTypes(env, ["event", "main_story"], now, { ctx }),
         getLatestPostTime(env, "news", { ctx }),
-        getAllRaidSchedules(env, forceRefresh),
+        getKoreanRaidSchedules(env, { forceRefresh, ctx }),
         getAllCoupons(env, { ctx }),
       ]);
 

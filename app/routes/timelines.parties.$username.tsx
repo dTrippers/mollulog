@@ -6,7 +6,7 @@ import { Page, RouteErrorBoundary } from "~/components/features/layout";
 import { Callout } from "~/components/primitives";
 import { socialMeta } from "~/lib/seo";
 import { getUserParties } from "~/models/party.server";
-import { getAllRaidSchedules } from "~/models/raid";
+import { getNumberedKoreanRaidSchedules } from "~/models/raid-season.server";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
@@ -32,7 +32,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const [allStudents, recruitedStudentTiers, allRaids, userParties] = await Promise.all([
     getAllStudents(env, true),
     getRecruitedStudentTiers(env, sensei.id),
-    getAllRaidSchedules(env),
+    getNumberedKoreanRaidSchedules(env, { ctx }),
     getUserParties(env, sensei.username, { includePrivate: me }),
   ]);
 

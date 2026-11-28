@@ -7,7 +7,7 @@ import { getFurnitureCatalogSource } from "~/models/furniture-catalog";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
-import { warmRaidCache } from "~/models/raid";
+import { warmKoreanRaidCache } from "~/models/raid-season.server";
 import { getRecruitTicketSource } from "~/models/recruit-ticket";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
@@ -34,7 +34,7 @@ async function executeCacheRefreshTask(env: Env, ctx: ExecutionContext, name: Ca
       await warmRecruitmentCache(env);
       return;
     case "warmRaidCache":
-      await warmRaidCache(env);
+      await warmKoreanRaidCache(env, true, ctx);
       return;
     case "getMainStories":
       await getMainStories(env, true);

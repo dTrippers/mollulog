@@ -10,7 +10,7 @@ import { getStudentGearData, getStudentSkillCosts } from "~/models/growth-resour
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
 import { publishPendingOcrOutbox, reconcileOcrJobs } from "~/models/ocr-job";
-import { warmRaidCache } from "~/models/raid";
+import { warmKoreanRaidCache } from "~/models/raid-season.server";
 import { getRecruitTicketSource } from "~/models/recruit-ticket";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
@@ -114,7 +114,7 @@ async function refreshForcedSourceCaches(env: Env, ctx?: ExecutionContext): Prom
     () => syncRawStudents(env, true),
     () => syncStudentDirectory(env, true),
     () => warmRecruitmentCache(env, true),
-    () => warmRaidCache(env, true),
+    () => warmKoreanRaidCache(env, true, ctx),
     () => getMainStories(env, true),
     () => getAllStudentsFavoriteItems(env, true),
     () => syncAllTimelineContentsMeta(env, true, { ctx }),
