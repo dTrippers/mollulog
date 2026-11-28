@@ -392,7 +392,7 @@ export async function getPostgresTimelineAutoSyncRows(
           startAt: pgTimelineContentsTable.startAt,
           endAt: pgTimelineContentsTable.endAt,
           endless: pgTimelineContentsTable.endless,
-          jpRaidType: pgTimelineContentsTable.jpRaidType,
+          raidType: pgTimelineContentsTable.raidType,
           jpRaidSeasonIndex: pgTimelineContentsTable.jpRaidSeasonIndex,
         })
         .from(pgTimelineContentsTable)
@@ -412,7 +412,7 @@ function updateMatchCondition(match: TimelineAutoSyncUpdateMatch) {
   if (match.kind === "jpRaidSeason") {
     return and(
       eq(table.contentType, match.contentType),
-      eq(table.jpRaidType, match.raidType),
+      eq(table.raidType, match.raidType),
       eq(table.jpRaidSeasonIndex, match.seasonIndex),
     );
   }
@@ -467,7 +467,7 @@ export async function applyPostgresTimelineAutoSyncPlan(
           const futureRows = await tx
             .select({
               uid: pgTimelineContentsTable.uid,
-              jpRaidType: pgTimelineContentsTable.jpRaidType,
+              raidType: pgTimelineContentsTable.raidType,
               jpRaidSeasonIndex: pgTimelineContentsTable.jpRaidSeasonIndex,
             })
             .from(pgTimelineContentsTable)
@@ -478,13 +478,13 @@ export async function applyPostgresTimelineAutoSyncPlan(
               ),
             );
           creationBlockedByUids = futureRows
-            .filter((row) => row.jpRaidType === null || row.jpRaidSeasonIndex === null)
+            .filter((row) => row.raidType === null || row.jpRaidSeasonIndex === null)
             .map((row) => row.uid);
           if (creationBlockedByUids.length > 0) {
             creates = [];
           } else {
-            const seasons = new Set(futureRows.map((row) => JSON.stringify([row.jpRaidType, row.jpRaidSeasonIndex])));
-            creates = creates.filter((row) => !seasons.has(JSON.stringify([row.jpRaidType, row.jpRaidSeasonIndex])));
+            const seasons = new Set(futureRows.map((row) => JSON.stringify([row.raidType, row.jpRaidSeasonIndex])));
+            creates = creates.filter((row) => !seasons.has(JSON.stringify([row.raidType, row.jpRaidSeasonIndex])));
           }
         }
 
@@ -504,7 +504,7 @@ export async function applyPostgresTimelineAutoSyncPlan(
                 endAt: row.endAt ? new Date(row.endAt) : null,
                 endless: row.endless,
                 confirmed: row.confirmed,
-                jpRaidType: row.jpRaidType,
+                raidType: row.raidType,
                 jpRaidSeasonIndex: row.jpRaidSeasonIndex,
                 syncedAt,
                 createdAt: syncedAt,

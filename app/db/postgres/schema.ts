@@ -240,7 +240,7 @@ export const pgTimelineContentsTable = pgTable(
     nameI18n: jsonb("name_i18n").$type<TimelineContentNameI18n>().notNull().default({}),
     recruitmentStudentUids: text("recruitment_student_uids").array(),
     featuredUntil: timestamptz("featured_until"),
-    jpRaidType: text("jp_raid_type"),
+    raidType: text("raid_type"),
     jpRaidSeasonIndex: integer("jp_raid_season_index"),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),

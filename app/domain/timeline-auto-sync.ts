@@ -30,7 +30,11 @@ export type TimelineAutoSyncCandidate = TimelineAutoSyncContentKey & {
   jpRaidSeason?: TimelineAutoSyncJpRaidSeason | null;
 };
 
-/** A JP raid season by its client values. A GL season number is a prediction, so a raid row is found by this. */
+/**
+ * A JP raid season by its client values. A raid type is the same in every region, so a raid row keeps it as its own
+ * `raidType` and the JP season's index as `jpRaidSeasonIndex`. A GL season number is a prediction, so a raid row is
+ * found by this.
+ */
 export type TimelineAutoSyncJpRaidSeason = { raidType: string; seasonIndex: number };
 
 export type TimelineAutoSyncExistingRow = {
@@ -42,7 +46,7 @@ export type TimelineAutoSyncExistingRow = {
   startAt: UtcIsoString;
   endAt: UtcIsoString | null;
   endless: boolean;
-  jpRaidType: string | null;
+  raidType: string | null;
   jpRaidSeasonIndex: number | null;
 };
 
@@ -54,7 +58,7 @@ export type TimelineAutoSyncSchedule = {
 
 export type TimelineAutoSyncCreate = TimelineAutoSyncContentKey &
   TimelineAutoSyncCreateFields &
-  TimelineAutoSyncSchedule & { jpRaidType: string | null; jpRaidSeasonIndex: number | null };
+  TimelineAutoSyncSchedule & { raidType: string | null; jpRaidSeasonIndex: number | null };
 /**
  * The key the row was found by. The write changes the row only while it still has this key, because an admin may
  * change the row between the read and the write.
@@ -85,8 +89,9 @@ export type TimelineAutoSyncUpdatePolicy = {
    */
   keepOwnEndWithoutSourceEnd: boolean;
   /**
-   * How a candidate finds its row. `content` uses the content key, whose values are in-game ids. `jpRaidSeason` (raids)
-   * uses the JP season, because a GL raid schedule's uid is assembled from a predicted GL season number.
+   * How a candidate finds its row. `content` uses the content key, whose content uid is the content's uid in BAQL.
+   * `jpRaidSeason` (raids) uses the JP season, because a GL raid schedule's uid is assembled from a predicted GL season
+   * number.
    */
   matchBy: "content" | "jpRaidSeason";
 };
@@ -133,8 +138,8 @@ function formatJpRaidSeason(season: TimelineAutoSyncJpRaidSeason): string {
 
 function rowMatchKey(row: TimelineAutoSyncExistingRow, matchBy: TimelineAutoSyncUpdatePolicy["matchBy"]) {
   if (matchBy === "content") return row.contentUid === null ? null : formatTimelineAutoSyncContentKey(row);
-  if (row.jpRaidType === null || row.jpRaidSeasonIndex === null) return null;
-  return formatJpRaidSeason({ raidType: row.jpRaidType, seasonIndex: row.jpRaidSeasonIndex });
+  if (row.raidType === null || row.jpRaidSeasonIndex === null) return null;
+  return formatJpRaidSeason({ raidType: row.raidType, seasonIndex: row.jpRaidSeasonIndex });
 }
 
 function candidateMatchKey(candidate: TimelineAutoSyncCandidate, matchBy: TimelineAutoSyncUpdatePolicy["matchBy"]) {
@@ -321,7 +326,7 @@ export function planTimelineAutoSync(
       occurrence: candidate.occurrence,
       ...candidate.create,
       ...toCreatedSchedule(candidate),
-      jpRaidType: candidate.jpRaidSeason?.raidType ?? null,
+      raidType: candidate.jpRaidSeason?.raidType ?? null,
       jpRaidSeasonIndex: candidate.jpRaidSeason?.seasonIndex ?? null,
     });
   }

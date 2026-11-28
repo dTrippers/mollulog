@@ -40,7 +40,7 @@ function raidCreate(overrides: Partial<TimelineAutoSyncCreate> = {}): TimelineAu
     startAt: toUtcIso("2100-02-10T02:00:00Z"),
     endAt: toUtcIso("2100-03-08T19:00:00Z"),
     endless: false,
-    jpRaidType: "unlimit",
+    raidType: "unlimit",
     jpRaidSeasonIndex: 32,
     ...overrides,
   };
@@ -49,7 +49,7 @@ function raidCreate(overrides: Partial<TimelineAutoSyncCreate> = {}): TimelineAu
 /** The schedule a plan was computed from: a story-like row with an exposure end. */
 const READ_SCHEDULE = { startAt: toUtcIso("2099-12-01T02:00:00Z"), endAt: null, endless: true };
 
-const RECHECK_SELECT = 'select "uid", "jp_raid_type", "jp_raid_season_index" from "timeline_contents"';
+const RECHECK_SELECT = 'select "uid", "raid_type", "jp_raid_season_index" from "timeline_contents"';
 
 describe("applyPostgresTimelineAutoSyncPlan", () => {
   it("updates a raid row only while it still has the matched JP season and has not started, never confirmed", async () => {
@@ -79,7 +79,7 @@ describe("applyPostgresTimelineAutoSyncPlan", () => {
 
     const [update] = statements().filter((statement) => statement.text.startsWith("update"));
     expect(update?.text).toBe(
-      `update "timeline_contents" set "start_at" = $1, "end_at" = $2, "endless" = $3, "content_uid" = $4, "synced_at" = $5, "updated_at" = $6 where ("timeline_contents"."uid" = $7 and ("timeline_contents"."content_type" = $8 and "timeline_contents"."jp_raid_type" = $9 and "timeline_contents"."jp_raid_season_index" = $10) and (date_trunc('milliseconds', "timeline_contents"."start_at") = $11::timestamptz and date_trunc('milliseconds', "timeline_contents"."end_at") = $12::timestamptz and "timeline_contents"."endless" = $13) and "timeline_contents"."start_at" > $14) returning "uid"`,
+      `update "timeline_contents" set "start_at" = $1, "end_at" = $2, "endless" = $3, "content_uid" = $4, "synced_at" = $5, "updated_at" = $6 where ("timeline_contents"."uid" = $7 and ("timeline_contents"."content_type" = $8 and "timeline_contents"."raid_type" = $9 and "timeline_contents"."jp_raid_season_index" = $10) and (date_trunc('milliseconds', "timeline_contents"."start_at") = $11::timestamptz and date_trunc('milliseconds', "timeline_contents"."end_at") = $12::timestamptz and "timeline_contents"."endless" = $13) and "timeline_contents"."start_at" > $14) returning "uid"`,
     );
     expect(update?.values.slice(6, 13)).toEqual([
       "unlimit_30",
@@ -197,7 +197,7 @@ describe("applyPostgresTimelineAutoSyncPlan", () => {
       {
         updateStartedRows: false,
         matchBy: "content",
-        creates: [raidCreate({ contentType: "campaign", jpRaidType: null, jpRaidSeasonIndex: null })],
+        creates: [raidCreate({ contentType: "campaign", raidType: null, jpRaidSeasonIndex: null })],
         updates: [
           {
             uid: "changed-by-admin",
@@ -274,7 +274,7 @@ describe("applyPostgresTimelineAutoSyncPlan", () => {
       await applyPostgresTimelineAutoSyncPlan(
         env,
         {
-          ...raidPlan([raidCreate({ contentType: "campaign", jpRaidType: null, jpRaidSeasonIndex: null })]),
+          ...raidPlan([raidCreate({ contentType: "campaign", raidType: null, jpRaidSeasonIndex: null })]),
           matchBy: "content",
         },
         NOW,

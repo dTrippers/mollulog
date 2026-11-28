@@ -32,7 +32,7 @@ function row(overrides: Partial<TimelineAutoSyncExistingRow> = {}): TimelineAuto
     startAt: toUtcIso("2026-11-02T19:00:00Z"),
     endAt: toUtcIso("2026-11-09T19:00:00Z"),
     endless: false,
-    jpRaidType: null,
+    raidType: null,
     jpRaidSeasonIndex: null,
     ...overrides,
   };
@@ -57,7 +57,7 @@ function raidRow(overrides: Partial<TimelineAutoSyncExistingRow> = {}): Timeline
     contentUid: "gl_unlimit_30",
     startAt: toUtcIso("2026-12-16T02:00:00Z"),
     endAt: toUtcIso("2027-01-11T19:00:00Z"),
-    jpRaidType: "unlimit",
+    raidType: "unlimit",
     jpRaidSeasonIndex: 30,
     ...overrides,
   });
@@ -89,7 +89,7 @@ describe("planTimelineAutoSync", () => {
         startAt: toUtcIso("2026-11-02T19:00:00Z"),
         endAt: toUtcIso("2026-11-09T19:00:00Z"),
         endless: false,
-        jpRaidType: null,
+        raidType: null,
         jpRaidSeasonIndex: null,
       },
     ]);
@@ -395,7 +395,7 @@ describe("planTimelineAutoSync", () => {
           startAt: toUtcIso("2026-12-16T02:00:00Z"),
           endAt: toUtcIso("2027-01-11T19:00:00Z"),
           endless: false,
-          jpRaidType: "unlimit",
+          raidType: "unlimit",
           jpRaidSeasonIndex: 30,
         },
       ]);
@@ -414,11 +414,11 @@ describe("planTimelineAutoSync", () => {
         ],
         [
           raidRow(),
-          raidRow({ uid: "unlimit_31", contentUid: "gl_unlimit_31", jpRaidType: null, jpRaidSeasonIndex: null }),
+          raidRow({ uid: "unlimit_31", contentUid: "gl_unlimit_31", raidType: null, jpRaidSeasonIndex: null }),
           raidRow({
             uid: "past-unlinked",
             startAt: toUtcIso("2026-10-01T02:00:00Z"),
-            jpRaidType: null,
+            raidType: null,
             jpRaidSeasonIndex: null,
           }),
         ],
@@ -440,7 +440,7 @@ describe("planTimelineAutoSync", () => {
           raidRow({
             uid: "past",
             startAt: toUtcIso("2026-10-01T02:00:00Z"),
-            jpRaidType: null,
+            raidType: null,
             jpRaidSeasonIndex: null,
           }),
         ],
