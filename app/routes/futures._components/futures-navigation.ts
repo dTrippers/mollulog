@@ -1,9 +1,9 @@
+import { getRaidSeasonIdentityUid } from "@dtrippers/mollulog-sdk";
 import {
   type ContentFilterState,
   defaultContentFilterState,
   normalizeContentFilterState,
 } from "~/domain/futures/content-filter-state";
-import { getRaidSeasonIdentityUid } from "~/domain/raid-season-resolution";
 
 export type FutureContentView = "timeline" | "table" | "compact";
 export type MobileFutureContentView = Exclude<FutureContentView, "table">;

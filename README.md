@@ -9,6 +9,18 @@ Check content schedules and statistics for the mobile game "Blue Archive", and k
 
 - Node.js 22+
 
+### Installing dependencies
+
+The dependency `@dtrippers/mollulog-sdk` is a private package on GitHub Packages
+(`.npmrc` points the `@dtrippers` scope there), and the registry needs a token
+even to install it. Installing needs a GitHub token that can read that package
+(a personal access token with `read:packages`), given in your user-level npm
+config, never in a project file:
+
+```ini
+//npm.pkg.github.com/:_authToken=<token>
+```
+
 ### Quick start
 
 ```bash

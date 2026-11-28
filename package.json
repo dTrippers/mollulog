@@ -31,6 +31,7 @@
     "student-state:migration": "node scripts/student-state-migration.mjs"
   },
   "dependencies": {
+    "@dtrippers/mollulog-sdk": "0.1.0",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@headlessui/react": "^2.2.10",
     "@heroicons/react": "^2.2.0",

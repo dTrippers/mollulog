@@ -1,17 +1,28 @@
 import {
-  createRaidRowScheduleResolver,
-  findGlScheduleOfJpSeason,
-  type RaidRowRef,
-  type RaidRowScheduleResolution,
+  findKoreanRaidSeason,
+  findKoreanRaidSeasonOfJpSchedule,
+  findNumberedForecastRaidSeason as findPackageNumberedForecastRaidSeason,
+  findRaidRowSeasonPage,
+  hasRaidRowNotEnded,
+  isLinkedRaidRow,
+  listKoreanRaidSchedules,
+  listNumberedKoreanRaidSchedules,
+  type ForecastRaidSeason as PackageForecastRaidSeason,
+  type KoreanRaidSeasons as PackageKoreanRaidSeasons,
+  type NumberedForecastRaidSeason as PackageNumberedForecastRaidSeason,
+  type RaidRowResolution as PackageRaidRowResolution,
   type RaidRowSeason,
   toForecastRaidSchedule,
-} from "~/domain/raid-season-resolution";
-import { getInstantTime, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
+  toKoreanRaidSeasons,
+  toRaidRowListSchedule as toPackageRaidRowListSchedule,
+} from "@dtrippers/mollulog-sdk";
+import type { UtcIsoString } from "~/lib/date-time";
 import { getAllRaidSchedules, getRaidSchedule, type RaidSchedule, type RaidScheduleListItem, warmRaidCache } from "~/models/raid";
 import { getAllRaidRows, getFutureRaidRows, type TimelineContent } from "~/models/timeline-content.server";
 
 // Korean-server raid seasons: BAQL's `gl` schedules, plus the forecast seasons of MolluLog raid rows whose JP season has
-// no `gl` schedule at BAQL. The rule itself is in `~/domain/raid-season-resolution`.
+// no `gl` schedule at BAQL. The rule and the season assembly are in `@dtrippers/mollulog-sdk`; this module reads the
+// raid rows and BAQL's lists (with their caches) for them, and BAQL's schedule details for the screens.
 
 /**
  * `seasons` passes the Korean-server seasons a request already read, so that one request reads the raid rows and BAQL's
@@ -31,78 +42,20 @@ export type RaidRowLike = TimelineContent & { raidSeason?: RaidRowSeason };
 type RowDates = { startAt: UtcIsoString; endAt: UtcIsoString | null };
 
 /** A raid row that has not ended whose JP season has no `gl` schedule at BAQL, shown from the JP schedule. */
-export type ForecastRaidSeason = {
-  rowUid: string;
-  raidType: string;
-  /** The row's Korean-server season number while the season owns it, otherwise null. */
-  seasonIndex: number | null;
-  row: RowDates;
-  /** The JP list item the season is shown from. */
-  jpSchedule: RaidScheduleListItem;
-  schedule: KoreanRaidScheduleListItem;
-};
+export type ForecastRaidSeason = PackageForecastRaidSeason<RaidScheduleListItem>;
 
-export type RaidRowResolution = RaidRowScheduleResolution<RaidScheduleListItem, RaidScheduleListItem>;
+type NumberedForecastRaidSeason = PackageNumberedForecastRaidSeason<RaidScheduleListItem>;
+
+export type RaidRowResolution = PackageRaidRowResolution<RaidScheduleListItem, RaidScheduleListItem>;
 
 /** BAQL's `gl` schedules and the forecast seasons of the raid rows that have not ended, read once. */
-export type KoreanRaidSeasons = {
-  glSchedules: RaidScheduleListItem[];
-  /** Resolves any raid row; only a row that has not ended can own a forecast season number. */
-  resolve: (row: RaidRowLike) => RaidRowResolution;
-  forecasts: ForecastRaidSeason[];
-};
-
-const UNLINKED_ROW_SEASON: RaidRowSeason = { raidType: null, jpRaidSeasonIndex: null, glRaidSeasonIndex: null };
-
-function toRowRef(row: RaidRowLike): RaidRowRef {
-  return { uid: row.uid, raidSeason: row.raidSeason ?? UNLINKED_ROW_SEASON };
-}
-
-function isLinked(row: RaidRowLike): boolean {
-  const season = row.raidSeason ?? UNLINKED_ROW_SEASON;
-  return season.raidType !== null && season.jpRaidSeasonIndex !== null;
-}
-
-/** The rows `getFutureRaidRows` reads: a raid row that has not ended. */
-function hasNotEnded(row: RaidRowLike, now: UtcIsoString): boolean {
-  return row.endAt === null || getInstantTime(row.endAt) >= getInstantTime(now);
-}
+export type KoreanRaidSeasons = PackageKoreanRaidSeasons<RaidScheduleListItem, RaidScheduleListItem>;
 
 function loadRaidScheduleLists(env: Env, forceRefresh: boolean) {
   return Promise.all([
     getAllRaidSchedules(env, forceRefresh),
     getAllRaidSchedules(env, forceRefresh, { region: "jp" }),
   ]);
-}
-
-function forecastSeasonsOf(
-  rows: readonly RaidRowLike[],
-  resolve: (row: RaidRowLike) => RaidRowResolution,
-): ForecastRaidSeason[] {
-  return rows.flatMap((row) => {
-    const resolution = resolve(row);
-    if (resolution.kind !== "jp") return [];
-    return [
-      {
-        rowUid: row.uid,
-        raidType: resolution.schedule.raidType,
-        seasonIndex: resolution.seasonIndex,
-        row: { startAt: row.startAt, endAt: row.endAt },
-        jpSchedule: resolution.schedule,
-        schedule: toForecastRaidSchedule(resolution.schedule, row, resolution.seasonIndex),
-      },
-    ];
-  });
-}
-
-function toKoreanRaidSeasons(
-  glSchedules: RaidScheduleListItem[],
-  jpSchedules: RaidScheduleListItem[],
-  futureRows: readonly RaidRowLike[],
-): KoreanRaidSeasons {
-  const resolveRow = createRaidRowScheduleResolver(glSchedules, jpSchedules, futureRows.map(toRowRef));
-  const resolve = (row: RaidRowLike) => resolveRow(toRowRef(row));
-  return { glSchedules, resolve, forecasts: forecastSeasonsOf(futureRows, resolve) };
 }
 
 /** Reads the Korean-server seasons: the raid rows that have not ended, and BAQL's `gl` and JP lists. */
@@ -133,7 +86,7 @@ export async function loadRaidRowResolver(
   resolve: (row: RaidRowLike) => RaidRowResolution;
   glSchedules: RaidScheduleListItem[] | null;
 }> {
-  if (!futureRows.some(isLinked)) {
+  if (!futureRows.some(isLinkedRaidRow)) {
     return { resolve: () => ({ kind: "unlinked" }), glSchedules: null };
   }
   const [glSchedules, jpSchedules] = await loadRaidScheduleLists(env, forceRefresh);
@@ -170,9 +123,7 @@ export function toRaidRowListSchedule(
   row: RowDates,
   resolution: Exclude<RaidRowResolution, { kind: "unlinked" }>,
 ): KoreanRaidScheduleListItem | null {
-  if (resolution.kind === "gl") return resolution.schedule;
-  if (resolution.kind === "jp") return toForecastRaidSchedule(resolution.schedule, row, resolution.seasonIndex);
-  return null;
+  return toPackageRaidRowListSchedule(row, resolution);
 }
 
 /** Every Korean-server season: BAQL's `gl` schedules, then the forecast seasons, with or without a number. */
@@ -180,14 +131,7 @@ export async function getKoreanRaidSchedules(
   env: Env,
   options: RaidSeasonReadOptions = {},
 ): Promise<KoreanRaidScheduleListItem[]> {
-  const { glSchedules, forecasts } = await seasonsOf(env, options);
-  return [...glSchedules, ...forecasts.map((forecast) => forecast.schedule)];
-}
-
-type NumberedForecastRaidSeason = ForecastRaidSeason & { seasonIndex: number };
-
-function numberedForecastsOf({ forecasts }: KoreanRaidSeasons): NumberedForecastRaidSeason[] {
-  return forecasts.filter((forecast): forecast is NumberedForecastRaidSeason => forecast.seasonIndex !== null);
+  return listKoreanRaidSchedules(await seasonsOf(env, options));
 }
 
 /** The Korean-server seasons that have a season page: BAQL's `gl` schedules, then the numbered forecast seasons. */
@@ -195,11 +139,7 @@ export async function getNumberedKoreanRaidSchedules(
   env: Env,
   options: RaidSeasonReadOptions = {},
 ): Promise<RaidScheduleListItem[]> {
-  const seasons = await seasonsOf(env, options);
-  return [
-    ...seasons.glSchedules,
-    ...numberedForecastsOf(seasons).map((forecast) => ({ ...forecast.schedule, seasonIndex: forecast.seasonIndex })),
-  ];
+  return listNumberedKoreanRaidSchedules(await seasonsOf(env, options));
 }
 
 /**
@@ -212,11 +152,7 @@ export async function findNumberedForecastRaidSeason(
   seasonIndex: number,
   options: RaidSeasonReadOptions = {},
 ): Promise<NumberedForecastRaidSeason | null> {
-  return (
-    numberedForecastsOf(await seasonsOf(env, options)).find(
-      (candidate) => candidate.raidType === raidType && candidate.seasonIndex === seasonIndex,
-    ) ?? null
-  );
+  return findPackageNumberedForecastRaidSeason(await seasonsOf(env, options), raidType, seasonIndex);
 }
 
 async function toForecastDetail(
@@ -248,10 +184,9 @@ export async function getKoreanRaidScheduleByTypeAndSeason(
   if (parsedSeasonIndex === null) return null;
 
   const glSchedules = options.seasons?.glSchedules ?? (await getAllRaidSchedules(env, forceRefresh));
-  const glSummary = glSchedules.find(
-    (schedule) => schedule.raidType === raidType && schedule.seasonIndex === parsedSeasonIndex,
-  );
-  if (glSummary) return getRaidSchedule(env, glSummary.uid, forceRefresh);
+  // BAQL's `gl` list alone decides a `gl` season, so the raid rows and the JP list are read only when it has none.
+  const glMatch = findKoreanRaidSeason(toKoreanRaidSeasons(glSchedules, [], []), raidType, parsedSeasonIndex);
+  if (glMatch?.kind === "gl") return getRaidSchedule(env, glMatch.schedule.uid, forceRefresh);
 
   // The `gl` list was read just above; read only the rest of the seasons.
   const seasons =
@@ -263,10 +198,8 @@ export async function getKoreanRaidScheduleByTypeAndSeason(
         getFutureRaidRows(env, { ctx: options.ctx }),
       ])),
     );
-  const forecast = numberedForecastsOf(seasons).find(
-    (candidate) => candidate.raidType === raidType && candidate.seasonIndex === parsedSeasonIndex,
-  );
-  return forecast ? toForecastDetail(env, forecast, forceRefresh) : null;
+  const match = findKoreanRaidSeason(seasons, raidType, parsedSeasonIndex);
+  return match?.kind === "forecast" ? toForecastDetail(env, match.forecast, forceRefresh) : null;
 }
 
 /**
@@ -283,12 +216,12 @@ export async function getKoreanRaidScheduleByUid(
   const schedule = await getRaidSchedule(env, uid, forceRefresh);
   if (schedule?.region !== "jp") return schedule;
 
-  const seasons = await seasonsOf(env, options);
-  const glSchedule = findGlScheduleOfJpSeason(seasons.glSchedules, schedule.raidType, schedule.seasonIndex);
-  if (glSchedule) return getRaidSchedule(env, glSchedule.uid, forceRefresh);
-
-  const forecast = numberedForecastsOf(seasons).find((candidate) => candidate.jpSchedule.uid === uid);
-  return forecast ? toForecastRaidSchedule(schedule, forecast.row, forecast.seasonIndex) : schedule;
+  const match = findKoreanRaidSeasonOfJpSchedule(await seasonsOf(env, options), schedule);
+  if (match?.kind === "gl") return getRaidSchedule(env, match.schedule.uid, forceRefresh);
+  if (match?.kind === "forecast") {
+    return toForecastRaidSchedule(schedule, match.forecast.row, match.forecast.seasonIndex);
+  }
+  return schedule;
 }
 
 /**
@@ -308,26 +241,19 @@ export async function getRaidRowSeasonPages(
     getAllRaidRows(env, { ctx }),
     loadRaidScheduleLists(env, forceRefresh),
   ]);
-  const now = nowUtcIso();
-  const { resolve } = toKoreanRaidSeasons(
+  const now = new Date();
+  const seasons = toKoreanRaidSeasons(
     glSchedules,
     jpSchedules,
-    rows.filter((row) => hasNotEnded(row, now)),
+    rows.filter((row) => hasRaidRowNotEnded(row, now)),
   );
   const rowsByUid = new Map<string, RaidRowLike>(rows.map((row) => [row.uid, row]));
-  const glSchedulesByUid = new Map(glSchedules.map((schedule) => [schedule.uid, schedule]));
 
   for (const content of raidContents) {
-    const resolution = resolve(rowsByUid.get(content.uid) ?? content);
-    const page =
-      resolution.kind === "gl"
-        ? resolution.schedule
-        : resolution.kind === "unlinked" && content.contentUid
-          ? glSchedulesByUid.get(content.contentUid)
-          : resolution.kind === "jp" && resolution.seasonIndex !== null
-            ? { raidType: resolution.schedule.raidType, seasonIndex: resolution.seasonIndex }
-            : undefined;
-    if (page) pages.set(content.uid, { raidType: page.raidType, seasonIndex: page.seasonIndex });
+    // The raid columns are the raid row's; a row without a JP season keeps the lookup by the listed `content_uid`.
+    const row = { ...(rowsByUid.get(content.uid) ?? content), contentUid: content.contentUid };
+    const page = findRaidRowSeasonPage(seasons, row);
+    if (page) pages.set(content.uid, page);
   }
   return pages;
 }

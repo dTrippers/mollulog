@@ -1,3 +1,4 @@
+import type { RaidRowSeason } from "@dtrippers/mollulog-sdk";
 import { and, asc, type Column, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { pgTimelineContentsTable } from "~/db/postgres/schema";
@@ -7,7 +8,6 @@ import type {
   TimelineAutoSyncSchedule,
   TimelineAutoSyncUpdateMatch,
 } from "~/domain/timeline-auto-sync";
-import type { RaidRowSeason } from "~/domain/raid-season-resolution";
 import {
   type RunType,
   type TimelineContent,

@@ -34,6 +34,9 @@ importers:
 
   .:
     dependencies:
+      '@dtrippers/mollulog-sdk':
+        specifier: 0.1.0
+        version: 0.1.0
       '@graphql-typed-document-node/core':
         specifier: ^3.2.0
         version: 3.2.0(graphql@16.14.2)
@@ -644,6 +647,10 @@ packages:
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
+
+  '@dtrippers/mollulog-sdk@0.1.0':
+    resolution: {integrity: sha512-uZ21tiQFwBgBO0TKDvko8o9r/A6KmGH3Qcauo4HFB/tWt3ofrNZfdwIpLn4zGTcMVyhOdTyheEbHp33mmyjzpg==, tarball: https://npm.pkg.github.com/download/@dtrippers/mollulog-sdk/0.1.0/3d6625d0264ad1795562efe83798e406ac63a2d9}
+    engines: {node: '>=22.18.0'}
 
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
@@ -6003,6 +6010,8 @@ snapshots:
   '@csstools/css-tokenizer@3.0.4': {}
 
   '@drizzle-team/brocli@0.10.2': {}
+
+  '@dtrippers/mollulog-sdk@0.1.0': {}
 
   '@emnapi/core@1.10.0':
     dependencies:

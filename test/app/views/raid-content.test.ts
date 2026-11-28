@@ -1,5 +1,5 @@
+import type { RaidRowSeason } from "@dtrippers/mollulog-sdk";
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
-import type { RaidRowSeason } from "~/domain/raid-season-resolution";
 import type { RaidSchedule, RaidScheduleListItem } from "~/models/raid";
 import { getAllRaidSchedules, getRaidSchedule } from "~/models/raid";
 import type { TimelineRaidRow } from "~/models/timeline-content.server";

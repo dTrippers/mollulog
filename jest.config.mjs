@@ -5,8 +5,8 @@ const config = {
     "^.+\\.[cm]?[jt]sx?$": "<rootDir>/test/transformers/import-meta-env.cjs",
   },
   transformIgnorePatterns: [
-    "node_modules/.pnpm/(?!(?:htmlparser2|domhandler|domutils|domelementtype|dom-serializer|entities)@)",
-    "node_modules/(?!\\.pnpm/|htmlparser2/|domhandler/|domutils/|domelementtype/|dom-serializer/|entities/)",
+    "node_modules/.pnpm/(?!(?:htmlparser2|domhandler|domutils|domelementtype|dom-serializer|entities|@dtrippers\\+mollulog-sdk)@)",
+    "node_modules/(?!\\.pnpm/|htmlparser2/|domhandler/|domutils/|domelementtype/|dom-serializer/|entities/|@dtrippers/mollulog-sdk/)",
   ],
   moduleNameMapper: {
     "^~/(.*)$": "<rootDir>/app/$1",

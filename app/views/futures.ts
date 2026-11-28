@@ -1,5 +1,5 @@
+import { getRaidSeasonIdentityUid } from "@dtrippers/mollulog-sdk";
 import type { MinigameConfig } from "~/domain/event-shop";
-import { getRaidSeasonIdentityUid } from "~/domain/raid-season-resolution";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import type { RecruitmentPeriod } from "~/domain/recruitment-period-notice";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";

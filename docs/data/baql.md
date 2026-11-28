@@ -123,7 +123,7 @@ A row with `raid_type` and `jp_raid_season_index` shows, in this order:
    boss uid, and the JP schedule's uid;
 3. otherwise no schedule data.
 
-The rule lives in `app/domain/raid-season-resolution.ts`, without I/O. A match
+The rule lives in the package `@dtrippers/mollulog-sdk`, without I/O. A match
 that more than one schedule claims resolves to no schedule. Never choose the
 schedule of such a row by `content_uid`, and never build or parse a schedule uid;
 the `content_uid` lookup is only for rows without those two columns.
@@ -136,8 +136,9 @@ whose `gl_raid_season_index` is null. A season without a number has no season
 page, so screens that link to or print a season number leave it out.
 
 Readers that list or open Korean-server seasons go through
-`app/models/raid-season.server.ts`, which joins BAQL's `gl` seasons with the
-forecast seasons of unfinished raid rows. A request that needs several of them
+`app/models/raid-season.server.ts`, which reads the raid rows and BAQL's lists
+and joins BAQL's `gl` seasons with the forecast seasons of unfinished raid rows
+by the package's season functions. A request that needs several of them
 reads the rows and BAQL's lists once and passes the result on (`seasons`).
 A season is identified across that change by `getRaidSeasonIdentityUid`: the
 uid of its JP schedule as BAQL returned it (the schedule's own uid when a `gl`

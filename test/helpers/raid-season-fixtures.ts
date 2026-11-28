@@ -1,4 +1,4 @@
-import type { RaidRowSeason } from "~/domain/raid-season-resolution";
+import type { RaidRowSeason } from "@dtrippers/mollulog-sdk";
 import type { Attack, Defense, Difficulty, Terrain } from "~/graphql/graphql";
 import { toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import type { RaidSchedule, RaidScheduleListItem } from "~/models/raid";
