@@ -254,6 +254,30 @@ export const pgTimelineContentsTable = pgTable(
   ],
 );
 
+export type TimelineContentForecastStudentKind = "pickup" | "given";
+export type TimelineContentForecastRecruitmentType = "usual" | "limited" | "fes";
+
+export const pgTimelineContentForecastStudentsTable = pgTable(
+  "timeline_content_forecast_students",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    timelineContentUid: text("timeline_content_uid").notNull(),
+    kind: text().$type<TimelineContentForecastStudentKind>().notNull(),
+    studentUid: text("student_uid"),
+    studentName: text("student_name").notNull(),
+    recruitmentType: text("recruitment_type").$type<TimelineContentForecastRecruitmentType>(),
+    rerun: boolean().notNull().default(false),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("timeline_content_forecast_students_content_uid_idx").on(table.timelineContentUid),
+    uniqueIndex("timeline_content_forecast_students_content_student_uidx")
+      .on(table.timelineContentUid, table.studentUid)
+      .where(sql`${table.studentUid} is not null`),
+  ],
+);
+
 export type DiscordConnectionStatus = "pending" | "active" | "failed";
 export type DiscordNotificationTrigger =
   | "event-start"
