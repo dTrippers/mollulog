@@ -42,6 +42,8 @@ const defaultTimelineContentRow = {
   nameI18n: { ko: "미래 이벤트" },
   recruitmentStudentUids: ["student-a"],
   featuredUntil: new Date("2026-08-01T00:00:00.000Z"),
+  jpRaidType: null,
+  jpRaidSeasonIndex: null,
   createdAt: new Date("2026-07-13T00:00:00.000Z"),
   updatedAt: new Date("2026-07-13T00:00:00.000Z"),
 } satisfies TimelineContentRow;

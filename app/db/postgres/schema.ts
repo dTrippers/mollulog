@@ -240,6 +240,8 @@ export const pgTimelineContentsTable = pgTable(
     nameI18n: jsonb("name_i18n").$type<TimelineContentNameI18n>().notNull().default({}),
     recruitmentStudentUids: text("recruitment_student_uids").array(),
     featuredUntil: timestamptz("featured_until"),
+    jpRaidType: text("jp_raid_type"),
+    jpRaidSeasonIndex: integer("jp_raid_season_index"),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },
@@ -252,6 +254,40 @@ export const pgTimelineContentsTable = pgTable(
       .on(table.recruitmentGroupUid)
       .where(sql`${table.recruitmentGroupUid} is not null`),
   ],
+);
+
+// MolluLog's own copy of a pickup recruitment group, found from `timeline_contents.recruitment_group_uid`.
+export const pgTimelineRecruitmentGroupsTable = pgTable(
+  "timeline_recruitment_groups",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    startAt: timestamptz("start_at").notNull(),
+    endAt: timestamptz("end_at"),
+    recruitmentType: text("recruitment_type").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("timeline_recruitment_groups_uid_uidx").on(table.uid)],
+);
+
+// The recruitments of a timeline recruitment group, in the source's order (`id` ascending).
+export const pgTimelineRecruitmentsTable = pgTable(
+  "timeline_recruitments",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    recruitmentGroupUid: text("recruitment_group_uid")
+      .notNull()
+      .references(() => pgTimelineRecruitmentGroupsTable.uid),
+    studentUid: text("student_uid"),
+    studentName: text("student_name").notNull(),
+    recruitmentType: text("recruitment_type").notNull(),
+    pickup: boolean().notNull(),
+    rerun: boolean().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [index("timeline_recruitments_recruitment_group_uid_idx").on(table.recruitmentGroupUid, table.id)],
 );
 
 export type DiscordConnectionStatus = "pending" | "active" | "failed";
