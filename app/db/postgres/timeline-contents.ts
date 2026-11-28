@@ -1,17 +1,11 @@
 import { and, asc, type Column, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import {
-  pgTimelineContentsTable,
-  pgTimelineRecruitmentGroupsTable,
-  pgTimelineRecruitmentsTable,
-} from "~/db/postgres/schema";
+import { pgTimelineContentsTable } from "~/db/postgres/schema";
 import type {
   TimelineAutoSyncExistingRow,
   TimelineAutoSyncPlan,
   TimelineAutoSyncSchedule,
   TimelineAutoSyncUpdateMatch,
-  TimelineRecruitmentGroup,
-  TimelineRecruitmentGroupWrite,
 } from "~/domain/timeline-auto-sync";
 import {
   type RunType,
@@ -547,123 +541,6 @@ export async function applyPostgresTimelineAutoSyncPlan(
           updatedUids.push(...updated.map((updatedRow) => updatedRow.uid));
         }
         return { createdUids, updatedUids, creationBlockedByUids };
-      }),
-    createClient,
-    ctx,
-  );
-}
-
-/** Recruitment groups referenced by timeline rows that start after `now`. */
-export async function getPostgresFutureRecruitmentGroupUids(
-  env: Pick<Env, "HYPERDRIVE">,
-  now: UtcIsoString,
-  options: PostgresTimelineContentsOptions = {},
-): Promise<string[]> {
-  const rows = await selectRows(
-    env,
-    "get_future_recruitment_group_uids",
-    (db) =>
-      db
-        .selectDistinct({ recruitmentGroupUid: pgTimelineContentsTable.recruitmentGroupUid })
-        .from(pgTimelineContentsTable)
-        .where(
-          and(
-            isNotNull(pgTimelineContentsTable.recruitmentGroupUid),
-            gt(pgTimelineContentsTable.startAt, new Date(now)),
-          ),
-        )
-        .orderBy(asc(pgTimelineContentsTable.recruitmentGroupUid)),
-    options,
-  );
-  return rows.flatMap((row) => (row.recruitmentGroupUid ? [row.recruitmentGroupUid] : []));
-}
-
-export async function getPostgresTimelineRecruitmentGroups(
-  env: Pick<Env, "HYPERDRIVE">,
-  uids: readonly string[],
-  options: PostgresTimelineContentsOptions = {},
-): Promise<TimelineRecruitmentGroup[]> {
-  const uniqueUids = [...new Set(uids)];
-  if (uniqueUids.length === 0) return [];
-  const { ctx, createClient = createPostgresClient } = options;
-  const { groups, recruitments } = await withPostgresClient(
-    env,
-    async (client) => {
-      const db = drizzle(client);
-      return {
-        groups: await db
-          .select()
-          .from(pgTimelineRecruitmentGroupsTable)
-          .where(inArray(pgTimelineRecruitmentGroupsTable.uid, uniqueUids)),
-        recruitments: await db
-          .select()
-          .from(pgTimelineRecruitmentsTable)
-          .where(inArray(pgTimelineRecruitmentsTable.recruitmentGroupUid, uniqueUids))
-          .orderBy(asc(pgTimelineRecruitmentsTable.recruitmentGroupUid), asc(pgTimelineRecruitmentsTable.id)),
-      };
-    },
-    createClient,
-    ctx,
-  );
-  return groups.map((group) => ({
-    uid: group.uid,
-    startAt: normalizePostgresInstant(group.startAt),
-    endAt: group.endAt ? normalizePostgresInstant(group.endAt) : null,
-    recruitmentType: group.recruitmentType,
-    recruitments: recruitments
-      .filter((recruitment) => recruitment.recruitmentGroupUid === group.uid)
-      .map((recruitment) => ({
-        studentUid: recruitment.studentUid,
-        studentName: recruitment.studentName,
-        recruitmentType: recruitment.recruitmentType,
-        pickup: recruitment.pickup,
-        rerun: recruitment.rerun,
-      })),
-  }));
-}
-
-/** Writes each group, and replaces its recruitments as a set when the write carries them. */
-export async function applyPostgresTimelineRecruitmentGroupWrites(
-  env: Pick<Env, "HYPERDRIVE">,
-  writes: readonly TimelineRecruitmentGroupWrite[],
-  now: UtcIsoString,
-  options: PostgresTimelineContentsOptions = {},
-): Promise<void> {
-  if (writes.length === 0) return;
-
-  const { ctx, createClient = createPostgresClient } = options;
-  const syncedAt = new Date(now);
-  await withPostgresClient(
-    env,
-    (client) =>
-      drizzle(client).transaction(async (tx) => {
-        for (const { group, recruitments } of writes) {
-          const fields = {
-            startAt: new Date(group.startAt),
-            endAt: group.endAt ? new Date(group.endAt) : null,
-            recruitmentType: group.recruitmentType,
-            updatedAt: syncedAt,
-          };
-          await tx
-            .insert(pgTimelineRecruitmentGroupsTable)
-            .values({ uid: group.uid, ...fields, createdAt: syncedAt })
-            .onConflictDoUpdate({ target: pgTimelineRecruitmentGroupsTable.uid, set: fields });
-
-          if (recruitments === null) continue;
-          await tx
-            .delete(pgTimelineRecruitmentsTable)
-            .where(eq(pgTimelineRecruitmentsTable.recruitmentGroupUid, group.uid));
-          if (recruitments.length > 0) {
-            await tx.insert(pgTimelineRecruitmentsTable).values(
-              recruitments.map((recruitment) => ({
-                recruitmentGroupUid: group.uid,
-                ...recruitment,
-                createdAt: syncedAt,
-                updatedAt: syncedAt,
-              })),
-            );
-          }
-        }
       }),
     createClient,
     ctx,

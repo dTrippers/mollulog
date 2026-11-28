@@ -1,19 +1,11 @@
 import { nanoid } from "nanoid/non-secure";
-import {
-  applyPostgresTimelineAutoSyncPlan,
-  applyPostgresTimelineRecruitmentGroupWrites,
-  getPostgresFutureRecruitmentGroupUids,
-  getPostgresTimelineAutoSyncRows,
-  getPostgresTimelineRecruitmentGroups,
-} from "~/db/postgres/timeline-contents";
+import { applyPostgresTimelineAutoSyncPlan, getPostgresTimelineAutoSyncRows } from "~/db/postgres/timeline-contents";
 import {
   planTimelineAutoSync,
-  planTimelineRecruitmentGroupSync,
   type TimelineAutoSyncCandidate,
   type TimelineAutoSyncExistingRow,
   type TimelineAutoSyncJpRaidSeasonReference,
   type TimelineAutoSyncUpdatePolicy,
-  type TimelineRecruitmentGroup,
 } from "~/domain/timeline-auto-sync";
 import type { RunType, TimelineContentType } from "~/domain/timeline-content";
 import { graphql } from "~/graphql";
@@ -512,57 +504,6 @@ const TIMELINE_AUTO_SYNC_SOURCES: readonly TimelineAutoSyncSource[] = [
   miniStorySource,
 ];
 
-const timelineAutoSyncRecruitmentGroupsQuery = graphql(`
-  query TimelineAutoSyncRecruitmentGroups($uids: [String!]!) {
-    recruitmentGroups(uids: $uids) {
-      uid
-      startAt
-      endAt
-      recruitmentType
-      recruitments {
-        studentName
-        recruitmentType
-        pickup
-        rerun
-        student {
-          uid
-        }
-      }
-    }
-  }
-`);
-
-/** Copies the pickup groups that future timeline rows reference, with their recruitments. */
-async function syncTimelineRecruitmentGroups(env: Env, now: UtcIsoString, ctx?: ExecutionContext) {
-  const referencedUids = await getPostgresFutureRecruitmentGroupUids(env, now, { ctx });
-  if (referencedUids.length === 0) {
-    return planTimelineRecruitmentGroupSync([], [], []);
-  }
-
-  const { data, error } = await runQuery(timelineAutoSyncRecruitmentGroupsQuery, { uids: referencedUids });
-  if (error || !data) {
-    throw error ?? new Error("failed to fetch recruitment groups for timeline auto sync");
-  }
-  const sourceGroups: TimelineRecruitmentGroup[] = data.recruitmentGroups.map((group) => ({
-    uid: group.uid,
-    startAt: toUtcIso(group.startAt),
-    endAt: group.endAt ? toUtcIso(group.endAt) : null,
-    recruitmentType: group.recruitmentType,
-    recruitments: group.recruitments.map((recruitment) => ({
-      studentUid: recruitment.student?.uid ?? null,
-      studentName: recruitment.studentName,
-      recruitmentType: recruitment.recruitmentType,
-      pickup: recruitment.pickup,
-      rerun: recruitment.rerun,
-    })),
-  }));
-
-  const storedGroups = await getPostgresTimelineRecruitmentGroups(env, referencedUids, { ctx });
-  const plan = planTimelineRecruitmentGroupSync(referencedUids, sourceGroups, storedGroups);
-  await applyPostgresTimelineRecruitmentGroupWrites(env, plan.writes, now, { ctx });
-  return plan;
-}
-
 export async function syncTimelineContentsFromSources(
   env: Env,
   ctx?: ExecutionContext,
@@ -640,19 +581,6 @@ export async function syncTimelineContentsFromSources(
       logger.error("Timeline auto sync source failed", error, { contentType: source.contentType });
       errors.push(error);
     }
-  }
-
-  try {
-    const plan = await syncTimelineRecruitmentGroups(env, now, ctx);
-    logger.info("Timeline recruitment group sync completed", {
-      written: plan.writes.map((write) => write.group.uid),
-      recruitmentsReplaced: plan.writes.flatMap((write) => (write.recruitments ? [write.group.uid] : [])),
-      missingAtSource: plan.missingUids,
-      emptyAtSource: plan.emptyAtSourceUids,
-    });
-  } catch (error) {
-    logger.error("Timeline recruitment group sync failed", error, { contentType: "pickup" });
-    errors.push(error);
   }
 
   if (errors.length > 0) {

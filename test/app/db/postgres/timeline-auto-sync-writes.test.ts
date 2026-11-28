@@ -1,9 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
-import {
-  applyPostgresTimelineAutoSyncPlan,
-  applyPostgresTimelineRecruitmentGroupWrites,
-} from "~/db/postgres/timeline-contents";
+import { applyPostgresTimelineAutoSyncPlan } from "~/db/postgres/timeline-contents";
 import type { TimelineAutoSyncCreate, TimelineAutoSyncPlan } from "~/domain/timeline-auto-sync";
 import { toUtcIso } from "~/lib/date-time";
 
@@ -287,52 +284,5 @@ describe("applyPostgresTimelineAutoSyncPlan", () => {
       expect(statements().some((statement) => statement.text.startsWith(RECHECK_SELECT))).toBe(false);
       expect(inserts(statements)).toHaveLength(1);
     });
-  });
-});
-
-describe("applyPostgresTimelineRecruitmentGroupWrites", () => {
-  it("upserts the group and replaces its recruitments as a set, keeping a recruitment without a student uid", async () => {
-    const { options, statements } = recordingClient();
-
-    await applyPostgresTimelineRecruitmentGroupWrites(
-      env,
-      [
-        {
-          group: {
-            uid: "dive-into-ocean",
-            startAt: toUtcIso("2099-12-15T02:00:00Z"),
-            endAt: null,
-            recruitmentType: "limited",
-          },
-          recruitments: [
-            { studentUid: null, studentName: "새 학생", recruitmentType: "limited", pickup: true, rerun: false },
-          ],
-        },
-        {
-          group: {
-            uid: "kept-recruitments",
-            startAt: toUtcIso("2099-12-15T02:00:00Z"),
-            endAt: null,
-            recruitmentType: "usual",
-          },
-          recruitments: null,
-        },
-      ],
-      NOW,
-      options,
-    );
-
-    const writes = statements().filter((statement) => /^(insert|delete|update)/.test(statement.text));
-    expect(writes.map((statement) => statement.text.split(" (")[0]?.split(" where")[0])).toEqual([
-      'insert into "timeline_recruitment_groups"',
-      'delete from "timeline_recruitments"',
-      'insert into "timeline_recruitments"',
-      'insert into "timeline_recruitment_groups"',
-    ]);
-    expect(writes[0]?.text).toContain('on conflict ("uid") do update set');
-    expect(writes[1]?.values).toEqual(["dive-into-ocean"]);
-    expect(writes[2]?.values).toEqual(
-      expect.arrayContaining(["dive-into-ocean", null, "새 학생", "limited", true, false]),
-    );
   });
 });

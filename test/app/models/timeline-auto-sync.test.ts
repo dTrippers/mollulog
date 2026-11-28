@@ -1,11 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import {
-  applyPostgresTimelineAutoSyncPlan,
-  applyPostgresTimelineRecruitmentGroupWrites,
-  getPostgresFutureRecruitmentGroupUids,
-  getPostgresTimelineAutoSyncRows,
-  getPostgresTimelineRecruitmentGroups,
-} from "~/db/postgres/timeline-contents";
+import { applyPostgresTimelineAutoSyncPlan, getPostgresTimelineAutoSyncRows } from "~/db/postgres/timeline-contents";
 import type { TimelineAutoSyncExistingRow } from "~/domain/timeline-auto-sync";
 import { runQuery } from "~/lib/baql";
 import { toUtcIso } from "~/lib/date-time";
@@ -16,10 +10,7 @@ const mockLoggerInfo = jest.fn();
 
 jest.mock("~/db/postgres/timeline-contents", () => ({
   applyPostgresTimelineAutoSyncPlan: jest.fn(),
-  applyPostgresTimelineRecruitmentGroupWrites: jest.fn(),
-  getPostgresFutureRecruitmentGroupUids: jest.fn(),
   getPostgresTimelineAutoSyncRows: jest.fn(),
-  getPostgresTimelineRecruitmentGroups: jest.fn(),
 }));
 jest.mock("~/lib/baql", () => ({ runQuery: jest.fn() }));
 jest.mock("~/lib/observability.server", () => ({
@@ -29,15 +20,6 @@ jest.mock("~/lib/observability.server", () => ({
 const mockedRunQuery = runQuery as unknown as jest.Mock<(...args: unknown[]) => Promise<unknown>>;
 const mockedGetRows = getPostgresTimelineAutoSyncRows as jest.MockedFunction<typeof getPostgresTimelineAutoSyncRows>;
 const mockedApply = applyPostgresTimelineAutoSyncPlan as jest.MockedFunction<typeof applyPostgresTimelineAutoSyncPlan>;
-const mockedGroupUids = getPostgresFutureRecruitmentGroupUids as jest.MockedFunction<
-  typeof getPostgresFutureRecruitmentGroupUids
->;
-const mockedStoredGroups = getPostgresTimelineRecruitmentGroups as jest.MockedFunction<
-  typeof getPostgresTimelineRecruitmentGroups
->;
-const mockedApplyGroups = applyPostgresTimelineRecruitmentGroupWrites as jest.MockedFunction<
-  typeof applyPostgresTimelineRecruitmentGroupWrites
->;
 
 const env = {} as Env;
 
@@ -70,7 +52,6 @@ type BaqlResults = {
   miniEventContents?: BaqlResult;
   mainStories?: BaqlResult;
   miniStories?: BaqlResult;
-  recruitmentGroups?: BaqlResult;
 };
 
 /** Answers each source's query separately; a source left out gets an empty list. */
@@ -91,8 +72,6 @@ function mockBaql(results: BaqlResults) {
         return results.mainStories ?? { data: { mainStories: [] } };
       case "TimelineAutoSyncMiniStories":
         return results.miniStories ?? { data: { miniStories: [] } };
-      case "TimelineAutoSyncRecruitmentGroups":
-        return results.recruitmentGroups ?? { data: { recruitmentGroups: [] } };
       default:
         throw new Error(`unexpected BAQL query: ${operationName(document)}`);
     }
@@ -173,9 +152,6 @@ beforeEach(() => {
       creationBlockedByUids: [],
     };
   });
-  mockedGroupUids.mockResolvedValue([]);
-  mockedStoredGroups.mockResolvedValue([]);
-  mockedApplyGroups.mockResolvedValue();
   mockBaql({});
 });
 
@@ -947,80 +923,6 @@ describe("syncTimelineContentsFromSources", () => {
           endless: true,
         },
       ]);
-    });
-  });
-
-  describe("recruitment groups", () => {
-    it("copies the referenced groups, keeping a recruitment without a student by its name", async () => {
-      mockedGroupUids.mockResolvedValue(["dive-into-ocean", "gone-group"]);
-      mockBaql({
-        recruitmentGroups: {
-          data: {
-            recruitmentGroups: [
-              {
-                uid: "dive-into-ocean",
-                startAt: "2099-12-15T02:00:00Z",
-                endAt: "2099-12-29T02:00:00Z",
-                recruitmentType: "limited",
-                recruitments: [
-                  {
-                    studentName: "미카",
-                    recruitmentType: "limited",
-                    pickup: true,
-                    rerun: false,
-                    student: { uid: "20036" },
-                  },
-                  { studentName: "새 학생", recruitmentType: "limited", pickup: true, rerun: false, student: null },
-                ],
-              },
-            ],
-          },
-        },
-      });
-
-      await syncTimelineContentsFromSources(env);
-
-      expect(queryVariables("TimelineAutoSyncRecruitmentGroups")).toEqual({ uids: ["dive-into-ocean", "gone-group"] });
-      expect(mockedStoredGroups).toHaveBeenCalledWith(env, ["dive-into-ocean", "gone-group"], { ctx: undefined });
-      expect(mockedApplyGroups.mock.calls[0]?.[1]).toEqual([
-        {
-          group: {
-            uid: "dive-into-ocean",
-            startAt: toUtcIso("2099-12-15T02:00:00Z"),
-            endAt: toUtcIso("2099-12-29T02:00:00Z"),
-            recruitmentType: "limited",
-          },
-          recruitments: [
-            { studentUid: "20036", studentName: "미카", recruitmentType: "limited", pickup: true, rerun: false },
-            { studentUid: null, studentName: "새 학생", recruitmentType: "limited", pickup: true, rerun: false },
-          ],
-        },
-      ]);
-    });
-
-    it("does not ask BAQL when no future row references a group", async () => {
-      await syncTimelineContentsFromSources(env);
-
-      expect(queryVariables("TimelineAutoSyncRecruitmentGroups")).toBeUndefined();
-      expect(mockedApplyGroups).not.toHaveBeenCalled();
-    });
-
-    it("fails the run and writes no group when BAQL fails, after syncing the timeline sources", async () => {
-      mockedGroupUids.mockResolvedValue(["dive-into-ocean"]);
-      mockBaql({
-        recruitmentGroups: { error: new Error("baql down") },
-        campaigns: { data: { campaigns: [campaign("20991103", ["exp"])] } },
-      });
-
-      await expect(syncTimelineContentsFromSources(env)).rejects.toThrow(AggregateError);
-
-      expect(planFor("campaign")?.creates.map((row) => row.uid)).toEqual(["campaign-20991103"]);
-      expect(mockedApplyGroups).not.toHaveBeenCalled();
-      expect(mockLoggerError).toHaveBeenCalledWith(
-        "Timeline recruitment group sync failed",
-        expect.objectContaining({ message: "baql down" }),
-        { contentType: "pickup" },
-      );
     });
   });
 });

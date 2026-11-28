@@ -2,11 +2,8 @@ import { describe, expect, it } from "@jest/globals";
 import {
   DEFAULT_TIMELINE_AUTO_SYNC_UPDATE_POLICY,
   planTimelineAutoSync,
-  planTimelineRecruitmentGroupSync,
   type TimelineAutoSyncCandidate,
   type TimelineAutoSyncExistingRow,
-  type TimelineRecruitment,
-  type TimelineRecruitmentGroup,
 } from "~/domain/timeline-auto-sync";
 import { toUtcIso } from "~/lib/date-time";
 
@@ -746,101 +743,5 @@ describe("planTimelineAutoSync", () => {
 
       expect(plan.updates).toEqual([]);
     });
-  });
-});
-
-function recruitment(overrides: Partial<TimelineRecruitment> = {}): TimelineRecruitment {
-  return {
-    studentUid: "20036",
-    studentName: "미카",
-    recruitmentType: "limited",
-    pickup: true,
-    rerun: false,
-    ...overrides,
-  };
-}
-
-function group(overrides: Partial<TimelineRecruitmentGroup> = {}): TimelineRecruitmentGroup {
-  return {
-    uid: "dive-into-ocean",
-    startAt: toUtcIso("2026-12-15T02:00:00Z"),
-    endAt: toUtcIso("2026-12-29T02:00:00Z"),
-    recruitmentType: "limited",
-    recruitments: [recruitment()],
-    ...overrides,
-  };
-}
-
-describe("planTimelineRecruitmentGroupSync", () => {
-  it("copies a group the timeline references with its recruitments", () => {
-    const plan = planTimelineRecruitmentGroupSync(["dive-into-ocean"], [group()], []);
-
-    expect(plan.writes).toEqual([
-      {
-        group: {
-          uid: "dive-into-ocean",
-          startAt: toUtcIso("2026-12-15T02:00:00Z"),
-          endAt: toUtcIso("2026-12-29T02:00:00Z"),
-          recruitmentType: "limited",
-        },
-        recruitments: [recruitment()],
-      },
-    ]);
-  });
-
-  it("keeps a recruitment without a student uid with its name", () => {
-    const unknownStudent = recruitment({ studentUid: null, studentName: "새 학생" });
-    const plan = planTimelineRecruitmentGroupSync(["dive-into-ocean"], [group({ recruitments: [unknownStudent] })], []);
-
-    expect(plan.writes[0]?.recruitments).toEqual([{ ...unknownStudent, studentUid: null, studentName: "새 학생" }]);
-  });
-
-  it("replaces a group's recruitments as a set when any of them changed", () => {
-    const stored = group({ recruitments: [recruitment(), recruitment({ studentUid: "10000", studentName: "아루" })] });
-    const source = group({ recruitments: [recruitment({ rerun: true })] });
-
-    const plan = planTimelineRecruitmentGroupSync(["dive-into-ocean"], [source], [stored]);
-
-    expect(plan.writes).toEqual([
-      { group: expect.objectContaining({ uid: "dive-into-ocean" }), recruitments: [recruitment({ rerun: true })] },
-    ]);
-  });
-
-  it("updates only the group's period when its recruitments are unchanged, using the group's own period", () => {
-    const plan = planTimelineRecruitmentGroupSync(
-      ["dive-into-ocean"],
-      [group({ endAt: toUtcIso("2026-12-30T02:00:00Z") })],
-      [group()],
-    );
-
-    expect(plan.writes).toEqual([
-      {
-        group: expect.objectContaining({ endAt: toUtcIso("2026-12-30T02:00:00Z") }),
-        recruitments: null,
-      },
-    ]);
-  });
-
-  it("writes nothing when the copy is current", () => {
-    const plan = planTimelineRecruitmentGroupSync(["dive-into-ocean", "dive-into-ocean"], [group()], [group()]);
-
-    expect(plan).toEqual({ writes: [], missingUids: [], emptyAtSourceUids: [] });
-  });
-
-  it("leaves a group the source does not list exactly as it is and reports it", () => {
-    const plan = planTimelineRecruitmentGroupSync(["dive-into-ocean"], [], [group()]);
-
-    expect(plan).toEqual({ writes: [], missingUids: ["dive-into-ocean"], emptyAtSourceUids: [] });
-  });
-
-  it("never empties stored recruitments because the source lists none", () => {
-    const plan = planTimelineRecruitmentGroupSync(
-      ["dive-into-ocean"],
-      [group({ recruitments: [], endAt: toUtcIso("2026-12-30T02:00:00Z") })],
-      [group()],
-    );
-
-    expect(plan.emptyAtSourceUids).toEqual(["dive-into-ocean"]);
-    expect(plan.writes).toEqual([{ group: expect.objectContaining({ uid: "dive-into-ocean" }), recruitments: null }]);
   });
 });

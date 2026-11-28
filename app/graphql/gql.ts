@@ -58,7 +58,6 @@ type Documents = {
     "\n  query TimelineAutoSyncMiniEventContents {\n    miniEventContents {\n      uid\n      schedules {\n        region\n        occurrence\n        startAt\n        endAt\n      }\n    }\n  }\n": typeof types.TimelineAutoSyncMiniEventContentsDocument,
     "\n  query TimelineAutoSyncMainStories {\n    mainStories {\n      chapters {\n        parts {\n          uid\n          schedules {\n            region\n            releasedAt\n          }\n        }\n      }\n    }\n  }\n": typeof types.TimelineAutoSyncMainStoriesDocument,
     "\n  query TimelineAutoSyncMiniStories {\n    miniStories {\n      uid\n      schedules {\n        region\n        releasedAt\n      }\n    }\n  }\n": typeof types.TimelineAutoSyncMiniStoriesDocument,
-    "\n  query TimelineAutoSyncRecruitmentGroups($uids: [String!]!) {\n    recruitmentGroups(uids: $uids) {\n      uid\n      startAt\n      endAt\n      recruitmentType\n      recruitments {\n        studentName\n        recruitmentType\n        pickup\n        rerun\n        student {\n          uid\n        }\n      }\n    }\n  }\n": typeof types.TimelineAutoSyncRecruitmentGroupsDocument,
 };
 const documents: Documents = {
     "\n  query EventContentSchedule($eventUid: String!) {\n    eventContent(uid: $eventUid) {\n      schedules {\n        region\n        runType\n        startAt\n        endAt\n      }\n    }\n  }\n": types.EventContentScheduleDocument,
@@ -105,7 +104,6 @@ const documents: Documents = {
     "\n  query TimelineAutoSyncMiniEventContents {\n    miniEventContents {\n      uid\n      schedules {\n        region\n        occurrence\n        startAt\n        endAt\n      }\n    }\n  }\n": types.TimelineAutoSyncMiniEventContentsDocument,
     "\n  query TimelineAutoSyncMainStories {\n    mainStories {\n      chapters {\n        parts {\n          uid\n          schedules {\n            region\n            releasedAt\n          }\n        }\n      }\n    }\n  }\n": types.TimelineAutoSyncMainStoriesDocument,
     "\n  query TimelineAutoSyncMiniStories {\n    miniStories {\n      uid\n      schedules {\n        region\n        releasedAt\n      }\n    }\n  }\n": types.TimelineAutoSyncMiniStoriesDocument,
-    "\n  query TimelineAutoSyncRecruitmentGroups($uids: [String!]!) {\n    recruitmentGroups(uids: $uids) {\n      uid\n      startAt\n      endAt\n      recruitmentType\n      recruitments {\n        studentName\n        recruitmentType\n        pickup\n        rerun\n        student {\n          uid\n        }\n      }\n    }\n  }\n": types.TimelineAutoSyncRecruitmentGroupsDocument,
 };
 
 /**
@@ -298,10 +296,6 @@ export function graphql(source: "\n  query TimelineAutoSyncMainStories {\n    ma
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query TimelineAutoSyncMiniStories {\n    miniStories {\n      uid\n      schedules {\n        region\n        releasedAt\n      }\n    }\n  }\n"): (typeof documents)["\n  query TimelineAutoSyncMiniStories {\n    miniStories {\n      uid\n      schedules {\n        region\n        releasedAt\n      }\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  query TimelineAutoSyncRecruitmentGroups($uids: [String!]!) {\n    recruitmentGroups(uids: $uids) {\n      uid\n      startAt\n      endAt\n      recruitmentType\n      recruitments {\n        studentName\n        recruitmentType\n        pickup\n        rerun\n        student {\n          uid\n        }\n      }\n    }\n  }\n"): (typeof documents)["\n  query TimelineAutoSyncRecruitmentGroups($uids: [String!]!) {\n    recruitmentGroups(uids: $uids) {\n      uid\n      startAt\n      endAt\n      recruitmentType\n      recruitments {\n        studentName\n        recruitmentType\n        pickup\n        rerun\n        student {\n          uid\n        }\n      }\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};
