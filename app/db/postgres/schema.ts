@@ -256,8 +256,51 @@ export const pgTimelineContentsTable = pgTable(
   ],
 );
 
-export type TimelineContentForecastStudentKind = "pickup" | "given";
-export type TimelineContentForecastRecruitmentType = "usual" | "limited" | "fes";
+// The recruitment types a forecast group or a forecast student can have: BAQL's recruitment type values without
+// `given`, which is a student `kind` here. A group and each of its students store their own type.
+export type TimelineContentForecastRecruitmentType =
+  | "usual"
+  | "limited"
+  | "fes"
+  | "archive"
+  | "encore"
+  | "recollect"
+  | "premium_dash";
+
+// One row per recruitment banner set shown on a timeline content. A row with `recruitmentGroupUid` is a confirmed
+// BAQL group: BAQL owns its period, type, and students, so `startAt`, `endAt`, and `recruitmentType` stay null, and
+// `studentUids` limits it to those students (null means all of them). A row without it is a forecast group that
+// exists only in MolluLog, with its own period, `recruitmentType`, and forecast students. On a forecast group, a null
+// `endAt` means the recruitment has no end date; a per-player period (as for `premium_dash`) is not stored as dates
+// and follows from the type.
+export const pgTimelineContentRecruitmentGroupsTable = pgTable(
+  "timeline_content_recruitment_groups",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    timelineContentUid: text("timeline_content_uid").notNull(),
+    recruitmentGroupUid: text("recruitment_group_uid"),
+    startAt: timestamptz("start_at"),
+    endAt: timestamptz("end_at"),
+    studentUids: text("student_uids").array(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    recruitmentType: text("recruitment_type").$type<TimelineContentForecastRecruitmentType>(),
+  },
+  (table) => [
+    index("timeline_content_recruitment_groups_content_uid_idx").on(table.timelineContentUid),
+    index("timeline_content_recruitment_groups_group_uid_idx")
+      .on(table.recruitmentGroupUid)
+      .where(sql`${table.recruitmentGroupUid} is not null`),
+    uniqueIndex("timeline_content_recruitment_groups_content_group_uidx")
+      .on(table.timelineContentUid, table.recruitmentGroupUid)
+      .where(sql`${table.recruitmentGroupUid} is not null`),
+  ],
+);
+
+// `recruitment`: recruited from a forecast banner set (`timelineContentRecruitmentGroupId` set), with a
+// `recruitmentType` of the same values as the group's. `given`: handed out by the timeline content itself (group id
+// and `recruitmentType` null).
+export type TimelineContentForecastStudentKind = "recruitment" | "given";
 
 export const pgTimelineContentForecastStudentsTable = pgTable(
   "timeline_content_forecast_students",
@@ -271,12 +314,21 @@ export const pgTimelineContentForecastStudentsTable = pgTable(
     rerun: boolean().notNull().default(false),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    timelineContentRecruitmentGroupId: integer("timeline_content_recruitment_group_id").references(
+      () => pgTimelineContentRecruitmentGroupsTable.id,
+      { onDelete: "cascade" },
+    ),
+    pickup: boolean().notNull().default(true),
   },
   (table) => [
     index("timeline_content_forecast_students_content_uid_idx").on(table.timelineContentUid),
-    uniqueIndex("timeline_content_forecast_students_content_student_uidx")
+    index("timeline_content_forecast_students_group_id_idx").on(table.timelineContentRecruitmentGroupId),
+    uniqueIndex("timeline_content_forecast_students_group_student_uidx")
+      .on(table.timelineContentRecruitmentGroupId, table.studentUid)
+      .where(sql`${table.timelineContentRecruitmentGroupId} is not null and ${table.studentUid} is not null`),
+    uniqueIndex("timeline_content_forecast_students_given_student_uidx")
       .on(table.timelineContentUid, table.studentUid)
-      .where(sql`${table.studentUid} is not null`),
+      .where(sql`${table.timelineContentRecruitmentGroupId} is null and ${table.studentUid} is not null`),
   ],
 );
 
